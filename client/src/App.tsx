@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { checkSystem, Category } from "./api.js";
 
-// UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
 
 export default function App() {
@@ -10,9 +9,6 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState("");
 
   async function handleCheck() {
-    // TODO(Issue 4): set loading, call checkSystem(), then either
-    //   - success: store categories and show Online + the list, or
-    //   - error: show Offline + a useful message.
     setState("loading");
     setErrorMessage("");
 
@@ -24,6 +20,7 @@ export default function App() {
     } catch (error) {
       console.error("System check failed:", error);
 
+      setCategories([]);
       setErrorMessage(
         "Unable to connect to the TokTickIT API. Please make sure the backend server is running."
       );
@@ -45,11 +42,15 @@ export default function App() {
         {state === "loading" ? "Loading…" : "Check System"}
       </button>
 
-      {/* TODO(Issue 4): render loading / success (Online + categories) / error (Offline) states. */}
+      {state === "loading" && (
+        <p className="mt-4">Loading categories...</p>
+      )}
 
       {state === "success" && (
         <div className="mt-4">
           <p className="text-success">Online</p>
+
+          <h2 className="h5">IT Request Categories</h2>
 
           <ul>
             {categories.map((category) => (

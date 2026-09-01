@@ -20,7 +20,41 @@ async function main() {
     });
   }
 
-  console.log("Category seed completed.");
+  const relatedSystems = [
+    "Email",
+    "Campus Wi-Fi",
+    "VPN",
+    "LEB2 App",
+    "Grade Submission App",
+    "Printer",
+    "Corporate Laptop",
+  ];
+
+  for (const name of relatedSystems) {
+    await prisma.relatedSystem.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
+
+  const requesters = [
+    { name: "Jennifer Anderson", email: "jennifer.anderson@toktickit.test", isActive: true },
+    { name: "Michael Brown", email: "michael.brown@toktickit.test", isActive: true },
+    { name: "Sarah Johnson", email: "sarah.johnson@toktickit.test", isActive: true },
+    { name: "David Lee", email: "david.lee@toktickit.test", isActive: true },
+    { name: "Emily Carter", email: "emily.carter@toktickit.test", isActive: false },
+  ];
+
+  for (const requester of requesters) {
+    await prisma.requester.upsert({
+      where: { email: requester.email },
+      update: {},
+      create: requester,
+    });
+  }
+
+  console.log("Category, RelatedSystem, and Requester seed completed.");
 }
 
 main()

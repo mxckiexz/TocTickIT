@@ -6,35 +6,37 @@ async function main() {
   const prisma = getPrisma();
 
   const categories = [
-    "Account and Access",
-    "Hardware",
-    "Software",
-    "Network",
+    { name: "Account and Access", isActive: true },
+    { name: "Hardware", isActive: true },
+    { name: "Software", isActive: true },
+    { name: "Network", isActive: true },
+    { name: "Archived Category (test fixture)", isActive: false },
   ];
 
-  for (const name of categories) {
+  for (const category of categories) {
     await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+      where: { name: category.name },
+      update: { isActive: category.isActive },
+      create: category,
     });
   }
 
   const relatedSystems = [
-    "Email",
-    "Campus Wi-Fi",
-    "VPN",
-    "LEB2 App",
-    "Grade Submission App",
-    "Printer",
-    "Corporate Laptop",
+    { name: "Email", isActive: true },
+    { name: "Campus Wi-Fi", isActive: true },
+    { name: "VPN", isActive: true },
+    { name: "LEB2 App", isActive: true },
+    { name: "Grade Submission App", isActive: true },
+    { name: "Printer", isActive: true },
+    { name: "Corporate Laptop", isActive: true },
+    { name: "Archived System (test fixture)", isActive: false },
   ];
 
-  for (const name of relatedSystems) {
+  for (const relatedSystem of relatedSystems) {
     await prisma.relatedSystem.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+      where: { name: relatedSystem.name },
+      update: { isActive: relatedSystem.isActive },
+      create: relatedSystem,
     });
   }
 
@@ -49,7 +51,7 @@ async function main() {
   for (const requester of requesters) {
     await prisma.requester.upsert({
       where: { email: requester.email },
-      update: {},
+      update: { name: requester.name, isActive: requester.isActive },
       create: requester,
     });
   }

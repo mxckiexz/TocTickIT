@@ -28,6 +28,7 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
     const prisma = getPrisma();
 
     const categories = await prisma.category.findMany({
+      where: { isActive: true },
       select: {
         id: true,
         name: true,
@@ -53,6 +54,11 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 const REQUESTED_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 const SUMMARY_MAX_LENGTH = 150;
 const DESCRIPTION_MAX_LENGTH = 2000;
+// BR-02: duplicate-submission prevention. A resubmission of the exact same
+// ticket content by the same Requester within this window (e.g. a double
+// click or a retried request) returns the ticket already created instead of
+// inserting a second row.
+const DUPLICATE_SUBMISSION_WINDOW_MS = 10_000;
 
 app.post("/api/tickets", async (req: Request, res: Response) => {
   const body = req.body ?? {};
@@ -107,6 +113,25 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
 
     if (Object.keys(errors).length > 0) {
       return res.status(400).json({ errors });
+    }
+
+    const duplicate = await prisma.ticket.findFirst({
+      where: {
+        requesterId,
+        categoryId,
+        relatedSystemId,
+        summary,
+        description,
+        requestedPriority,
+        createdAt: {
+          gte: new Date(Date.now() - DUPLICATE_SUBMISSION_WINDOW_MS),
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (duplicate) {
+      return res.status(200).json(duplicate);
     }
 
     // BR-01: the Ticket Number is backend-generated and unique. It is derived

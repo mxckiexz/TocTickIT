@@ -8,6 +8,9 @@ describe("POST /api/tickets", () => {
   let inactiveRequesterId: number;
   let categoryId: number;
   let relatedSystemId: number;
+  let inactiveCategoryId: number;
+  let inactiveRelatedSystemId: number;
+  let createdTicketIds: number[] = [];
 
   beforeAll(async () => {
     const prisma = getPrisma();
@@ -24,15 +27,31 @@ describe("POST /api/tickets", () => {
     const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({
       where: { isActive: true },
     });
+    const inactiveCategory = await prisma.category.findFirstOrThrow({
+      where: { isActive: false },
+    });
+    const inactiveRelatedSystem = await prisma.relatedSystem.findFirstOrThrow({
+      where: { isActive: false },
+    });
 
     activeRequesterId = activeRequester.id;
     inactiveRequesterId = inactiveRequester.id;
     categoryId = category.id;
     relatedSystemId = relatedSystem.id;
+    inactiveCategoryId = inactiveCategory.id;
+    inactiveRelatedSystemId = inactiveRelatedSystem.id;
   });
 
   afterEach(async () => {
-    await getPrisma().ticket.deleteMany();
+    // Only remove the tickets this test file created — never a blanket
+    // deleteMany(), which would wipe every Ticket row in the database
+    // (including anything a user created against the same DATABASE_URL).
+    if (createdTicketIds.length > 0) {
+      await getPrisma().ticket.deleteMany({
+        where: { id: { in: createdTicketIds } },
+      });
+      createdTicketIds = [];
+    }
   });
 
   function validPayload(overrides: Record<string, unknown> = {}) {
@@ -62,6 +81,7 @@ describe("POST /api/tickets", () => {
       currentStatus: "New",
     });
     expect(response.body.ticketNumber).toMatch(/^TKT-\d{4}-\d{6}$/);
+    createdTicketIds.push(response.body.id);
 
     const prisma = getPrisma();
     const saved = await prisma.ticket.findUnique({
@@ -120,5 +140,77 @@ describe("POST /api/tickets", () => {
       .expect(400);
 
     expect(response.body.errors.requesterId).toBeDefined();
+  });
+
+  it("rejects an inactive Category", async () => {
+    const response = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ categoryId: inactiveCategoryId }))
+      .expect(400);
+
+    expect(response.body.errors.categoryId).toBeDefined();
+  });
+
+  it("rejects an inactive Related System", async () => {
+    const response = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ relatedSystemId: inactiveRelatedSystemId }))
+      .expect(400);
+
+    expect(response.body.errors.relatedSystemId).toBeDefined();
+  });
+
+  it("accepts a summary at the 150-character limit and rejects 151 characters", async () => {
+    const atLimit = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ summary: "A".repeat(150) }))
+      .expect(201);
+    createdTicketIds.push(atLimit.body.id);
+
+    const overLimit = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ summary: "A".repeat(151) }))
+      .expect(400);
+    expect(overLimit.body.errors.summary).toBeDefined();
+  });
+
+  it("accepts a description at the 2000-character limit and rejects 2001 characters", async () => {
+    const atLimit = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ description: "A".repeat(2000) }))
+      .expect(201);
+    createdTicketIds.push(atLimit.body.id);
+
+    const overLimit = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ description: "A".repeat(2001) }))
+      .expect(400);
+    expect(overLimit.body.errors.description).toBeDefined();
+  });
+
+  it("returns the existing ticket instead of creating a duplicate on resubmission (BR-02)", async () => {
+    const payload = validPayload({ summary: "Duplicate submission test" });
+
+    const first = await request(app)
+      .post("/api/tickets")
+      .send(payload)
+      .expect(201);
+    createdTicketIds.push(first.body.id);
+
+    const second = await request(app)
+      .post("/api/tickets")
+      .send(payload)
+      .expect(200);
+
+    expect(second.body.id).toBe(first.body.id);
+    expect(second.body.ticketNumber).toBe(first.body.ticketNumber);
+
+    const count = await getPrisma().ticket.count({
+      where: {
+        requesterId: activeRequesterId,
+        summary: "Duplicate submission test",
+      },
+    });
+    expect(count).toBe(1);
   });
 });

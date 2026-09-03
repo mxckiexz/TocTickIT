@@ -1,6 +1,10 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import multer, { MulterError } from "multer";
 import { randomUUID } from "node:crypto";
+import { mkdirSync, unlink } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
@@ -166,5 +170,110 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to create ticket" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Feature 2 — Upload a permitted supporting attachment
+// (POST /api/tickets/:id/attachments)
+// ---------------------------------------------------------------------------
+const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_ACTIVE_ATTACHMENTS_PER_TICKET = 5;
+
+const UPLOAD_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "uploads"
+);
+mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    // Never trust the client-supplied filename for the path on disk — only
+    // its extension is reused, everything else is a fresh random id.
+    filename: (_req, file, cb) => {
+      cb(null, `${randomUUID()}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: MAX_ATTACHMENT_SIZE_BYTES },
+});
+
+app.post(
+  "/api/tickets/:id/attachments",
+  (req: Request, res: Response, next) => {
+    upload.single("file")(req, res, (error: unknown) => {
+      if (error instanceof MulterError && error.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+          error: `File exceeds the ${MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB limit.`,
+        });
+      }
+      if (error) {
+        return res.status(400).json({ error: "Upload failed." });
+      }
+      next();
+    });
+  },
+  async (req: Request, res: Response) => {
+    const ticketId = Number(req.params.id);
+    const file = req.file;
+
+    if (!Number.isInteger(ticketId)) {
+      if (file) unlink(file.path, () => {});
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+    if (!file) {
+      return res.status(400).json({ error: "A file is required." });
+    }
+    if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(file.mimetype)) {
+      unlink(file.path, () => {});
+      return res.status(415).json({
+        error: "Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.",
+      });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+      });
+      if (!ticket) {
+        unlink(file.path, () => {});
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const activeAttachmentCount = await prisma.attachment.count({
+        where: { ticketId },
+      });
+      if (activeAttachmentCount >= MAX_ACTIVE_ATTACHMENTS_PER_TICKET) {
+        unlink(file.path, () => {});
+        return res.status(409).json({
+          error: `A ticket can have at most ${MAX_ACTIVE_ATTACHMENTS_PER_TICKET} active attachments.`,
+        });
+      }
+
+      const attachment = await prisma.attachment.create({
+        data: {
+          ticketId,
+          originalFilename: file.originalname,
+          storedFilename: file.filename,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+        },
+      });
+
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Failed to upload attachment:", error);
+      unlink(file.path, () => {});
+      res.status(500).json({ error: "Failed to upload attachment" });
+    }
+  }
+);
 
 export default app;

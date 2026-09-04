@@ -5,6 +5,8 @@ import { getPrisma } from "../../src/prisma.js";
 
 describe("POST /api/tickets/:id/attachments", () => {
   let ticketId: number;
+  let ownerRequesterId: number;
+  let otherRequesterId: number;
   const createdTicketIds: number[] = [];
 
   beforeAll(async () => {
@@ -13,6 +15,9 @@ describe("POST /api/tickets/:id/attachments", () => {
     const requester = await prisma.requester.findFirstOrThrow({
       where: { isActive: true },
     });
+    const anotherRequester = await prisma.requester.findFirstOrThrow({
+      where: { isActive: true, NOT: { id: requester.id } },
+    });
     const category = await prisma.category.findFirstOrThrow({
       where: { isActive: true },
     });
@@ -20,10 +25,13 @@ describe("POST /api/tickets/:id/attachments", () => {
       where: { isActive: true },
     });
 
+    ownerRequesterId = requester.id;
+    otherRequesterId = anotherRequester.id;
+
     const ticket = await prisma.ticket.create({
       data: {
         ticketNumber: `TEST-${Date.now()}`,
-        requesterId: requester.id,
+        requesterId: ownerRequesterId,
         categoryId: category.id,
         relatedSystemId: relatedSystem.id,
         summary: "Attachment test ticket",
@@ -49,6 +57,7 @@ describe("POST /api/tickets/:id/attachments", () => {
   it("uploads a permitted file and returns its metadata", async () => {
     const response = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
+      .field("requesterId", String(ownerRequesterId))
       .attach("file", Buffer.from("fake image bytes"), {
         filename: "screenshot.png",
         contentType: "image/png",
@@ -72,6 +81,7 @@ describe("POST /api/tickets/:id/attachments", () => {
   it("rejects an unsupported file type", async () => {
     const response = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
+      .field("requesterId", String(ownerRequesterId))
       .attach("file", Buffer.from("#!/bin/sh\necho hi"), {
         filename: "script.sh",
         contentType: "application/x-sh",
@@ -86,6 +96,7 @@ describe("POST /api/tickets/:id/attachments", () => {
 
     const response = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
+      .field("requesterId", String(ownerRequesterId))
       .attach("file", oversized, {
         filename: "big.png",
         contentType: "image/png",
@@ -98,6 +109,19 @@ describe("POST /api/tickets/:id/attachments", () => {
   it("rejects an upload with no file", async () => {
     const response = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
+      .field("requesterId", String(ownerRequesterId))
+      .expect(400);
+
+    expect(response.body.error).toBeDefined();
+  });
+
+  it("rejects an upload with no requesterId", async () => {
+    const response = await request(app)
+      .post(`/api/tickets/${ticketId}/attachments`)
+      .attach("file", Buffer.from("fake"), {
+        filename: "note.pdf",
+        contentType: "application/pdf",
+      })
       .expect(400);
 
     expect(response.body.error).toBeDefined();
@@ -106,6 +130,7 @@ describe("POST /api/tickets/:id/attachments", () => {
   it("rejects an upload to a ticket that does not exist", async () => {
     const response = await request(app)
       .post(`/api/tickets/999999/attachments`)
+      .field("requesterId", String(ownerRequesterId))
       .attach("file", Buffer.from("fake"), {
         filename: "note.pdf",
         contentType: "application/pdf",
@@ -113,6 +138,24 @@ describe("POST /api/tickets/:id/attachments", () => {
       .expect(404);
 
     expect(response.body.error).toBeDefined();
+  });
+
+  it("rejects an upload from a requester who does not own the ticket", async () => {
+    const response = await request(app)
+      .post(`/api/tickets/${ticketId}/attachments`)
+      .field("requesterId", String(otherRequesterId))
+      .attach("file", Buffer.from("fake"), {
+        filename: "note.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(403);
+
+    expect(response.body.error).toBeDefined();
+
+    const attachments = await getPrisma().attachment.findMany({
+      where: { ticketId, originalFilename: "note.pdf" },
+    });
+    expect(attachments).toHaveLength(0);
   });
 
   it("rejects a 6th active attachment on the same ticket", async () => {
@@ -142,6 +185,7 @@ describe("POST /api/tickets/:id/attachments", () => {
     for (let i = 0; i < 5; i++) {
       await request(app)
         .post(`/api/tickets/${limitTicket.id}/attachments`)
+        .field("requesterId", String(requester.id))
         .attach("file", Buffer.from(`file-${i}`), {
           filename: `file-${i}.png`,
           contentType: "image/png",
@@ -151,6 +195,7 @@ describe("POST /api/tickets/:id/attachments", () => {
 
     const response = await request(app)
       .post(`/api/tickets/${limitTicket.id}/attachments`)
+      .field("requesterId", String(requester.id))
       .attach("file", Buffer.from("one too many"), {
         filename: "one-too-many.png",
         contentType: "image/png",

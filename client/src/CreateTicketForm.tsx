@@ -9,7 +9,6 @@ import {
   createTicket,
   fetchCategories,
   fetchRelatedSystems,
-  fetchRequesters,
   uploadAttachment,
 } from "./api.js";
 
@@ -19,13 +18,16 @@ const DESCRIPTION_MAX_LENGTH = 2000;
 type LookupState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting";
 
-export default function CreateTicketForm() {
+interface CreateTicketFormProps {
+  requester: Requester;
+  onSwitchRequester: () => void;
+}
+
+export default function CreateTicketForm({ requester, onSwitchRequester }: CreateTicketFormProps) {
   const [lookupState, setLookupState] = useState<LookupState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
   const [relatedSystems, setRelatedSystems] = useState<RelatedSystem[]>([]);
-  const [requesters, setRequesters] = useState<Requester[]>([]);
 
-  const [requesterId, setRequesterId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [relatedSystemId, setRelatedSystemId] = useState("");
   const [summary, setSummary] = useState("");
@@ -44,17 +46,15 @@ export default function CreateTicketForm() {
 
     async function loadLookups() {
       try {
-        const [categoryList, relatedSystemList, requesterList] = await Promise.all([
+        const [categoryList, relatedSystemList] = await Promise.all([
           fetchCategories(),
           fetchRelatedSystems(),
-          fetchRequesters(),
         ]);
 
         if (cancelled) return;
 
         setCategories(categoryList);
         setRelatedSystems(relatedSystemList);
-        setRequesters(requesterList);
         setLookupState("ready");
       } catch (error) {
         console.error("Failed to load ticket form data:", error);
@@ -71,7 +71,6 @@ export default function CreateTicketForm() {
 
   function resetForNewTicket() {
     setCreatedTicket(null);
-    setRequesterId("");
     setCategoryId("");
     setRelatedSystemId("");
     setSummary("");
@@ -98,7 +97,7 @@ export default function CreateTicketForm() {
 
     try {
       const ticket = await createTicket({
-        requesterId: Number(requesterId),
+        requesterId: requester.id,
         categoryId: Number(categoryId),
         relatedSystemId: Number(relatedSystemId),
         summary,
@@ -108,7 +107,7 @@ export default function CreateTicketForm() {
 
       if (file) {
         try {
-          await uploadAttachment(ticket.id, file);
+          await uploadAttachment(ticket.id, requester.id, file);
         } catch (attachmentError) {
           console.error("Attachment upload failed:", attachmentError);
           setAttachmentWarning(
@@ -145,48 +144,37 @@ export default function CreateTicketForm() {
 
   if (createdTicket) {
     return (
-      <div className="alert alert-success mt-4" role="status">
-        <p className="mb-1">Ticket created successfully.</p>
-        <p className="mb-3">
-          Your Ticket Number: <strong>{createdTicket.ticketNumber}</strong>
-        </p>
-        {attachmentWarning && <p className="text-danger mb-3">{attachmentWarning}</p>}
-        <button
-          type="button"
-          className="btn btn-outline-success btn-sm"
-          onClick={resetForNewTicket}
-        >
-          Create another ticket
-        </button>
+      <div className="mt-4">
+        <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} />
+        <div className="alert alert-success" role="status">
+          <p className="mb-1">Ticket created successfully.</p>
+          <p className="mb-3">
+            Your Ticket Number: <strong>{createdTicket.ticketNumber}</strong>
+          </p>
+          {attachmentWarning && <p className="text-danger mb-3">{attachmentWarning}</p>}
+          <button
+            type="button"
+            className="btn btn-outline-success btn-sm"
+            onClick={resetForNewTicket}
+          >
+            Create another ticket
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <form className="mt-4" onSubmit={handleSubmit} noValidate>
+      <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} />
+
       <h2 className="h5">Create a New Ticket</h2>
 
-      <div className="mb-3">
-        <label htmlFor="requesterId" className="form-label">
-          Requester
-        </label>
-        <select
-          id="requesterId"
-          className="form-select"
-          value={requesterId}
-          onChange={(event) => setRequesterId(event.target.value)}
-        >
-          <option value="">Select a requester…</option>
-          {requesters.map((requester) => (
-            <option key={requester.id} value={requester.id}>
-              {requester.name} ({requester.email})
-            </option>
-          ))}
-        </select>
-        {fieldErrors.requesterId && (
-          <div className="text-danger small mt-1">{fieldErrors.requesterId}</div>
-        )}
-      </div>
+      {fieldErrors.requesterId && (
+        <div className="alert alert-danger" role="alert">
+          {fieldErrors.requesterId}
+        </div>
+      )}
 
       <div className="mb-3">
         <label htmlFor="categoryId" className="form-label">
@@ -312,5 +300,21 @@ export default function CreateTicketForm() {
         {submitState === "submitting" ? "Submitting…" : "Submit Ticket"}
       </button>
     </form>
+  );
+}
+
+interface RequesterBannerProps {
+  requester: Requester;
+  onSwitchRequester: () => void;
+}
+
+function RequesterBanner({ requester, onSwitchRequester }: RequesterBannerProps) {
+  return (
+    <p className="text-muted small mb-3">
+      Creating as <strong>{requester.name}</strong> ({requester.email}){" "}
+      <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={onSwitchRequester}>
+        Switch requester
+      </button>
+    </p>
   );
 }

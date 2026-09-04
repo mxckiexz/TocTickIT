@@ -1,14 +1,48 @@
 import { useState } from "react";
-import { checkSystem, Category } from "./api.js";
+import { checkSystem, Category, Requester } from "./api.js";
 import CreateTicketForm from "./CreateTicketForm.js";
+import DevRequesterPicker from "./DevRequesterPicker.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
+
+// Lab 2 stand-in for real auth (arrives in Lab 3) — remember the chosen
+// Requester across reloads so it "stays active" rather than resetting every
+// time the ticket flow is reopened.
+const ACTIVE_REQUESTER_STORAGE_KEY = "toktickit.activeRequester";
+
+function loadStoredRequester(): Requester | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_REQUESTER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Requester) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [activeRequester, setActiveRequester] = useState<Requester | null>(loadStoredRequester);
+
+  function handleSelectRequester(requester: Requester) {
+    setActiveRequester(requester);
+    try {
+      localStorage.setItem(ACTIVE_REQUESTER_STORAGE_KEY, JSON.stringify(requester));
+    } catch {
+      // Non-fatal — the choice just won't survive a reload this time.
+    }
+  }
+
+  function handleSwitchRequester() {
+    setActiveRequester(null);
+    try {
+      localStorage.removeItem(ACTIVE_REQUESTER_STORAGE_KEY);
+    } catch {
+      // Non-fatal.
+    }
+  }
 
   async function handleCheck() {
     setState("loading");
@@ -76,7 +110,13 @@ export default function App() {
         </button>
       )}
 
-      {showCreateForm && <CreateTicketForm />}
+      {showCreateForm && !activeRequester && (
+        <DevRequesterPicker onSelect={handleSelectRequester} />
+      )}
+
+      {showCreateForm && activeRequester && (
+        <CreateTicketForm requester={activeRequester} onSwitchRequester={handleSwitchRequester} />
+      )}
     </div>
   );
 }

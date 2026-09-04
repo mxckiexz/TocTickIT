@@ -268,11 +268,17 @@ app.post(
   },
   async (req: Request, res: Response) => {
     const ticketId = Number(req.params.id);
+    // multer places non-file multipart fields on req.body alongside req.file.
+    const requesterId = Number(req.body.requesterId);
     const file = req.file;
 
     if (!Number.isInteger(ticketId)) {
       if (file) unlink(file.path, () => {});
       return res.status(400).json({ error: "Invalid ticket id." });
+    }
+    if (!Number.isInteger(requesterId) || requesterId <= 0) {
+      if (file) unlink(file.path, () => {});
+      return res.status(400).json({ error: "Requester is required." });
     }
     if (!file) {
       return res.status(400).json({ error: "A file is required." });
@@ -293,6 +299,14 @@ app.post(
       if (!ticket) {
         unlink(file.path, () => {});
         return res.status(404).json({ error: "Ticket not found." });
+      }
+      // Ownership check: only the Requester who owns the ticket may add
+      // attachments to it.
+      if (ticket.requesterId !== requesterId) {
+        unlink(file.path, () => {});
+        return res.status(403).json({
+          error: "You do not have permission to add attachments to this ticket.",
+        });
       }
 
       const activeAttachmentCount = await prisma.attachment.count({

@@ -6,6 +6,7 @@ import { getPrisma } from "../../src/prisma.js";
 describe("GET /api/tickets", () => {
   let requesterAId: number;
   let requesterBId: number;
+  let requesterWithNoTicketsId: number;
   const createdTicketIds: number[] = [];
 
   beforeAll(async () => {
@@ -24,6 +25,22 @@ describe("GET /api/tickets", () => {
 
     requesterAId = requesterA.id;
     requesterBId = requesterB.id;
+
+    // Dedicated fixture for the empty-list case — a seeded requester "found
+    // to have no tickets right now" is fragile (any other test or manual
+    // run against the same DB could leave it with tickets). This one is
+    // created here and nothing ever creates a ticket against it, so the
+    // empty-list assertion holds regardless of what else is in the DB.
+    const requesterWithNoTickets = await prisma.requester.upsert({
+      where: { email: "no-tickets-fixture@toktickit.test" },
+      update: { isActive: true },
+      create: {
+        name: "No Tickets Fixture",
+        email: "no-tickets-fixture@toktickit.test",
+        isActive: true,
+      },
+    });
+    requesterWithNoTicketsId = requesterWithNoTickets.id;
 
     async function createTicket(requesterId: number, summary: string) {
       const ticket = await prisma.ticket.create({
@@ -140,14 +157,9 @@ describe("GET /api/tickets", () => {
   });
 
   it("returns an empty array for a Requester with no tickets", async () => {
-    const prisma = getPrisma();
-    const otherRequester = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, id: { notIn: [requesterAId, requesterBId] } },
-    });
-
     const response = await request(app)
       .get("/api/tickets")
-      .query({ requesterId: otherRequester.id })
+      .query({ requesterId: requesterWithNoTicketsId })
       .expect(200);
 
     expect(response.body).toEqual([]);

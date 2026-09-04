@@ -49,9 +49,17 @@
   active — reused for every ticket created and every attachment uploaded in
   the session — until the user explicitly switches. The Requester field is
   not part of the ticket form itself.
-- **AC-06** (Feature 4): a Requester can retrieve their own ticket list via
-  `GET /api/tickets?requesterId=<id>` and sees only tickets they own, newest
-  first, with no way (via this endpoint) to see another Requester's tickets.
+- **AC-06** (Feature 4) — My Tickets list, Given–When–Then:
+  - **Given** a Requester has one or more tickets in the system,
+    **when** they call `GET /api/tickets` with their own `requesterId`,
+    **then** the response is `200` and contains only tickets whose
+    `requesterId` matches theirs — no ticket belonging to another Requester
+    appears, ordered `createdAt desc, id desc` (BR-08).
+  - **Given** a Requester has no tickets, **when** they call `GET /api/tickets`
+    with their own `requesterId`, **then** the response is `200` with an
+    empty array — not an error.
+  - **Given** any caller, **when** `requesterId` is missing or not a positive
+    integer, **then** the response is `400` and no ticket data is returned.
 
 ## Business Rules
 

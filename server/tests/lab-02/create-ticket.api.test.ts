@@ -106,6 +106,21 @@ describe("POST /api/tickets", () => {
     });
   });
 
+  it("rejects requesterId/categoryId/relatedSystemId of 0, not just missing", async () => {
+    // An unselected <select> in the client form coerces to 0 via Number(""),
+    // which passes a bare Number.isInteger() check — ids must be > 0.
+    const response = await request(app)
+      .post("/api/tickets")
+      .send(validPayload({ requesterId: 0, categoryId: 0, relatedSystemId: 0 }))
+      .expect(400);
+
+    expect(response.body.errors).toMatchObject({
+      requesterId: expect.any(String),
+      categoryId: expect.any(String),
+      relatedSystemId: expect.any(String),
+    });
+  });
+
   it("rejects a summary that is only whitespace", async () => {
     const response = await request(app)
       .post("/api/tickets")

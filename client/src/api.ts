@@ -5,6 +5,67 @@ export interface Category {
   name: string;
 }
 
+export interface RelatedSystem {
+  id: number;
+  name: string;
+}
+
+export interface Requester {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+export interface Ticket {
+  id: number;
+  ticketNumber: string;
+  requesterId: number;
+  categoryId: number;
+  relatedSystemId: number;
+  summary: string;
+  description: string;
+  requestedPriority: Priority;
+  currentStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Attachment {
+  id: number;
+  ticketId: number;
+  originalFilename: string;
+  storedFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface CreateTicketInput {
+  requesterId: number;
+  categoryId: number;
+  relatedSystemId: number;
+  summary: string;
+  description: string;
+  requestedPriority: Priority;
+}
+
+// Thrown by the ticket-creation calls below. `fieldErrors` is only set for a
+// 400 from POST /api/tickets, keyed the same way the form's fields are named
+// (see server/src/app.ts), so the UI can show each message next to its field.
+export class ApiError extends Error {
+  status: number;
+  fieldErrors?: Record<string, string>;
+
+  constructor(message: string, status: number, fieldErrors?: Record<string, string>) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
 export interface SystemStatus {
   online: boolean;
   categories: Category[];
@@ -27,4 +88,71 @@ export async function checkSystem(): Promise<SystemStatus> {
     online: true,
     categories: [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Feature 3 — Create ticket form data + submission
+// ---------------------------------------------------------------------------
+export async function fetchCategories(): Promise<Category[]> {
+  const response = await fetch(`${API_URL}/api/categories`);
+
+  if (!response.ok) {
+    throw new ApiError("Failed to load categories", response.status);
+  }
+
+  return response.json();
+}
+
+export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
+  const response = await fetch(`${API_URL}/api/related-systems`);
+
+  if (!response.ok) {
+    throw new ApiError("Failed to load related systems", response.status);
+  }
+
+  return response.json();
+}
+
+export async function fetchRequesters(): Promise<Requester[]> {
+  const response = await fetch(`${API_URL}/api/requesters`);
+
+  if (!response.ok) {
+    throw new ApiError("Failed to load requesters", response.status);
+  }
+
+  return response.json();
+}
+
+export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
+  const response = await fetch(`${API_URL}/api/tickets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError("Ticket submission failed", response.status, body.errors);
+  }
+
+  return body;
+}
+
+export async function uploadAttachment(ticketId: number, file: File): Promise<Attachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Attachment upload failed", response.status);
+  }
+
+  return body;
 }

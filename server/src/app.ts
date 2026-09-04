@@ -53,6 +53,51 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// Feature 3 — lookup lists the ticket-creation form needs
+// ---------------------------------------------------------------------------
+app.get("/api/related-systems", async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+
+    const relatedSystems = await prisma.relatedSystem.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { id: "asc" },
+    });
+
+    res.status(200).json(relatedSystems);
+  } catch (error) {
+    console.error("Failed to retrieve related systems:", error);
+
+    res.status(500).json({
+      error: "Failed to retrieve related systems",
+    });
+  }
+});
+
+// Lab 2 stand-in for authentication: the client fetches the active
+// Requesters and lets the user pick which one they are "logged in" as.
+app.get("/api/requesters", async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+
+    const requesters = await prisma.requester.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, email: true },
+      orderBy: { id: "asc" },
+    });
+
+    res.status(200).json(requesters);
+  } catch (error) {
+    console.error("Failed to retrieve requesters:", error);
+
+    res.status(500).json({
+      error: "Failed to retrieve requesters",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Feature 1 — Create an IT support ticket (POST /api/tickets)
 // ---------------------------------------------------------------------------
 const REQUESTED_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
@@ -70,13 +115,16 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
 
   const errors: Record<string, string> = {};
 
-  if (!Number.isInteger(requesterId)) {
+  // Ids are positive (autoincrement starts at 1) — 0 is what an empty <select>
+  // coerces to via Number(""), and it's still a valid integer, so it must be
+  // rejected explicitly rather than just checked with Number.isInteger.
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
     errors.requesterId = "Requester is required.";
   }
-  if (!Number.isInteger(categoryId)) {
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
     errors.categoryId = "Category is required.";
   }
-  if (!Number.isInteger(relatedSystemId)) {
+  if (!Number.isInteger(relatedSystemId) || relatedSystemId <= 0) {
     errors.relatedSystemId = "Related System is required.";
   }
 

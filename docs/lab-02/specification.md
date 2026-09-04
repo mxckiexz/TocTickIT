@@ -1,21 +1,14 @@
-# Lab 2 — Create an IT Support Ticket — Specification
+# Lab 2 / Feature 1 — Create an IT Support Ticket — Specification
 
-> Kept as the source of truth to check the API/tests against — update this file
-> first when the contract changes, then update the code and tests to match.
-> Covers Feature 1 (`POST /api/tickets`), Feature 2 (attachment upload), and
-> Feature 3 (the ticket-creation UI that ties both into one flow).
+> Written against the code as implemented on `feature/1-create-an-IT-support-ticket`
+> (commit `eff3ca3`). Kept as the source of truth to check the API/tests against —
+> update this file first when the contract changes, then update the code and tests
+> to match.
 
 ## Scope
 
-- **Feature 1** (`feature/1-create-an-IT-support-ticket`): backend only,
-  `POST /api/tickets`.
-- **Feature 2** (`feature/2-upload-permitted-supporting-attachments`): backend
-  only, `POST /api/tickets/:id/attachments`.
-- **Feature 3** (`feature3`, this branch): the client-side ticket-creation form —
-  `GET /api/related-systems` and `GET /api/requesters` (new lookup endpoints the
-  form needs), plus the React form itself, so a Requester can actually fill in
-  a ticket, optionally attach one supporting file, submit, and see the unique
-  Ticket Number that comes back. See [ui-spec.md](ui-spec.md).
+Backend only: `POST /api/tickets`. No client-side ticket form exists yet in this
+branch (see [ui-spec.md](ui-spec.md)).
 
 ## Entities
 
@@ -34,10 +27,6 @@
   validation errors and creates no row.
 - **AC-03**: Submitting with a Requester, Category, or RelatedSystem that is
   inactive or does not exist is rejected.
-- **AC-04** (Feature 3): a Requester can fill in and submit the ticket form in
-  the browser — picking Requester/Category/Related System from real data,
-  optionally attaching one supporting file — and sees the unique Ticket Number
-  displayed on success.
 
 ## Business Rules
 
@@ -54,11 +43,6 @@
   characters, both required and not whitespace-only.
 - **BR-04 — Requested Priority**: one of `LOW`, `MEDIUM`, `HIGH`.
 - **BR-05 — Initial status**: every new ticket starts with `currentStatus: "New"`.
-- **BR-06 — Ids must be positive**: `requesterId`/`categoryId`/`relatedSystemId`
-  of `0` (or negative) are rejected as "required", not treated as a valid
-  reference. Found while building the Feature 3 form: an unselected `<select>`
-  coerces to `0` via `Number("")`, which a bare `Number.isInteger()` check let
-  through.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

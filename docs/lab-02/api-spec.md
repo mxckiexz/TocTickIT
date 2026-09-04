@@ -1,4 +1,4 @@
-# Lab 2 — API Spec
+# Lab 2 / Feature 1 — API Spec
 
 ## `POST /api/tickets`
 
@@ -43,31 +43,3 @@ Regex: `^TKT-\d{4}-\d{6}$`.
 Returns only **active** categories, `[{ id, name }]`, ordered by `id` ascending.
 Inactive categories are intentionally excluded so a ticket form never offers a
 choice that `POST /api/tickets` would then reject.
-
-## `GET /api/related-systems`
-
-Same shape and same active-only filtering as `GET /api/categories`:
-`[{ id, name }]`, ordered by `id` ascending.
-
-## `GET /api/requesters`
-
-Active Requesters only: `[{ id, name, email }]`, ordered by `id` ascending.
-Lab 2 has no real authentication yet, so the client uses this to let the user
-pick which Requester they're acting as (see the `Requester` model comment in
-`server/prisma/schema.prisma`).
-
-## `POST /api/tickets/:id/attachments`
-
-Multipart upload, field name `file`. One file per call — call it again to add
-more, up to the per-ticket limit.
-
-| Status | When | Body |
-|---|---|---|
-| `201 Created` | File accepted | The created `Attachment` (`id`, `ticketId`, `originalFilename`, `storedFilename`, `mimeType`, `sizeBytes`, `createdAt`). |
-| `400 Bad Request` | Missing/invalid ticket id, or no file sent | `{ "error": "<message>" }` |
-| `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
-| `409 Conflict` | Ticket already has 5 attachments | `{ "error": "A ticket can have at most 5 active attachments." }` |
-| `413 Payload Too Large` | File over 5MB | `{ "error": "File exceeds the 5MB limit." }` |
-| `415 Unsupported Media Type` | Mime type not JPG/PNG/WEBP/PDF | `{ "error": "Unsupported file type. Allowed: JPG, PNG, WEBP, PDF." }` |
-
-A rejected file is deleted from disk immediately — nothing is left orphaned.

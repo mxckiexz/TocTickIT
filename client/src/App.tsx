@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { checkSystem, Category } from "./api.js";
-import CreateTicketForm from "./CreateTicketForm.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
 
@@ -8,7 +7,6 @@ export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false);
 
   async function handleCheck() {
     setState("loading");
@@ -67,16 +65,6 @@ export default function App() {
           Offline — {errorMessage}
         </div>
       )}
-
-      <hr className="my-5" />
-
-      {!showCreateForm && (
-        <button className="btn btn-outline-success" onClick={() => setShowCreateForm(true)}>
-          New Ticket
-        </button>
-      )}
-
-      {showCreateForm && <CreateTicketForm />}
     </div>
   );
 }

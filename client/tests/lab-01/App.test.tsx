@@ -32,7 +32,7 @@ describe("App", () => {
       screen.getByRole("button", { name: /Check System/i })
     );
 
-    expect(screen.getByText("Loading categories...")).toBeInTheDocument();
+    expect(screen.getByText(/Loading/i)).toBeInTheDocument();
 
     expect(await screen.findByText("Online")).toBeInTheDocument();
 

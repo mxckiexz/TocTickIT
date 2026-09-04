@@ -58,16 +58,20 @@ pick which Requester they're acting as (see the `Requester` model comment in
 
 ## `POST /api/tickets/:id/attachments`
 
-Multipart upload, field name `file`. One file per call — call it again to add
-more, up to the per-ticket limit.
+Multipart upload, fields `requesterId` (text) and `file`. One file per call —
+call it again to add more, up to the per-ticket limit.
 
 | Status | When | Body |
 |---|---|---|
 | `201 Created` | File accepted | The created `Attachment` (`id`, `ticketId`, `originalFilename`, `storedFilename`, `mimeType`, `sizeBytes`, `createdAt`). |
-| `400 Bad Request` | Missing/invalid ticket id, or no file sent | `{ "error": "<message>" }` |
+| `400 Bad Request` | Missing/invalid ticket id, missing/invalid `requesterId`, or no file sent | `{ "error": "<message>" }` |
+| `403 Forbidden` | `requesterId` doesn't match `ticket.requesterId` (BR-07) | `{ "error": "You do not have permission to add attachments to this ticket." }` |
 | `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
 | `409 Conflict` | Ticket already has 5 attachments | `{ "error": "A ticket can have at most 5 active attachments." }` |
 | `413 Payload Too Large` | File over 5MB | `{ "error": "File exceeds the 5MB limit." }` |
 | `415 Unsupported Media Type` | Mime type not JPG/PNG/WEBP/PDF | `{ "error": "Unsupported file type. Allowed: JPG, PNG, WEBP, PDF." }` |
 
-A rejected file is deleted from disk immediately — nothing is left orphaned.
+Check order: ticket id shape → `requesterId` shape → file present → mime type
+→ ticket exists (404) → ownership (403) → attachment count (409). A rejected
+file is deleted from disk immediately in every case — nothing is left
+orphaned.

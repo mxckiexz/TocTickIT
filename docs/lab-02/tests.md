@@ -26,8 +26,18 @@
 | 13 | GET /api/related-systems returns only active related systems in id order | passed |
 | 14 | GET /api/requesters returns only active requesters in id order | passed |
 
-`attachments.api.test.ts` (Feature 2): 6 tests covering type/size/count limits,
-missing-ticket, and orphan-file cleanup on rejection — passed.
+`attachments.api.test.ts` (Feature 2, extended on review with BR-07):
+
+| # | Test | Covers | Result |
+|---|------|--------|--------|
+| 15 | uploads a permitted file and returns its metadata | Feature 2 | passed |
+| 16 | rejects an unsupported file type | Feature 2 | passed |
+| 17 | rejects a file larger than 5MB | Feature 2 | passed |
+| 18 | rejects an upload with no file | Feature 2 | passed |
+| 19 | rejects an upload with no requesterId | BR-07 | passed |
+| 20 | rejects an upload to a ticket that does not exist | Feature 2 | passed |
+| 21 | rejects an upload from a requester who does not own the ticket | BR-07 | passed |
+| 22 | rejects a 6th active attachment on the same ticket | Feature 2 | passed |
 
 Run with:
 
@@ -39,24 +49,26 @@ cd server && npm run test
  ✓ tests/lab-01/health.test.ts (1 test)
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
- ✓ tests/lab-02/attachments.api.test.ts (6 tests)
+ ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
 
  Test Files  5 passed (5)
-      Tests  22 passed (22)
+      Tests  24 passed (24)
 ```
 
 ## Frontend (`client/tests/lab-02/create-ticket-form.test.tsx`, Vitest + React Testing Library)
 
 | # | Test | Covers | Result |
 |---|------|--------|--------|
-| 1 | does not fetch ticket form data until New Ticket is clicked | no side effects until opened | passed |
-| 2 | loads the requester, category, and related system options | AC-04 | passed |
-| 3 | submits the form and shows the returned unique Ticket Number | AC-04 | passed |
-| 4 | disables the submit button while the request is in flight | BR-02 (client side) | passed |
-| 5 | shows field-level errors from a rejected submission without creating a ticket | AC-02 | passed |
-| 6 | uploads the selected attachment after the ticket is created | Feature 2 + 3 integration | passed |
-| 7 | still shows the Ticket Number if the attachment upload fails | graceful degradation | passed |
+| 1 | does not fetch anything until New Ticket is clicked | no side effects until opened | passed |
+| 2 | shows the Development Requester picker before the ticket form, and no Requester field inside the form | AC-05 | passed |
+| 3 | submits the form as the selected requester and shows the returned unique Ticket Number | AC-04, AC-05 | passed |
+| 4 | keeps the same requester active for creating another ticket | AC-05 | passed |
+| 5 | returns to the requester picker when Switch requester is clicked | AC-05 | passed |
+| 6 | disables the submit button while the request is in flight | BR-02 (client side) | passed |
+| 7 | shows field-level errors from a rejected submission without creating a ticket | AC-02 | passed |
+| 8 | uploads the selected attachment as the active requester after the ticket is created | BR-07, Feature 2+3 integration | passed |
+| 9 | still shows the Ticket Number if the attachment upload fails | graceful degradation | passed |
 
 Run with:
 
@@ -66,24 +78,29 @@ cd client && npm run test
 
 ```
  ✓ tests/lab-01/App.test.tsx (3 tests)
- ✓ tests/lab-02/create-ticket-form.test.tsx (7 tests)
+ ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
 
  Test Files  2 passed (2)
-      Tests  10 passed (10)
+      Tests  12 passed (12)
 ```
 
-## Manual verification (Feature 3)
+## Manual verification
 
 Ran both dev servers and drove the real form in a browser:
-- Filled every field with valid data (with a real seeded Requester/Category/
-  Related System) → got `Ticket created successfully. Your Ticket Number:
-  TKT-2026-000036`.
+- Filled every field with valid data → got `Ticket created successfully. Your
+  Ticket Number: TKT-2026-000036`.
 - Submitted with everything empty → all six fields showed their own error
-  message together in one round trip ("Requester is required.", "Category is
-  required.", "Related System is required.", "Summary is required.",
-  "Description is required.", plus the enum default keeps Requested Priority
-  valid). This is what surfaced BR-06 — before the fix, only the text-field
-  errors showed and the three dropdown errors were silently swallowed.
+  message together in one round trip. This is what surfaced BR-06 — before
+  the fix, only the text-field errors showed and the three dropdown errors
+  were silently swallowed.
+- (Review fixes) Selected "Michael Brown" as the Development Requester,
+  created a ticket, saw "Creating as Michael Brown" persist through page
+  reload (localStorage) and through "Create another ticket" without
+  re-prompting.
+- `curl`'d `POST /api/tickets/:id/attachments` with `requesterId` set to a
+  Requester who does **not** own the ticket → `403
+  {"error":"You do not have permission to add attachments to this ticket."}`,
+  and with the actual owner's id → `201` succeeds normally.
 
 ## Known gaps (not yet covered)
 

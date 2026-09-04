@@ -35,9 +35,14 @@
 - **AC-03**: Submitting with a Requester, Category, or RelatedSystem that is
   inactive or does not exist is rejected.
 - **AC-04** (Feature 3): a Requester can fill in and submit the ticket form in
-  the browser — picking Requester/Category/Related System from real data,
-  optionally attaching one supporting file — and sees the unique Ticket Number
-  displayed on success.
+  the browser — picking Category/Related System from real data, optionally
+  attaching one supporting file — and sees the unique Ticket Number displayed
+  on success.
+- **AC-05** (Feature 3, added on review): before reaching the ticket form, the
+  user picks a Development Requester in a separate step. That choice stays
+  active — reused for every ticket created and every attachment uploaded in
+  the session — until the user explicitly switches. The Requester field is
+  not part of the ticket form itself.
 
 ## Business Rules
 
@@ -59,6 +64,11 @@
   reference. Found while building the Feature 3 form: an unselected `<select>`
   coerces to `0` via `Number("")`, which a bare `Number.isInteger()` check let
   through.
+- **BR-07 — Attachment ownership**: `POST /api/tickets/:id/attachments` must
+  be called with the `requesterId` of the Requester adding the file, and it is
+  rejected with `403` unless it matches `ticket.requesterId` — one Requester
+  cannot attach a file to another Requester's ticket. Added on peer review;
+  before this fix the endpoint only checked that the ticket existed.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

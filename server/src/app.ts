@@ -236,7 +236,9 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
 
     const tickets = await prisma.ticket.findMany({
       where: { requesterId },
-      orderBy: { createdAt: "desc" },
+      // id desc as a tiebreaker keeps order stable when two tickets share a
+      // createdAt (same millisecond, or a DB with lower timestamp precision).
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
 
     res.status(200).json(tickets);

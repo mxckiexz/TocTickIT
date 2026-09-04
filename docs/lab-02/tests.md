@@ -39,6 +39,18 @@
 | 21 | rejects an upload from a requester who does not own the ticket | BR-07 | passed |
 | 22 | rejects a 6th active attachment on the same ticket | Feature 2 | passed |
 
+`my-tickets.api.test.ts` (Feature 4):
+
+| # | Test | Covers | Result |
+|---|------|--------|--------|
+| 23 | returns only the selected Requester's own tickets (ownership) | AC-06 | passed |
+| 24 | does not return Requester A's tickets when Requester B is selected | AC-06 | passed |
+| 25 | orders tickets newest first | BR-08 | passed |
+| 26 | breaks a createdAt tie with id desc, so order stays predictable | BR-08 | passed |
+| 27 | returns an empty array for a Requester with no tickets | AC-06 | passed |
+| 28 | rejects a missing requesterId | Feature 4 | passed |
+| 29 | rejects a requesterId of 0 | Feature 4 | passed |
+
 Run with:
 
 ```bash
@@ -49,11 +61,12 @@ cd server && npm run test
  ✓ tests/lab-01/health.test.ts (1 test)
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
+ ✓ tests/lab-02/my-tickets.api.test.ts (7 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
 
- Test Files  5 passed (5)
-      Tests  24 passed (24)
+ Test Files  6 passed (6)
+      Tests  31 passed (31)
 ```
 
 ## Frontend (`client/tests/lab-02/create-ticket-form.test.tsx`, Vitest + React Testing Library)
@@ -109,3 +122,8 @@ Ran both dev servers and drove the real form in a browser:
 - No test covers uploading more than one attachment from the form (the
   `<input type="file">` is single-file; multi-file selection during creation
   is not part of this feature).
+- `GET /api/tickets` has no search, filter, sort-option, or pagination tests —
+  **deferred to Feature 5** (see [specification.md](specification.md) Feature 4
+  scope and [api-spec.md](api-spec.md)). This endpoint's own test coverage
+  (ownership, ordering incl. the `id desc` tiebreak, empty list, validation)
+  is complete for what it currently does.

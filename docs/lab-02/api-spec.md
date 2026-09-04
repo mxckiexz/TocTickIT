@@ -75,3 +75,21 @@ Check order: ticket id shape → `requesterId` shape → file present → mime t
 → ticket exists (404) → ownership (403) → attachment count (409). A rejected
 file is deleted from disk immediately in every case — nothing is left
 orphaned.
+
+## `GET /api/tickets`
+
+The My Tickets list (Feature 4) — a Requester's own tickets, ownership-scoped.
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer (no active/exists check — an id with zero tickets just returns `[]`) |
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | Valid `requesterId` | `Ticket[]` — only rows where `ticket.requesterId` matches, ordered by `createdAt desc, id desc` (BR-08). `[]` if the Requester has no tickets. |
+| `400 Bad Request` | `requesterId` missing, non-integer, or `<= 0` | `{ "error": "requesterId is required." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve tickets" }` |
+
+**Deferred to Feature 5** (not implemented here): search, filtering, sort
+options other than the fixed order above, and pagination. This endpoint
+always returns the Requester's complete ticket list in one response.

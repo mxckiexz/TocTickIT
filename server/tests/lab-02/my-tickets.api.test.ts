@@ -92,6 +92,53 @@ describe("GET /api/tickets", () => {
     expect(dates).toEqual(sorted);
   });
 
+  it("breaks a createdAt tie with id desc, so order stays predictable", async () => {
+    const prisma = getPrisma();
+    const category = await prisma.category.findFirstOrThrow({
+      where: { isActive: true },
+    });
+    const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({
+      where: { isActive: true },
+    });
+    const sameInstant = new Date();
+
+    const first = await prisma.ticket.create({
+      data: {
+        ticketNumber: `TEST-MYTIX-TIE-${Date.now()}-a`,
+        requesterId: requesterAId,
+        categoryId: category.id,
+        relatedSystemId: relatedSystem.id,
+        summary: "Tie-break ticket 1",
+        description: "Same createdAt as the next one, on purpose.",
+        requestedPriority: "LOW",
+        createdAt: sameInstant,
+      },
+    });
+    const second = await prisma.ticket.create({
+      data: {
+        ticketNumber: `TEST-MYTIX-TIE-${Date.now()}-b`,
+        requesterId: requesterAId,
+        categoryId: category.id,
+        relatedSystemId: relatedSystem.id,
+        summary: "Tie-break ticket 2",
+        description: "Same createdAt as the previous one, on purpose.",
+        requestedPriority: "LOW",
+        createdAt: sameInstant,
+      },
+    });
+    createdTicketIds.push(first.id, second.id);
+
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterAId })
+      .expect(200);
+
+    const tieIds = response.body
+      .map((t: { id: number }) => t.id)
+      .filter((id: number) => id === first.id || id === second.id);
+    expect(tieIds).toEqual([second.id, first.id]);
+  });
+
   it("returns an empty array for a Requester with no tickets", async () => {
     const prisma = getPrisma();
     const otherRequester = await prisma.requester.findFirstOrThrow({

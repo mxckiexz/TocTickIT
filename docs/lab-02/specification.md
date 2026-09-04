@@ -2,8 +2,9 @@
 
 > Kept as the source of truth to check the API/tests against — update this file
 > first when the contract changes, then update the code and tests to match.
-> Covers Feature 1 (`POST /api/tickets`), Feature 2 (attachment upload), and
-> Feature 3 (the ticket-creation UI that ties both into one flow).
+> Covers Feature 1 (`POST /api/tickets`), Feature 2 (attachment upload),
+> Feature 3 (the ticket-creation UI that ties both into one flow), and
+> Feature 4 (`GET /api/tickets`, the My Tickets list).
 
 ## Scope
 
@@ -11,11 +12,16 @@
   `POST /api/tickets`.
 - **Feature 2** (`feature/2-upload-permitted-supporting-attachments`): backend
   only, `POST /api/tickets/:id/attachments`.
-- **Feature 3** (`feature3`, this branch): the client-side ticket-creation form —
-  `GET /api/related-systems` and `GET /api/requesters` (new lookup endpoints the
-  form needs), plus the React form itself, so a Requester can actually fill in
-  a ticket, optionally attach one supporting file, submit, and see the unique
-  Ticket Number that comes back. See [ui-spec.md](ui-spec.md).
+- **Feature 3** (`feature3`, `feature3-fixes`): the client-side ticket-creation
+  form — `GET /api/related-systems` and `GET /api/requesters` (new lookup
+  endpoints the form needs), plus the React form itself, so a Requester can
+  actually fill in a ticket, optionally attach one supporting file, submit,
+  and see the unique Ticket Number that comes back. See [ui-spec.md](ui-spec.md).
+- **Feature 4** (`feature4`): backend only, `GET /api/tickets` — a Requester's
+  own ticket list, ownership-scoped and newest first. Search, filtering,
+  sorting options, and pagination are **explicitly deferred to Feature 5** —
+  this endpoint always returns the full list for the given `requesterId`, in
+  one fixed order.
 
 ## Entities
 
@@ -43,6 +49,9 @@
   active — reused for every ticket created and every attachment uploaded in
   the session — until the user explicitly switches. The Requester field is
   not part of the ticket form itself.
+- **AC-06** (Feature 4): a Requester can retrieve their own ticket list via
+  `GET /api/tickets?requesterId=<id>` and sees only tickets they own, newest
+  first, with no way (via this endpoint) to see another Requester's tickets.
 
 ## Business Rules
 
@@ -69,6 +78,11 @@
   rejected with `403` unless it matches `ticket.requesterId` — one Requester
   cannot attach a file to another Requester's ticket. Added on peer review;
   before this fix the endpoint only checked that the ticket existed.
+- **BR-08 — My Tickets ordering**: `GET /api/tickets` orders by `createdAt
+  desc`, with `id desc` as a tiebreaker, so the order stays predictable when
+  two tickets share a `createdAt` (same millisecond, or a clock with lower
+  precision). Search, filter, sort options, and pagination are **deferred to
+  Feature 5** — not part of this endpoint's contract yet.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

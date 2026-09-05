@@ -11,6 +11,7 @@ import {
   fetchTickets,
 } from "./api.js";
 import RequesterBanner from "./RequesterBanner.js";
+import TicketDetail from "./TicketDetail.js";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -49,6 +50,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
   const [listState, setListState] = useState<ListState>("loading");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +148,19 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
       <div className="alert alert-danger mt-4" role="alert">
         Unable to load My Tickets. Please make sure the backend server is running.
       </div>
+    );
+  }
+
+  if (selectedTicketId !== null) {
+    return (
+      <TicketDetail
+        ticketId={selectedTicketId}
+        requester={requester}
+        categories={categories}
+        relatedSystems={relatedSystems}
+        onBack={() => setSelectedTicketId(null)}
+        onSwitchRequester={onSwitchRequester}
+      />
     );
   }
 
@@ -266,7 +281,15 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
               <tbody>
                 {tickets.map((ticket) => (
                   <tr key={ticket.id}>
-                    <td>{ticket.ticketNumber}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0 align-baseline"
+                        onClick={() => setSelectedTicketId(ticket.id)}
+                      >
+                        {ticket.ticketNumber}
+                      </button>
+                    </td>
                     <td>{ticket.summary}</td>
                     <td>{categoryName(ticket.categoryId)}</td>
                     <td>{relatedSystemName(ticket.relatedSystemId)}</td>

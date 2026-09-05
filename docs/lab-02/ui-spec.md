@@ -1,4 +1,4 @@
-# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5)
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6)
 
 ## Entry point
 
@@ -105,7 +105,7 @@ state.
 | Category | `<select>` | `categoryId` filter, "All categories" clears it. |
 | Related System | `<select>` | `relatedSystemId` filter, "All related systems" clears it. |
 | Priority | `<select>` | `requestedPriority` filter (`LOW`/`MEDIUM`/`HIGH`), "All priorities" clears it. |
-| Status | `<select>` | `currentStatus` filter, "All statuses" clears it. Only "New" is offered as a value today — every ticket is `"New"` (BR-05, no status-transition feature exists yet) — but the control is there so it's ready once Feature 6/7 introduce more statuses; just add `<option>`s. |
+| Status | `<select>` | `currentStatus` filter, "All statuses" clears it. Only "New" is offered as a value today — every ticket is `"New"` (BR-05, no status-transition feature exists yet) — but the control is there so it's ready once a future feature introduces more statuses; just add `<option>`s. |
 | Sort | `<select>` | One dropdown covering both `sortBy` and `sortDir` as a single choice: Newest first (default, `createdAt desc`), Oldest first (`createdAt asc`), Summary A–Z (`summary asc`), Summary Z–A (`summary desc`). |
 | Previous / Next | buttons | Page navigation. Disabled at the first/last page respectively (`pagination.page`/`totalPages` from the response). |
 
@@ -121,9 +121,58 @@ category list by id — the API returns ids, not names), Related System
 "Page `<page>` of `<totalPages>` (`<totalItems>` tickets)" plus the
 Previous/Next buttons.
 
+The Ticket Number cell is a link-styled button — clicking it opens
+`TicketDetail` for that row (AC-08, Feature 6) instead of navigating (there's
+no router; `MyTickets` just swaps which component it renders based on a
+`selectedTicketId` state).
+
 Empty states:
 - No tickets at all for this Requester, or none matching the current
   search/filters → "No tickets match your search and filters." (same message
   either way — the controls are right there to relax them).
 - Filter/category/related-system lookups fail to load → an error banner
   ("Unable to load My Tickets…"), same pattern as `CreateTicketForm`.
+
+## `TicketDetail` (Feature 6)
+
+Reached only from `MyTickets` — clicking a row's Ticket Number sets
+`selectedTicketId`, and `MyTickets` renders `TicketDetail` in place of the
+list (same component, same active Requester, same fetched
+categories/related-systems passed down as props so the detail screen
+doesn't re-fetch them). There is no independent URL/route for a ticket's
+detail — refreshing the page or sharing a link returns to My Tickets, not
+back into the detail screen. Acceptable for this lab; would need a router
+(e.g. `/tickets/:id`) to fix, out of scope here.
+
+Fetches `GET /api/tickets/:id?requesterId=<active requester>` on mount (and
+whenever `ticketId` changes, i.e. clicking a different row while already on
+the detail screen would refetch, though nothing in the UI currently triggers
+that from within the screen itself).
+
+### Layout
+
+A definition list (`<dl>`): Summary, Description (`white-space: pre-wrap` so
+line breaks in the original text are preserved), Category, Related System
+(both names, resolved the same way as the list table), Requested Priority,
+Status, Created, Last Updated — all from the `Ticket` fields BR-11 gates
+access to. Attachments are **not** shown here — deferred to Feature 7.
+
+A "← Back to My Tickets" link-styled button above the content clears
+`selectedTicketId`, returning to the list with whatever search/filter/sort/
+page state it had before (that state lives in `MyTickets`, untouched by
+opening/closing the detail screen).
+
+### States
+
+| State | Shown |
+|---|---|
+| Loading | "Loading ticket…" |
+| `403` (BR-11) | The API's own message: "You do not have permission to view this ticket." |
+| `404` | The API's own message: "Ticket not found." |
+| Other error | "Unable to load this ticket." |
+| Loaded | The layout above |
+
+The 403/404 messages are passed through verbatim from the API response
+rather than replaced with a generic one — there's nothing sensitive to hide
+by being specific here (see [api-spec.md](api-spec.md)'s note on why
+existence and ownership get distinct statuses instead of collapsing to 404).

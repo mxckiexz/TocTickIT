@@ -89,6 +89,18 @@ tiebreak).
 | B50 | Negative | AC-07 | `pageSize=51` (over the 50 max) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
 | B51 | Negative | AC-07 | `pageSize=lots` (non-numeric) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
 
+### `ticket-detail.api.test.ts` (Feature 6)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B52 | Positive | AC-08 | The owning Requester requests a ticket's detail | `200`; full ticket fields returned | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B53 | Negative | AC-08, BR-11 | A different Requester requests the same ticket | `403`; no ticket data returned | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B54 | Negative | AC-08 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B55 | Negative | AC-08 | `:id` is not numeric | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B56 | Negative | AC-08 | `requesterId` query param omitted | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B57 | Negative | AC-08 | `requesterId=0` | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B58 | Negative | AC-08 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+
 Run with:
 
 ```bash
@@ -99,12 +111,13 @@ cd server && npm run test
  ✓ tests/lab-01/health.test.ts (1 test)
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (7 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
 
- Test Files  6 passed (6)
-      Tests  53 passed (53)
+ Test Files  7 passed (7)
+      Tests  60 passed (60)
 ```
 
 ## Frontend test plan
@@ -139,6 +152,15 @@ cd server && npm run test
 | F19 | Positive | AC-05 | Open "New Ticket" first, then click the "My Tickets" tab | Switches view **without** re-showing the Requester picker — same active Requester carries over | `client/tests/lab-02/my-tickets.test.tsx` | passed |
 | F20 | Positive | AC-07 | Change the status filter | "All statuses" option present; re-fetches with `currentStatus: "New"` and `page` reset to 1 | `client/tests/lab-02/my-tickets.test.tsx` | passed |
 
+### `ticket-detail.test.tsx` (Feature 6)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F21 | Positive | Design constraint (no side effects until opened) | List renders with one ticket, its row not clicked | `fetchTicketDetail` never called | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F22 | Positive | AC-08 | Click a ticket's Ticket Number | `fetchTicketDetail` called with `(ticketId, requesterId)`; Summary, Description, Category name, Related System name, and Priority all shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F23 | Positive | AC-08 | Set a non-default search/category/sort, open a ticket, click "Back to My Tickets" | Returns to the list with the same search text, category selection, and sort selection still applied — confirmed by the control values, and that no extra `fetchTickets` call fired while the detail screen was open | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F24 | Negative | AC-08, BR-11 | `fetchTicketDetail` rejects (e.g. a 403) | The API's error message is shown in place of the ticket fields | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+
 Run with:
 
 ```bash
@@ -149,9 +171,10 @@ cd client && npm run test
  ✓ tests/lab-01/App.test.tsx (3 tests)
  ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
  ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
+ ✓ tests/lab-02/ticket-detail.test.tsx (4 tests)
 
- Test Files  3 passed (3)
-      Tests  23 passed (23)
+ Test Files  4 passed (4)
+      Tests  27 passed (27)
 ```
 
 ## AC / BR → Test traceability matrix
@@ -165,6 +188,7 @@ cd client && npm run test
 | AC-05 — Development Requester picked first, stays active across ticket creations (and now across New Ticket / My Tickets) | F2, F4, F5, F11, F19 |
 | AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29, F12, F13 |
 | AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
+| AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |
@@ -175,6 +199,7 @@ cd client && npm run test
 | BR-08 — My Tickets ordering incl. `id desc` tiebreak, extended to whichever `sortBy` is chosen | B25, B26, B44, B45, F16 |
 | BR-09 — My Tickets response envelope (`{ tickets, pagination }`) | B30, B48, F17 |
 | BR-10 — My Tickets search/filter fields combine with AND | B35, B40, B41, B42, B43 |
+| BR-11 — Ticket Detail ownership | B53, F24 |
 
 ## Manual verification
 
@@ -191,7 +216,7 @@ Ran both dev servers and drove the real app in a browser:
 - `curl`'d `POST /api/tickets/:id/attachments` with a non-owning
   `requesterId` → `403`; with the actual owner's id → `201`.
 
-**Feature 5 (this round):** created a dozen tickets spread across all 4
+**Feature 5:** created a dozen tickets spread across all 4
 categories/related systems and 3 priorities via the API, then drove the real
 `MyTickets` view:
 - Entry: clicking **My Tickets** from the front screen shows the same
@@ -213,6 +238,19 @@ categories/related systems and 3 priorities via the API, then drove the real
 - Test data (the 12 manually-created tickets) was deleted from the DB after
   verification.
 
+**Feature 6 (this round):** with the same active Requester's existing
+tickets already in the list:
+- Clicked a Ticket Number (`TKT-2026-000036`) → Ticket Detail screen opened
+  showing Summary, Description, Category ("Hardware"), Related System
+  ("VPN"), Requested Priority ("MEDIUM"), Status ("New"), Created, and Last
+  Updated — all correct against what the list row showed.
+- Clicked "← Back to My Tickets" → returned to the list with the same rows
+  and pagination state as before.
+- `curl`'d `GET /api/tickets/:id` directly: the ticket's actual owner
+  (`requesterId=1`) → `200` with the full ticket; a different active
+  Requester (`requesterId=2`) → `403
+  {"error":"You do not have permission to view this ticket."}`.
+
 ## Known gaps (not yet covered)
 
 - No test exercises the `500` paths (DB failure) — would need a mocked Prisma
@@ -228,3 +266,11 @@ categories/related systems and 3 priorities via the API, then drove the real
   sorting by `categoryId`/`relatedSystemId`/`currentStatus` isn't offered (no
   test needed since the API rejects anything outside that list, covered by
   B46).
+- `TicketDetail` has no independent route (no router in this app) — there's
+  no test (or behavior) for reloading the page while on the detail screen,
+  since it isn't expected to preserve state across a reload. Not a gap in
+  Feature 6's own contract, just a known limitation of the current
+  navigation approach.
+- Attachments are not shown on the Ticket Detail screen — intentionally
+  deferred to Feature 7 (see [specification.md](specification.md) Feature 6
+  scope).

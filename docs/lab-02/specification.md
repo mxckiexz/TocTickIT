@@ -5,8 +5,9 @@
 > Covers Feature 1 (`POST /api/tickets`), Feature 2 (attachment upload),
 > Feature 3 (the ticket-creation UI that ties both into one flow),
 > Feature 4 (`GET /api/tickets`, the My Tickets list), Feature 5
-> (search, filter, sort, and pagination on that same endpoint), and
-> Feature 6 (`GET /api/tickets/:id`, the Ticket Detail screen).
+> (search, filter, sort, and pagination on that same endpoint), Feature 6
+> (`GET /api/tickets/:id`, the Ticket Detail screen), and Feature 7
+> (inspecting a ticket's attachments from that screen).
 
 ## Scope
 
@@ -32,6 +33,13 @@
   plus the `TicketDetail` React view reached by clicking a ticket in My
   Tickets. Attachments on this screen are **deferred to Feature 7** — this
   endpoint returns the ticket's own fields only, no attachment list.
+- **Feature 7** (`feature/7-inspect-ticket-information-and-attachments`):
+  backend `GET /api/tickets/:id/attachments` (list) and
+  `GET /api/tickets/:id/attachments/:attachmentId` (view/download one file),
+  both ownership-scoped the same way as Feature 6 (BR-12). `TicketDetail`
+  now shows an Attachments section below the ticket's own fields. Adding a
+  new attachment from this screen, and soft-removing one, are **deferred to
+  Features 8 and 9**.
 
 ## Entities
 
@@ -103,6 +111,25 @@
     number, **then** the Ticket Detail screen opens for that ticket, and a
     "Back to My Tickets" control returns to the list with its previous
     search/filter/sort/page state intact.
+- **AC-09** (Feature 7) — Inspect a ticket's attachments, Given–When–Then:
+  - **Given** a Requester owns a ticket with one or more attachments,
+    **when** they call `GET /api/tickets/:id/attachments` with their own
+    `requesterId`, **then** the response is `200` with that ticket's
+    attachments (metadata only), oldest first.
+  - **Given** a Requester owns a ticket with no attachments, **when** they
+    call the same endpoint, **then** the response is `200` with `[]`.
+  - **Given** a Requester owns a ticket and one of its attachments, **when**
+    they call `GET /api/tickets/:id/attachments/:attachmentId` with their
+    own `requesterId`, **then** the response is `200` with that file's
+    bytes and its original `mimeType`.
+  - **Given** any caller, **when** the `requesterId` does not match the
+    ticket's owner (BR-12), **then** both endpoints respond `403`.
+  - **Given** any caller, **when** `:attachmentId` exists but belongs to a
+    *different* ticket than `:id`, **then** the download endpoint responds
+    `404` — the same as if it didn't exist at all.
+  - **Given** a Requester viewing the Ticket Detail screen, **when** it
+    finishes loading, **then** an Attachments section lists each file as a
+    link that opens/downloads it, or states there are none.
 
 ## Business Rules
 
@@ -147,6 +174,14 @@
   requires `requesterId` and rejects with `403` unless it matches
   `ticket.requesterId` — the same rule as BR-07's attachment ownership,
   applied to viewing a ticket's detail instead of adding a file to it.
+- **BR-12 — Inspect-attachments ownership** (Feature 7): both
+  `GET /api/tickets/:id/attachments` and
+  `GET /api/tickets/:id/attachments/:attachmentId` require `requesterId`
+  and reject with `403` unless it matches `ticket.requesterId` — same rule
+  as BR-07/BR-11, applied to listing/viewing attachments. The download
+  endpoint additionally scopes `:attachmentId` to `:id`'s ticket — an
+  attachment id that exists but belongs to a different ticket is `404`, not
+  served.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

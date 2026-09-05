@@ -223,3 +223,57 @@ Example response for `GET /api/tickets/42?requesterId=1`:
   "updatedAt": "2026-09-04T10:12:03.000Z"
 }
 ```
+
+## `GET /api/tickets/:id/attachments`
+
+Feature 7 — lists a ticket's attachments (metadata only; use the endpoint
+below to fetch a file's actual bytes). Ownership-scoped the same way as
+`GET /api/tickets/:id` (BR-12).
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` exists and `requesterId` matches its owner | `Attachment[]`, ordered `createdAt asc` (oldest first — upload order). `[]` if the ticket has none. |
+| `400 Bad Request` | `:id` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner (BR-12) | `{ "error": "You do not have permission to view this ticket's attachments." }` |
+| `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve attachments" }` |
+
+Each `Attachment` has the same shape `POST /api/tickets/:id/attachments`
+already returns on upload: `id`, `ticketId`, `originalFilename`,
+`storedFilename`, `mimeType`, `sizeBytes`, `createdAt`.
+
+## `GET /api/tickets/:id/attachments/:attachmentId`
+
+Feature 7 — streams one attachment's actual file content, for viewing
+inline or downloading. Same ownership rule as the list endpoint (BR-12),
+plus `:attachmentId` must belong to `:id`'s ticket.
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` and `:attachmentId` both valid, owned, and matched to each other | The raw file bytes, `Content-Type` set to the stored `mimeType`, `Content-Disposition: inline; filename="<originalFilename>"` |
+| `400 Bad Request` | `:id`/`:attachmentId` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner | `{ "error": "You do not have permission to view this ticket's attachments." }` |
+| `404 Not Found` | `:id` doesn't exist, **or** `:attachmentId` doesn't exist, **or** it exists but belongs to a different ticket | `{ "error": "Ticket not found." }` or `{ "error": "Attachment not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure, or the stored file is missing from disk | `{ "error": "Failed to retrieve attachment" }` or `{ "error": "Failed to retrieve attachment file" }` |
+
+Check order: `:id`/`:attachmentId` shape → `requesterId` shape → ticket
+exists (404) → ownership (403) → attachment exists **and** belongs to this
+ticket (404) — an attachment id valid for a different ticket 404s exactly
+like one that doesn't exist, so this endpoint never confirms or denies that
+an attachment id exists on some *other* ticket.

@@ -1,4 +1,4 @@
-# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6)
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7)
 
 ## Entry point
 
@@ -155,7 +155,7 @@ A definition list (`<dl>`): Summary, Description (`white-space: pre-wrap` so
 line breaks in the original text are preserved), Category, Related System
 (both names, resolved the same way as the list table), Requested Priority,
 Status, Created, Last Updated — all from the `Ticket` fields BR-11 gates
-access to. Attachments are **not** shown here — deferred to Feature 7.
+access to. The Attachments section below it is Feature 7.
 
 A "← Back to My Tickets" link-styled button above the content clears
 `selectedTicketId`, returning to the list with whatever search/filter/sort/
@@ -176,3 +176,30 @@ The 403/404 messages are passed through verbatim from the API response
 rather than replaced with a generic one — there's nothing sensitive to hide
 by being specific here (see [api-spec.md](api-spec.md)'s note on why
 existence and ownership get distinct statuses instead of collapsing to 404).
+
+## Attachments section (Feature 7)
+
+Below the `<dl>` in `TicketDetail`. Fetched in a **separate** effect from the
+ticket's own fields (`GET /api/tickets/:id/attachments?requesterId=…`), so a
+hiccup on one doesn't block the other — both endpoints run the same
+ownership check anyway (BR-12), so in practice they succeed or fail
+together, but the UI doesn't assume that.
+
+| State | Shown |
+|---|---|
+| Loading | "Loading attachments…" |
+| Error (e.g. `403`) | The API's own message, in an alert — the ticket's own fields above it stay visible |
+| Loaded, empty | "No attachments on this ticket." |
+| Loaded, non-empty | A list: `<originalFilename>` as a link, `(<size> KB, uploaded <date>)` |
+
+Each filename is a real `<a href>` to
+`GET /api/tickets/:id/attachments/:attachmentId?requesterId=<active
+requester>` (`ticketAttachmentUrl()` in `api.ts`), opened in a new tab
+(`target="_blank"`) — the browser handles displaying or downloading it
+based on the response's `Content-Type`/`Content-Disposition`, same as any
+other file link. No client-side fetch-and-blob dance; the URL itself
+carries the ownership check via `requesterId`, same as every other endpoint
+in this app.
+
+Adding a new attachment from this screen, and removing one, are **not**
+part of Feature 7 — see Features 8 and 9.

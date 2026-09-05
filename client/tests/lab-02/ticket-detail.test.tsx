@@ -71,6 +71,7 @@ describe("TicketDetail", () => {
   it("opens the detail screen and shows the ticket's full fields", async () => {
     await openMyTicketsWithOneTicket();
     const fetchDetailSpy = vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
 
@@ -81,6 +82,60 @@ describe("TicketDetail", () => {
     expect(screen.getByText("Software")).toBeInTheDocument();
     expect(screen.getByText("Email")).toBeInTheDocument();
     expect(screen.getByText("MEDIUM")).toBeInTheDocument();
+  });
+
+  it("shows the ticket's attachments with a link to view/download each one", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    const fetchAttachmentsSpy = vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
+      {
+        id: 10,
+        ticketId: 1,
+        originalFilename: "screenshot.png",
+        storedFilename: "abc123.png",
+        mimeType: "image/png",
+        sizeBytes: 2048,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      },
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+
+    expect(fetchAttachmentsSpy).toHaveBeenCalledWith(1, 1);
+    const link = await screen.findByRole("link", { name: "screenshot.png" });
+    expect(link).toHaveAttribute(
+      "href",
+      api.ticketAttachmentUrl(1, 10, 1)
+    );
+    expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument();
+  });
+
+  it("shows an empty-state message when the ticket has no attachments", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+
+    expect(await screen.findByText("No attachments on this ticket.")).toBeInTheDocument();
+  });
+
+  it("shows an attachments error without hiding the rest of the ticket's fields", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockRejectedValue(
+      new ApiError("You do not have permission to view this ticket's attachments.", 403)
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+
+    expect(
+      await screen.findByText("You do not have permission to view this ticket's attachments.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Laptop battery drains quickly")).toBeInTheDocument();
   });
 
   it("keeps the previous search/filter/sort state after Back is clicked", async () => {
@@ -105,6 +160,7 @@ describe("TicketDetail", () => {
     const callsBeforeOpening = fetchTicketsSpy.mock.calls.length;
 
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
     await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
@@ -129,6 +185,7 @@ describe("TicketDetail", () => {
     vi.spyOn(api, "fetchTicketDetail").mockRejectedValue(
       new ApiError("You do not have permission to view this ticket.", 403)
     );
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
 

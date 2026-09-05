@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { ApiError, Category, RelatedSystem, Requester, Ticket, fetchTicketDetail } from "./api.js";
+import {
+  ApiError,
+  Attachment,
+  Category,
+  RelatedSystem,
+  Requester,
+  Ticket,
+  fetchTicketAttachments,
+  fetchTicketDetail,
+  ticketAttachmentUrl,
+} from "./api.js";
 import RequesterBanner from "./RequesterBanner.js";
 
 interface TicketDetailProps {
@@ -25,6 +35,10 @@ export default function TicketDetail({
   const [errorMessage, setErrorMessage] = useState("");
   const [ticket, setTicket] = useState<Ticket | null>(null);
 
+  const [attachmentsState, setAttachmentsState] = useState<LoadState>("loading");
+  const [attachmentsError, setAttachmentsError] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
   useEffect(() => {
     let cancelled = false;
     setLoadState("loading");
@@ -49,12 +63,43 @@ export default function TicketDetail({
     };
   }, [ticketId, requester.id]);
 
+  // Fetched independently of the ticket's own fields — a network hiccup on
+  // one shouldn't have to block the other, and the ownership check runs
+  // (redundantly but harmlessly) on both endpoints anyway.
+  useEffect(() => {
+    let cancelled = false;
+    setAttachmentsState("loading");
+
+    fetchTicketAttachments(ticketId, requester.id)
+      .then((result) => {
+        if (cancelled) return;
+        setAttachments(result);
+        setAttachmentsState("ready");
+      })
+      .catch((error) => {
+        console.error("Failed to load ticket attachments:", error);
+        if (cancelled) return;
+        setAttachmentsError(
+          error instanceof ApiError ? error.message : "Unable to load attachments."
+        );
+        setAttachmentsState("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketId, requester.id]);
+
   function categoryName(id: number) {
     return categories.find((category) => category.id === id)?.name ?? `#${id}`;
   }
 
   function relatedSystemName(id: number) {
     return relatedSystems.find((system) => system.id === id)?.name ?? `#${id}`;
+  }
+
+  function formatSize(sizeBytes: number) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
   }
 
   return (
@@ -104,6 +149,40 @@ export default function TicketDetail({
             <dt className="col-sm-3">Last Updated</dt>
             <dd className="col-sm-9">{new Date(ticket.updatedAt).toLocaleString()}</dd>
           </dl>
+
+          <h3 className="h6">Attachments</h3>
+
+          {attachmentsState === "loading" && <p>Loading attachments…</p>}
+
+          {attachmentsState === "error" && (
+            <div className="alert alert-danger" role="alert">
+              {attachmentsError}
+            </div>
+          )}
+
+          {attachmentsState === "ready" && attachments.length === 0 && (
+            <p className="text-muted">No attachments on this ticket.</p>
+          )}
+
+          {attachmentsState === "ready" && attachments.length > 0 && (
+            <ul className="list-unstyled">
+              {attachments.map((attachment) => (
+                <li key={attachment.id} className="mb-1">
+                  <a
+                    href={ticketAttachmentUrl(ticket.id, attachment.id, requester.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {attachment.originalFilename}
+                  </a>{" "}
+                  <span className="text-muted small">
+                    ({formatSize(attachment.sizeBytes)}, uploaded{" "}
+                    {new Date(attachment.createdAt).toLocaleString()})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>

@@ -65,9 +65,13 @@ describe("GET /api/tickets", () => {
   });
 
   afterAll(async () => {
-    await getPrisma().ticket.deleteMany({
+    const prisma = getPrisma();
+    await prisma.ticket.deleteMany({
       where: { id: { in: createdTicketIds } },
     });
+    // Tickets first (FK), then the fixture Requester itself — leave nothing
+    // behind for this test file to have created.
+    await prisma.requester.delete({ where: { id: requesterWithNoTicketsId } });
   });
 
   it("returns only the selected Requester's own tickets (ownership)", async () => {

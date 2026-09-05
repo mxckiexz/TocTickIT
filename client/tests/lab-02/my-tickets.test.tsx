@@ -142,6 +142,26 @@ describe("MyTickets", () => {
     );
   });
 
+  it("re-fetches with the chosen status filter", async () => {
+    mockLookups();
+    const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      tickets: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1 },
+    });
+    await openMyTickets();
+    fetchTicketsSpy.mockClear();
+
+    const statusSelect = screen.getByLabelText(/Filter by status/i);
+    expect(screen.getByRole("option", { name: "All statuses" })).toBeInTheDocument();
+    fireEvent.change(statusSelect, { target: { value: "New" } });
+
+    await waitFor(() =>
+      expect(fetchTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ currentStatus: "New", page: 1 })
+      )
+    );
+  });
+
   it("re-fetches with the chosen sort option", async () => {
     mockLookups();
     const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockResolvedValue({

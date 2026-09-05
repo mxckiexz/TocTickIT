@@ -105,14 +105,9 @@ state.
 | Category | `<select>` | `categoryId` filter, "All categories" clears it. |
 | Related System | `<select>` | `relatedSystemId` filter, "All related systems" clears it. |
 | Priority | `<select>` | `requestedPriority` filter (`LOW`/`MEDIUM`/`HIGH`), "All priorities" clears it. |
+| Status | `<select>` | `currentStatus` filter, "All statuses" clears it. Only "New" is offered as a value today — every ticket is `"New"` (BR-05, no status-transition feature exists yet) — but the control is there so it's ready once Feature 6/7 introduce more statuses; just add `<option>`s. |
 | Sort | `<select>` | One dropdown covering both `sortBy` and `sortDir` as a single choice: Newest first (default, `createdAt desc`), Oldest first (`createdAt asc`), Summary A–Z (`summary asc`), Summary Z–A (`summary desc`). |
 | Previous / Next | buttons | Page navigation. Disabled at the first/last page respectively (`pagination.page`/`totalPages` from the response). |
-
-There is no `currentStatus` filter control in the UI even though the API
-supports one (see [api-spec.md](api-spec.md)) — every ticket today is
-`"New"` (BR-05, no status-transition feature exists yet), so a status filter
-would have exactly one useful value. Easy to add once Feature 6/7 introduce
-status changes.
 
 Changing search, any filter, or sort resets to page 1 — otherwise a filter
 narrow enough to have fewer pages than the current page number would land on

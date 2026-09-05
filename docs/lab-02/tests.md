@@ -70,23 +70,24 @@ tiebreak).
 | B31 | Positive | AC-07 | `search` matches a word in `summary` | Only the matching ticket returned | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
 | B32 | Positive | AC-07 | `search` in a different case than stored | Same match as B31 (case-insensitive) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
 | B33 | Positive | AC-07 | `search` matches a unique term only present in `description` | Only that ticket returned | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B34 | Positive | BR-10 | `search` matches nothing | `200`; `tickets: []`, `pagination.totalItems: 0` — not an error | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B35 | Positive | AC-07 | `categoryId` filter | Only tickets in that category | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B36 | Positive | AC-07 | `relatedSystemId` filter | Only tickets on that related system | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B37 | Positive | AC-07 | `requestedPriority` filter | Only tickets at that priority | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B38 | Positive | AC-07 | `currentStatus=New` filter | All fixture tickets (all are `"New"`) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B39 | Positive | BR-10 | `currentStatus` value no ticket currently has | `200`; `tickets: []` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B40 | Positive | BR-10 | `categoryId` + `search` together | Only tickets matching **both** (AND) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B41 | Negative | AC-07 | `categoryId=not-a-number` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B42 | Negative | AC-07 | `requestedPriority=URGENT` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B43 | Positive | BR-08 | `sortBy=summary&sortDir=asc` | `tickets` alphabetically ascending by `summary` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B44 | Positive | BR-08 | `sortBy=summary&sortDir=desc` | `tickets` alphabetically descending by `summary` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B45 | Negative | AC-07 | `sortBy=id` (not a supported field) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B46 | Negative | AC-07 | `sortDir=sideways` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B47 | Positive | BR-09 | 5 tickets, `pageSize=2`, pages 1–3 requested in turn | Pages hold 2, 2, 1 tickets; `pagination` matches on page 1 (`totalItems:5, totalPages:3`); the 5 ids across all 3 pages are all distinct — no gap, no duplicate | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B48 | Negative | AC-07 | `page=0` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B49 | Negative | AC-07 | `pageSize=51` (over the 50 max) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
-| B50 | Negative | AC-07 | `pageSize=lots` (non-numeric) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B34 | Positive | AC-07 | `search` matches a fixture's own `ticketNumber` | Only that ticket returned | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B35 | Positive | BR-10 | `search` matches nothing | `200`; `tickets: []`, `pagination.totalItems: 0` — not an error | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B36 | Positive | AC-07 | `categoryId` filter | Only tickets in that category | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B37 | Positive | AC-07 | `relatedSystemId` filter | Only tickets on that related system | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B38 | Positive | AC-07 | `requestedPriority` filter | Only tickets at that priority | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B39 | Positive | AC-07 | `currentStatus=New` filter | All fixture tickets (all are `"New"`) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B40 | Positive | BR-10 | `currentStatus` value no ticket currently has | `200`; `tickets: []` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B41 | Positive | BR-10 | `categoryId` + `search` together | Only tickets matching **both** (AND) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B42 | Negative | AC-07 | `categoryId=not-a-number` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B43 | Negative | AC-07 | `requestedPriority=URGENT` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B44 | Positive | BR-08 | `sortBy=summary&sortDir=asc` | `tickets` alphabetically ascending by `summary` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B45 | Positive | BR-08 | `sortBy=summary&sortDir=desc` | `tickets` alphabetically descending by `summary` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B46 | Negative | AC-07 | `sortBy=id` (not a supported field) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B47 | Negative | AC-07 | `sortDir=sideways` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B48 | Positive | BR-09 | 5 tickets, `pageSize=2`, pages 1–3 requested in turn | Pages hold 2, 2, 1 tickets; `pagination` matches on page 1 (`totalItems:5, totalPages:3`); the 5 ids across all 3 pages are all distinct — no gap, no duplicate | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B49 | Negative | AC-07 | `page=0` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B50 | Negative | AC-07 | `pageSize=51` (over the 50 max) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B51 | Negative | AC-07 | `pageSize=lots` (non-numeric) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
 
 Run with:
 
@@ -100,10 +101,10 @@ cd server && npm run test
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
- ✓ tests/lab-02/my-tickets.api.test.ts (28 tests)
+ ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
 
  Test Files  6 passed (6)
-      Tests  52 passed (52)
+      Tests  53 passed (53)
 ```
 
 ## Frontend test plan
@@ -136,6 +137,7 @@ cd server && npm run test
 | F17 | Positive | AC-07, BR-09 | Click "Next" then check button state | Re-fetches with `page: 2`; "Previous" enables, "Next" disables once on the last page | `client/tests/lab-02/my-tickets.test.tsx` | passed |
 | F18 | Positive | AC-07 | On page 2, change a filter | Re-fetches with `page` reset to 1, not still on page 2 | `client/tests/lab-02/my-tickets.test.tsx` | passed |
 | F19 | Positive | AC-05 | Open "New Ticket" first, then click the "My Tickets" tab | Switches view **without** re-showing the Requester picker — same active Requester carries over | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F20 | Positive | AC-07 | Change the status filter | "All statuses" option present; re-fetches with `currentStatus: "New"` and `page` reset to 1 | `client/tests/lab-02/my-tickets.test.tsx` | passed |
 
 Run with:
 
@@ -146,10 +148,10 @@ cd client && npm run test
 ```
  ✓ tests/lab-01/App.test.tsx (3 tests)
  ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
- ✓ tests/lab-02/my-tickets.test.tsx (10 tests)
+ ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
 
  Test Files  3 passed (3)
-      Tests  22 passed (22)
+      Tests  23 passed (23)
 ```
 
 ## AC / BR → Test traceability matrix
@@ -162,7 +164,7 @@ cd client && npm run test
 | AC-04 — Requester fills in and submits the ticket form, sees the Ticket Number | F3 |
 | AC-05 — Development Requester picked first, stays active across ticket creations (and now across New Ticket / My Tickets) | F2, F4, F5, F11, F19 |
 | AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29, F12, F13 |
-| AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B35–B38, B41, B42, B43, B44, B45, B46, B47, B48, B49, B50, F14, F15, F16, F17, F18 |
+| AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |
@@ -170,9 +172,9 @@ cd client && npm run test
 | BR-05 — initial `currentStatus: "New"` | B1 (asserted in the response body) |
 | BR-06 — ids must be positive, not just present | B3 |
 | BR-07 — attachment ownership | B19, B21, F8 |
-| BR-08 — My Tickets ordering incl. `id desc` tiebreak, extended to whichever `sortBy` is chosen | B25, B26, B43, B44, F16 |
-| BR-09 — My Tickets response envelope (`{ tickets, pagination }`) | B30, B47, F17 |
-| BR-10 — My Tickets search/filter fields combine with AND | B34, B39, B40, B41, B42 |
+| BR-08 — My Tickets ordering incl. `id desc` tiebreak, extended to whichever `sortBy` is chosen | B25, B26, B44, B45, F16 |
+| BR-09 — My Tickets response envelope (`{ tickets, pagination }`) | B30, B48, F17 |
+| BR-10 — My Tickets search/filter fields combine with AND | B35, B40, B41, B42, B43 |
 
 ## Manual verification
 
@@ -220,9 +222,9 @@ categories/related systems and 3 priorities via the API, then drove the real
   is not part of this feature).
 - No test covers combining more than two query params at once (e.g.
   search + category + priority + sort + page all together) — each is tested
-  individually and pairwise (B40); a full combination is exercised only in
+  individually and pairwise (B41); a full combination is exercised only in
   manual verification above, not as an automated test.
 - `sortBy` only supports `createdAt`, `summary`, and `requestedPriority` —
   sorting by `categoryId`/`relatedSystemId`/`currentStatus` isn't offered (no
   test needed since the API rejects anything outside that list, covered by
-  B45).
+  B46).

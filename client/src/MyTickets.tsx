@@ -40,6 +40,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
   const [categoryId, setCategoryId] = useState("");
   const [relatedSystemId, setRelatedSystemId] = useState("");
   const [requestedPriority, setRequestedPriority] = useState("");
+  const [currentStatus, setCurrentStatus] = useState("");
   const [sortValue, setSortValue] = useState<(typeof SORT_OPTIONS)[number]["value"]>(
     "createdAt-desc"
   );
@@ -80,7 +81,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
   // always land back on page 1 rather than showing a now-out-of-range page.
   useEffect(() => {
     setPage(1);
-  }, [search, categoryId, relatedSystemId, requestedPriority, sortValue]);
+  }, [search, categoryId, relatedSystemId, requestedPriority, currentStatus, sortValue]);
 
   useEffect(() => {
     if (lookupState !== "ready") return;
@@ -96,6 +97,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
       categoryId: categoryId ? Number(categoryId) : undefined,
       relatedSystemId: relatedSystemId ? Number(relatedSystemId) : undefined,
       requestedPriority: (requestedPriority as Priority) || undefined,
+      currentStatus: currentStatus || undefined,
       sortBy: sortOption.sortBy,
       sortDir: sortOption.sortDir,
       page,
@@ -115,7 +117,17 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
     return () => {
       cancelled = true;
     };
-  }, [requester.id, search, categoryId, relatedSystemId, requestedPriority, sortValue, page, lookupState]);
+  }, [
+    requester.id,
+    search,
+    categoryId,
+    relatedSystemId,
+    requestedPriority,
+    currentStatus,
+    sortValue,
+    page,
+    lookupState,
+  ]);
 
   function categoryName(id: number) {
     return categories.find((category) => category.id === id)?.name ?? `#${id}`;
@@ -195,6 +207,17 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
             <option value="LOW">Low</option>
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
+          </select>
+        </div>
+        <div className="col-6 col-md-2">
+          <select
+            className="form-select"
+            aria-label="Filter by status"
+            value={currentStatus}
+            onChange={(event) => setCurrentStatus(event.target.value)}
+          >
+            <option value="">All statuses</option>
+            <option value="New">New</option>
           </select>
         </div>
         <div className="col-6 col-md-2">

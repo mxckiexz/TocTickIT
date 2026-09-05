@@ -212,6 +212,7 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
   let relatedSystemAId: number;
   let relatedSystemBId: number;
   const ticketIds: Record<string, number> = {};
+  const ticketNumbers: Record<string, string> = {};
   const createdTicketIds: number[] = [];
 
   beforeAll(async () => {
@@ -257,6 +258,7 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
         },
       });
       ticketIds[key] = ticket.id;
+      ticketNumbers[key] = ticket.ticketNumber;
       createdTicketIds.push(ticket.id);
       return ticket;
     }
@@ -332,6 +334,16 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
 
     const ids = response.body.tickets.map((t: { id: number }) => t.id);
     expect(ids).toEqual([ticketIds.charlie]);
+  });
+
+  it("filters by search text matching the ticketNumber", async () => {
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, search: ticketNumbers.delta })
+      .expect(200);
+
+    const ids = response.body.tickets.map((t: { id: number }) => t.id);
+    expect(ids).toEqual([ticketIds.delta]);
   });
 
   it("returns an empty result (not an error) when nothing matches the search", async () => {

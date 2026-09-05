@@ -220,6 +220,38 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// Feature 4 — View own tickets in My Tickets (GET /api/tickets)
+// Search, filter, sort, and pagination are Feature 5 — this returns the
+// requester's full ticket list, newest first.
+// ---------------------------------------------------------------------------
+app.get("/api/tickets", async (req: Request, res: Response) => {
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    const tickets = await prisma.ticket.findMany({
+      where: { requesterId },
+      // id desc as a tiebreaker keeps order stable when two tickets share a
+      // createdAt (same millisecond, or a DB with lower timestamp precision).
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+
+    res.status(200).json(tickets);
+  } catch (error) {
+    console.error("Failed to retrieve tickets:", error);
+
+    res.status(500).json({
+      error: "Failed to retrieve tickets",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Feature 2 — Upload a permitted supporting attachment
 // (POST /api/tickets/:id/attachments)
 // ---------------------------------------------------------------------------

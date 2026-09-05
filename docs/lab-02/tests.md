@@ -1,43 +1,66 @@
 # Lab 2 — Test Plan and Evidence
 
-## Backend (`server/tests/lab-02/`, Vitest + Supertest against a real Postgres via Prisma)
+Each test below has a stable Test ID (`B#` = backend, `F#` = frontend) so it
+can be referenced from the AC/BR traceability matrix at the bottom of this
+file without repeating the "What It Tests" text. "Expected Result" is the
+plan; "Final" is what actually happened when it was run — see the run output
+further down for the full suite confirmation.
 
-`create-ticket.api.test.ts`:
+**Type** classifies each case as **Positive** (valid input, expects success),
+**Negative** (invalid input, expects a client error), or **Boundary** (an
+exact edge value or limit — e.g. a length cap, a count limit, or an ordering
+tiebreak).
 
-| # | Test | Covers | Result |
-|---|------|--------|--------|
-| 1 | creates a ticket and returns a unique Ticket Number (AC-01) | AC-01, BR-01 | passed |
-| 2 | rejects a submission missing required fields with field-level errors | AC-02 | passed |
-| 3 | rejects requesterId/categoryId/relatedSystemId of 0, not just missing | AC-02, BR-06 | passed |
-| 4 | rejects a summary that is only whitespace | BR-03 | passed |
-| 5 | rejects a requestedPriority outside LOW/MEDIUM/HIGH | BR-04 | passed |
-| 6 | rejects an inactive Requester | AC-03 | passed |
-| 7 | rejects a requesterId that does not exist | AC-03 | passed |
-| 8 | rejects an inactive Category | AC-03 | passed |
-| 9 | rejects an inactive Related System | AC-03 | passed |
-| 10 | accepts a summary at the 150-character limit and rejects 151 characters | BR-03 boundary | passed |
-| 11 | accepts a description at the 2000-character limit and rejects 2001 characters | BR-03 boundary | passed |
-| 12 | returns the existing ticket instead of creating a duplicate on resubmission | BR-02 | passed |
+## Backend test plan (`server/tests/lab-02/`, Vitest + Supertest against a real Postgres via Prisma)
 
-`lookup-lists.api.test.ts` (Feature 3):
+### `create-ticket.api.test.ts`
 
-| # | Test | Result |
-|---|------|--------|
-| 13 | GET /api/related-systems returns only active related systems in id order | passed |
-| 14 | GET /api/requesters returns only active requesters in id order | passed |
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B1 | Positive | AC-01, BR-01, BR-05 | Valid ticket submission | `201`; unique `ticketNumber` matching `TKT-\d{4}-\d{6}`; `currentStatus: "New"` | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B2 | Negative | AC-02 | Submission with `{}` (all required fields missing) | `400`; `errors` has one message per missing field | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B3 | Negative | AC-02, BR-06 | `requesterId`/`categoryId`/`relatedSystemId` sent as `0` | `400`; treated as missing, not as a valid id | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B4 | Negative | BR-03 | `summary` is whitespace only | `400`; `errors.summary` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B5 | Negative | BR-04 | `requestedPriority` outside `LOW`/`MEDIUM`/`HIGH` | `400`; `errors.requestedPriority` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B6 | Negative | AC-03 | `requesterId` references an inactive Requester | `400`; `errors.requesterId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B7 | Negative | AC-03 | `requesterId` does not exist | `400`; `errors.requesterId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B8 | Negative | AC-03 | `categoryId` references an inactive Category | `400`; `errors.categoryId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B9 | Negative | AC-03 | `relatedSystemId` references an inactive Related System | `400`; `errors.relatedSystemId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B10 | Boundary | BR-03 | `summary` at exactly 150 / 151 chars | 150 → `201`; 151 → `400 errors.summary` | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B11 | Boundary | BR-03 | `description` at exactly 2000 / 2001 chars | 2000 → `201`; 2001 → `400 errors.description` | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B12 | Positive | BR-02 | Same Requester resubmits identical content within 10s | `200` with the **existing** ticket, no second row created | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
 
-`attachments.api.test.ts` (Feature 2, extended on review with BR-07):
+### `lookup-lists.api.test.ts` (Feature 3)
 
-| # | Test | Covers | Result |
-|---|------|--------|--------|
-| 15 | uploads a permitted file and returns its metadata | Feature 2 | passed |
-| 16 | rejects an unsupported file type | Feature 2 | passed |
-| 17 | rejects a file larger than 5MB | Feature 2 | passed |
-| 18 | rejects an upload with no file | Feature 2 | passed |
-| 19 | rejects an upload with no requesterId | BR-07 | passed |
-| 20 | rejects an upload to a ticket that does not exist | Feature 2 | passed |
-| 21 | rejects an upload from a requester who does not own the ticket | BR-07 | passed |
-| 22 | rejects a 6th active attachment on the same ticket | Feature 2 | passed |
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B13 | Positive | Feature 3 | `GET /api/related-systems` | `200`; only active related systems, ordered by `id` asc | `server/tests/lab-02/lookup-lists.api.test.ts` | passed |
+| B14 | Positive | Feature 3 | `GET /api/requesters` | `200`; only active requesters, ordered by `id` asc | `server/tests/lab-02/lookup-lists.api.test.ts` | passed |
+
+### `attachments.api.test.ts` (Feature 2, extended on review with BR-07)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B15 | Positive | Feature 2 | Upload a permitted file (owner's `requesterId`) | `201`; returns the `Attachment`, `storedFilename` differs from the original | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B16 | Negative | Feature 2 | Upload an unsupported file type | `415` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B17 | Negative | Feature 2 | Upload a file over 5MB | `413` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B18 | Negative | Feature 2 | Upload with no file attached | `400` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B19 | Negative | BR-07 | Upload with no `requesterId` field | `400` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B20 | Negative | Feature 2 | Upload to a ticket id that does not exist | `404` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B21 | Negative | BR-07 | Upload with a `requesterId` that does not own the ticket | `403`; no `Attachment` row created | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B22 | Boundary | Feature 2 | Upload a 6th file to the same ticket (limit is 5) | `409` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+
+### `my-tickets.api.test.ts` (Feature 4)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B23 | Positive | AC-06 | Requester A requests their own tickets | `200`; every returned ticket has `requesterId === A`, Requester B's ticket is absent | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B24 | Positive | AC-06 | Requester B requests their own tickets | `200`; contains B's ticket, not Requester A's | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B25 | Positive | BR-08 | Requester A has 2+ tickets created at different times | `200`; `createdAt` strictly descending | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B26 | Boundary | BR-08 | Two tickets share the exact same `createdAt` (set explicitly in the fixture) | `200`; the higher `id` sorts first (tiebreak) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B27 | Positive | AC-06 | A Requester with zero tickets (dedicated fixture, not a "found to currently have none" seeded row) requests their list | `200`; `[]` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B28 | Negative | AC-06 | `requesterId` query param omitted | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B29 | Negative | AC-06 | `requesterId=0` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
 
 Run with:
 
@@ -49,26 +72,27 @@ cd server && npm run test
  ✓ tests/lab-01/health.test.ts (1 test)
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
+ ✓ tests/lab-02/my-tickets.api.test.ts (7 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
 
- Test Files  5 passed (5)
-      Tests  24 passed (24)
+ Test Files  6 passed (6)
+      Tests  31 passed (31)
 ```
 
-## Frontend (`client/tests/lab-02/create-ticket-form.test.tsx`, Vitest + React Testing Library)
+## Frontend test plan (`client/tests/lab-02/create-ticket-form.test.tsx`, Vitest + React Testing Library)
 
-| # | Test | Covers | Result |
-|---|------|--------|--------|
-| 1 | does not fetch anything until New Ticket is clicked | no side effects until opened | passed |
-| 2 | shows the Development Requester picker before the ticket form, and no Requester field inside the form | AC-05 | passed |
-| 3 | submits the form as the selected requester and shows the returned unique Ticket Number | AC-04, AC-05 | passed |
-| 4 | keeps the same requester active for creating another ticket | AC-05 | passed |
-| 5 | returns to the requester picker when Switch requester is clicked | AC-05 | passed |
-| 6 | disables the submit button while the request is in flight | BR-02 (client side) | passed |
-| 7 | shows field-level errors from a rejected submission without creating a ticket | AC-02 | passed |
-| 8 | uploads the selected attachment as the active requester after the ticket is created | BR-07, Feature 2+3 integration | passed |
-| 9 | still shows the Ticket Number if the attachment upload fails | graceful degradation | passed |
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F1 | Positive | Design constraint (no side effects until opened) | App renders, nothing clicked yet | `fetchCategories`/`fetchRequesters`/etc. are never called | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F2 | Positive | AC-05 | Click "New Ticket" with no active Requester | Development Requester picker shown first; ticket form (and its Requester field) not shown yet | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F3 | Positive | AC-04 | Pick a Requester, fill the form, submit | `createTicket` called with that Requester's id; returned `ticketNumber` displayed | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F4 | Positive | AC-05 | Click "Create another ticket" after a successful submission | Same Requester still active — no re-prompt | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F5 | Positive | AC-05 | Click "Switch requester" | Returns to the Development Requester picker | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F6 | Positive | BR-02 (client side) | Submit while the request is in flight | Submit button reads "Submitting…" and is disabled until it resolves | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F7 | Negative | AC-02 | `createTicket` rejects with field errors | Errors shown inline per field; no ticket-created state shown | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F8 | Positive | BR-07 | Submit with a file attached | `uploadAttachment` called with `(ticketId, requesterId, file)` after the ticket is created | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F9 | Negative | Graceful degradation (not a formal AC/BR) | `uploadAttachment` rejects | Ticket Number still shown; a warning about the failed attachment is shown alongside it | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
 
 Run with:
 
@@ -83,6 +107,25 @@ cd client && npm run test
  Test Files  2 passed (2)
       Tests  12 passed (12)
 ```
+
+## AC / BR → Test traceability matrix
+
+| Acceptance Criterion / Business Rule | Covered by |
+|---|---|
+| AC-01 — unique Ticket Number on valid submission | B1 |
+| AC-02 — field-level errors on invalid/missing submission | B2, B3, F7 |
+| AC-03 — inactive/nonexistent Requester, Category, or Related System rejected | B6, B7, B8, B9 |
+| AC-04 — Requester fills in and submits the ticket form, sees the Ticket Number | F3 |
+| AC-05 — Development Requester picked first, stays active across ticket creations | F2, F4, F5 |
+| AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29 |
+| BR-01 — Ticket Number format | B1 |
+| BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
+| BR-03 — summary/description length limits | B4, B10, B11 |
+| BR-04 — requestedPriority enum | B5 |
+| BR-05 — initial `currentStatus: "New"` | B1 (asserted in the response body) |
+| BR-06 — ids must be positive, not just present | B3 |
+| BR-07 — attachment ownership | B19, B21, F8 |
+| BR-08 — My Tickets ordering incl. `id desc` tiebreak | B25, B26 |
 
 ## Manual verification
 
@@ -109,3 +152,8 @@ Ran both dev servers and drove the real form in a browser:
 - No test covers uploading more than one attachment from the form (the
   `<input type="file">` is single-file; multi-file selection during creation
   is not part of this feature).
+- `GET /api/tickets` has no search, filter, sort-option, or pagination tests —
+  **deferred to Feature 5** (see [specification.md](specification.md) Feature 4
+  scope and [api-spec.md](api-spec.md)). This endpoint's own test coverage
+  (ownership, ordering incl. the `id desc` tiebreak, empty list, validation)
+  is complete for what it currently does.

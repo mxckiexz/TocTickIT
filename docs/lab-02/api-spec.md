@@ -75,3 +75,60 @@ Check order: ticket id shape → `requesterId` shape → file present → mime t
 → ticket exists (404) → ownership (403) → attachment count (409). A rejected
 file is deleted from disk immediately in every case — nothing is left
 orphaned.
+
+## `GET /api/tickets`
+
+The My Tickets list (Feature 4) — a Requester's own tickets, ownership-scoped.
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer (no active/exists check — an id with zero tickets just returns `[]`) |
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | Valid `requesterId` | An array of ticket objects (shape below) — only rows where `ticket.requesterId` matches, ordered by `createdAt desc, id desc` (BR-08). `[]` if the Requester has no tickets. |
+| `400 Bad Request` | `requesterId` missing, non-integer, or `<= 0` | `{ "error": "requesterId is required." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve tickets" }` |
+
+### Response body — ticket object fields
+
+Each array entry is a full `Ticket` row (no joins/nesting — `categoryId` etc.
+are ids, not embedded objects):
+
+| Field | Type | Notes |
+|---|---|---|
+| id | integer | |
+| ticketNumber | string | Format `TKT-<year>-<6-digit sequence>`, e.g. `TKT-2026-000042` (BR-01). |
+| requesterId | integer | Always equal to the `requesterId` query param, by construction. |
+| categoryId | integer | |
+| relatedSystemId | integer | |
+| summary | string | ≤ 150 chars (BR-03). |
+| description | string | ≤ 2000 chars (BR-03). |
+| requestedPriority | string | One of `LOW`, `MEDIUM`, `HIGH` (BR-04). |
+| currentStatus | string | `"New"` for every ticket returned by this endpoint today (BR-05) — no status transitions exist yet. |
+| createdAt | string | ISO 8601 timestamp. |
+| updatedAt | string | ISO 8601 timestamp. |
+
+Example response for `GET /api/tickets?requesterId=1`:
+
+```json
+[
+  {
+    "id": 42,
+    "ticketNumber": "TKT-2026-000042",
+    "requesterId": 1,
+    "categoryId": 2,
+    "relatedSystemId": 1,
+    "summary": "Laptop battery drains quickly",
+    "description": "Battery drains much faster than usual, even when idle.",
+    "requestedPriority": "MEDIUM",
+    "currentStatus": "New",
+    "createdAt": "2026-09-04T10:12:03.000Z",
+    "updatedAt": "2026-09-04T10:12:03.000Z"
+  }
+]
+```
+
+**Deferred to Feature 5** (not implemented here): search, filtering, sort
+options other than the fixed order above, and pagination. This endpoint
+always returns the Requester's complete ticket list in one response.

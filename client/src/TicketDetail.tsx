@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   ApiError,
   AttachmentSummary,
@@ -9,8 +9,14 @@ import {
   fetchTicketAttachments,
   fetchTicketDetail,
   ticketAttachmentUrl,
+  uploadAttachment,
 } from "./api.js";
 import RequesterBanner from "./RequesterBanner.js";
+
+// Mirrors server/src/app.ts's MAX_ACTIVE_ATTACHMENTS_PER_TICKET — a client-
+// side hint only (disables the upload control at the limit); the server is
+// the real gate and still enforces this with its own 409.
+const MAX_ATTACHMENTS_PER_TICKET = 5;
 
 interface TicketDetailProps {
   ticketId: number;
@@ -38,6 +44,14 @@ export default function TicketDetail({
   const [attachmentsState, setAttachmentsState] = useState<LoadState>("loading");
   const [attachmentsError, setAttachmentsError] = useState("");
   const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
+  // Bumped after a successful upload to re-trigger the attachments effect
+  // below, so the new file shows up (with correct public-metadata shape
+  // and ordering) without duplicating the fetch/response-handling logic.
+  const [attachmentsRefreshKey, setAttachmentsRefreshKey] = useState(0);
+
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadState, setUploadState] = useState<"idle" | "uploading">("idle");
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +102,28 @@ export default function TicketDetail({
     return () => {
       cancelled = true;
     };
-  }, [ticketId, requester.id]);
+  }, [ticketId, requester.id, attachmentsRefreshKey]);
+
+  async function handleUploadSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!uploadFile || uploadState === "uploading") return;
+
+    setUploadState("uploading");
+    setUploadError("");
+
+    try {
+      await uploadAttachment(ticketId, requester.id, uploadFile);
+      setUploadFile(null);
+      setAttachmentsRefreshKey((key) => key + 1);
+    } catch (error) {
+      console.error("Failed to upload attachment:", error);
+      setUploadError(
+        error instanceof ApiError ? error.message : "Unable to upload the attachment."
+      );
+    } finally {
+      setUploadState("idle");
+    }
+  }
 
   function categoryName(id: number) {
     return categories.find((category) => category.id === id)?.name ?? `#${id}`;
@@ -182,6 +217,47 @@ export default function TicketDetail({
                 </li>
               ))}
             </ul>
+          )}
+
+          {attachmentsState === "ready" && (
+            <form className="mt-2" onSubmit={handleUploadSubmit}>
+              <label htmlFor="newAttachment" className="form-label small mb-1">
+                Add an attachment ({attachments.length}/{MAX_ATTACHMENTS_PER_TICKET}) — JPG, PNG,
+                WEBP, or PDF, up to 5MB
+              </label>
+              <div className="d-flex gap-2">
+                <input
+                  key={attachmentsRefreshKey}
+                  id="newAttachment"
+                  type="file"
+                  className="form-control form-control-sm"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf"
+                  disabled={attachments.length >= MAX_ATTACHMENTS_PER_TICKET}
+                  onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-success btn-sm"
+                  disabled={
+                    !uploadFile ||
+                    uploadState === "uploading" ||
+                    attachments.length >= MAX_ATTACHMENTS_PER_TICKET
+                  }
+                >
+                  {uploadState === "uploading" ? "Uploading…" : "Upload"}
+                </button>
+              </div>
+              {attachments.length >= MAX_ATTACHMENTS_PER_TICKET && (
+                <p className="text-muted small mt-1 mb-0">
+                  This ticket already has the maximum of {MAX_ATTACHMENTS_PER_TICKET} attachments.
+                </p>
+              )}
+              {uploadError && (
+                <div className="alert alert-danger mt-2 py-1 px-2 small" role="alert">
+                  {uploadError}
+                </div>
+              )}
+            </form>
           )}
         </div>
       )}

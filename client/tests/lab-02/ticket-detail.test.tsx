@@ -192,4 +192,110 @@ describe("TicketDetail", () => {
       await screen.findByText("You do not have permission to view this ticket.")
     ).toBeInTheDocument();
   });
+
+  it("shows the current attachment count next to the upload control", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
+      {
+        id: 10,
+        ticketId: 1,
+        originalFilename: "screenshot.png",
+        mimeType: "image/png",
+        sizeBytes: 2048,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      },
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+
+    expect(await screen.findByText(/Add an attachment \(1\/5\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload" })).toBeDisabled();
+  });
+
+  it("uploads a new attachment and refreshes the attachments list", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    const fetchAttachmentsSpy = vi
+      .spyOn(api, "fetchTicketAttachments")
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 11,
+          ticketId: 1,
+          originalFilename: "new-file.png",
+          mimeType: "image/png",
+          sizeBytes: 1024,
+          createdAt: "2026-09-06T09:00:00.000Z",
+        },
+      ]);
+    const uploadSpy = vi.spyOn(api, "uploadAttachment").mockResolvedValue({
+      id: 11,
+      ticketId: 1,
+      originalFilename: "new-file.png",
+      storedFilename: "abc.png",
+      mimeType: "image/png",
+      sizeBytes: 1024,
+      createdAt: "2026-09-06T09:00:00.000Z",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+    await screen.findByText("No attachments on this ticket.");
+
+    const file = new File(["fake bytes"], "new-file.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText(/Add an attachment/), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, 1, file));
+    expect(await screen.findByRole("link", { name: "new-file.png" })).toBeInTheDocument();
+    expect(fetchAttachmentsSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows an error message when the upload is rejected (e.g. unsupported type)", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
+    vi.spyOn(api, "uploadAttachment").mockRejectedValue(
+      new ApiError("Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.", 415)
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+    await screen.findByText("No attachments on this ticket.");
+
+    const file = new File(["not an image"], "malware.exe", {
+      type: "application/x-msdownload",
+    });
+    fireEvent.change(screen.getByLabelText(/Add an attachment/), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    expect(
+      await screen.findByText("Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.")
+    ).toBeInTheDocument();
+  });
+
+  it("disables the upload control once the ticket has the maximum of 5 attachments", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue(
+      Array.from({ length: 5 }, (_, index) => ({
+        id: index + 1,
+        ticketId: 1,
+        originalFilename: `file-${index}.png`,
+        mimeType: "image/png",
+        sizeBytes: 100,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      }))
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+
+    expect(await screen.findByText(/Add an attachment \(5\/5\)/)).toBeInTheDocument();
+    expect(screen.getByText(/already has the maximum of 5 attachments/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Add an attachment/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Upload" })).toBeDisabled();
+  });
 });

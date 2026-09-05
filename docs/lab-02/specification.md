@@ -6,8 +6,9 @@
 > Feature 3 (the ticket-creation UI that ties both into one flow),
 > Feature 4 (`GET /api/tickets`, the My Tickets list), Feature 5
 > (search, filter, sort, and pagination on that same endpoint), Feature 6
-> (`GET /api/tickets/:id`, the Ticket Detail screen), and Feature 7
-> (inspecting a ticket's attachments from that screen).
+> (`GET /api/tickets/:id`, the Ticket Detail screen), Feature 7
+> (inspecting a ticket's attachments from that screen), and Feature 8
+> (adding a new attachment to an existing ticket from that same screen).
 
 ## Scope
 
@@ -40,6 +41,16 @@
   now shows an Attachments section below the ticket's own fields. Adding a
   new attachment from this screen, and soft-removing one, are **deferred to
   Features 8 and 9**.
+- **Feature 8**
+  (`feature/8-add-a-permitted-attachment-to-an-existing-ticket;-and`):
+  client-only — no backend changes. `TicketDetail` gets an "Add an
+  attachment" control below the attachments list, calling the same
+  `POST /api/tickets/:id/attachments` Feature 2 already built (type/size/
+  count limits and BR-07 ownership were already enforced server-side; this
+  feature is purely about reaching that existing endpoint from an
+  *existing* ticket's detail screen, as opposed to Feature 3's "attach
+  while creating a new ticket" flow). A successful upload refreshes the
+  attachments list in place.
 
 ## Entities
 
@@ -130,6 +141,19 @@
   - **Given** a Requester viewing the Ticket Detail screen, **when** it
     finishes loading, **then** an Attachments section lists each file as a
     link that opens/downloads it, or states there are none.
+- **AC-10** (Feature 8) — Add an attachment from Ticket Detail, Given–When–Then:
+  - **Given** a Requester is viewing one of their own tickets with fewer
+    than 5 active attachments, **when** they pick a permitted file and
+    submit the "Add an attachment" control, **then** the file is uploaded
+    via `POST /api/tickets/:id/attachments`, and the Attachments section
+    refreshes to include it.
+  - **Given** the upload is rejected (wrong type, too large, or the ticket
+    already has 5 attachments), **when** that happens, **then** the API's
+    own error message is shown and the attachments list is left unchanged.
+  - **Given** a ticket already has 5 attachments, **when** the Requester
+    views its detail screen, **then** the file input and Upload button are
+    disabled and a message explains the limit is reached — a client-side
+    convenience only; the server's `409` remains the actual enforcement.
 
 ## Business Rules
 

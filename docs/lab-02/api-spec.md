@@ -76,6 +76,11 @@ Check order: ticket id shape → `requesterId` shape → file present → mime t
 file is deleted from disk immediately in every case — nothing is left
 orphaned.
 
+This is also the endpoint Feature 8's "Add an attachment" control on the
+Ticket Detail screen calls — no new backend contract for that feature, only
+a new caller. `client/src/api.ts`'s `uploadAttachment()` (Feature 3) is
+reused as-is.
+
 ## `GET /api/tickets`
 
 The My Tickets list (Feature 4), extended with search, filter, sort, and

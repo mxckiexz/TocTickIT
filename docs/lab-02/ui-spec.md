@@ -1,4 +1,4 @@
-# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7)
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8)
 
 ## Entry point
 
@@ -203,3 +203,33 @@ in this app.
 
 Adding a new attachment from this screen, and removing one, are **not**
 part of Feature 7 — see Features 8 and 9.
+
+## Add an attachment (Feature 8)
+
+A small `<form>` right below the attachments list in `TicketDetail`, always
+shown once the attachments section itself has loaded (`attachmentsState ===
+"ready"`) — regardless of whether the list is empty or not.
+
+| Control | Notes |
+|---|---|
+| Label | "Add an attachment (`<count>`/5) — JPG, PNG, WEBP, or PDF, up to 5MB" — the count updates live from the same `attachments` state the list above renders from. |
+| `<input type="file">` | `accept=".jpg,.jpeg,.png,.webp,.pdf"` (UX hint only, same as `CreateTicketForm`'s attachment field — the server is the real gate). Disabled once `attachments.length >= 5`. |
+| "Upload" button | Disabled with no file chosen, while a request is in flight ("Uploading…"), or at the 5-attachment limit. |
+
+Submitting calls `uploadAttachment(ticketId, requester.id, file)` — the same
+function `CreateTicketForm` already uses (Feature 3), reused as-is; no new
+`api.ts` function needed. On success:
+- The file input is cleared (given a fresh `key`, since a native
+  `<input type="file">` can't be reset by just clearing React state).
+- `attachmentsRefreshKey` is bumped, which re-runs the attachments-loading
+  effect from Feature 7 — the list re-fetches with the new file included,
+  in its correct place (BR-13's `createdAt asc, id asc`), rather than the
+  new file being appended client-side with a guessed shape.
+
+On failure (`415`/`413`/`409`/anything else), the API's own error message
+is shown in an alert below the form, and the attachments list above is left
+exactly as it was — a rejected upload never touches it.
+
+At the 5-attachment limit, a line under the form states the limit is
+reached, in addition to the disabled controls — the label's `(5/5)` alone
+was judged too easy to miss.

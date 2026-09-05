@@ -196,6 +196,10 @@ cd server && npm run test
 | F25 | Positive | AC-09 | Ticket has one attachment | `fetchTicketAttachments` called with `(ticketId, requesterId)`; filename shown as a link to `ticketAttachmentUrl(...)`, size shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F26 | Positive | AC-09 | Ticket has no attachments | "No attachments on this ticket." shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F27 | Negative | AC-09, BR-12 | `fetchTicketAttachments` rejects (e.g. a 403) | The API's error message is shown for the attachments section — the ticket's own fields above it stay visible | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F28 | Positive | AC-10 | Ticket has 1 of 5 attachments | "Add an attachment (1/5)…" label shown; Upload button disabled with no file chosen | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F29 | Positive | AC-10 | Pick a file and click Upload | `uploadAttachment` called with `(ticketId, requesterId, file)`; `fetchTicketAttachments` called again (refresh) and the new file appears as a link | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F30 | Negative | AC-10 | `uploadAttachment` rejects (e.g. a 415) | The API's error message is shown; the existing attachments list is unaffected | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F31 | Positive | AC-10 | Ticket already has 5 attachments | File input and Upload button both disabled; a message states the limit is reached | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 
 Run with:
 
@@ -207,10 +211,10 @@ cd client && npm run test
  ✓ tests/lab-01/App.test.tsx (3 tests)
  ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
  ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
- ✓ tests/lab-02/ticket-detail.test.tsx (7 tests)
+ ✓ tests/lab-02/ticket-detail.test.tsx (11 tests)
 
  Test Files  4 passed (4)
-      Tests  30 passed (30)
+      Tests  34 passed (34)
 ```
 
 ## AC / BR → Test traceability matrix
@@ -226,6 +230,7 @@ cd client && npm run test
 | AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
 | AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
 | AC-09 — inspect a ticket's attachments (list + view/download), ownership-checked | B59, B60, B62–B75, F25, F26, F27 |
+| AC-10 — add an attachment to an existing ticket from Ticket Detail | F28, F29, F30, F31 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |
@@ -319,6 +324,18 @@ tickets already in the list:
   uploads (previously it only deleted the DB rows).
 - Cleaned up the manual test attachment/file afterward.
 
+**Feature 8:** opened `TKT-2026-000023` (which already had 1 attachment)
+in a browser — the "Add an attachment (1/5) — JPG, PNG, WEBP, or PDF, up to
+5MB" control rendered correctly below the existing attachment, with the
+Upload button disabled until a file is chosen. Driving the native file
+picker itself isn't something this session's browser-automation tool can
+do, so the actual upload flow (select file → click Upload → list refreshes)
+is verified by the 4 automated tests above (F28–F31, using a real `File`
+object with a mocked `uploadAttachment`) plus the fact that `uploadAttachment`
+itself is the exact same, already browser-verified function `CreateTicketForm`
+uses (see Feature 3's manual verification) and the endpoint it calls was
+already verified end-to-end via `curl` in Feature 2/7.
+
 ## Known gaps (not yet covered)
 
 - No test exercises the `500` paths (DB failure) — would need a mocked Prisma
@@ -339,9 +356,6 @@ tickets already in the list:
   since it isn't expected to preserve state across a reload. Not a gap in
   Feature 6's own contract, just a known limitation of the current
   navigation approach.
-- Attachments are not shown on the Ticket Detail screen — intentionally
-  deferred to Feature 7 (see [specification.md](specification.md) Feature 6
-  scope).
 - No test covers the disk-file-missing case for the download endpoint (DB
   row exists, physical file doesn't — surfaced during manual verification
   above via stale pre-existing demo data). It behaves correctly (`500` with
@@ -349,6 +363,12 @@ tickets already in the list:
   it — would need to delete a file out from under a real upload mid-test,
   which felt like testing Node's `fs`/Express's `sendFile` rather than this
   app's own logic.
-- Adding a new attachment from the Ticket Detail screen, and removing one,
-  are **not** part of Feature 7 — see Features 8 and 9
-  ([specification.md](specification.md)).
+- Removing an attachment from the Ticket Detail screen (with the required
+  soft-removal rules) is **not** part of Feature 8 — see Feature 9
+  ([specification.md](specification.md)). Adding one is now covered (this
+  feature).
+- No automated test drives Feature 8's actual browser file picker (see
+  Manual verification above) — the upload flow is covered with a real
+  `File` object and a mocked `uploadAttachment`/`fetchTicketAttachments`
+  instead, and the underlying endpoint itself already has thorough
+  automated + manual coverage from Feature 2/7.

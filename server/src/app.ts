@@ -518,4 +518,125 @@ app.post(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Feature 7 — Inspect a ticket's attachments (list + view/download one)
+// Same ownership rule as the rest of Feature 6/BR-07: only the Requester who
+// owns the ticket may see or fetch its attachments (BR-12).
+// ---------------------------------------------------------------------------
+app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.id);
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    if (ticket.requesterId !== requesterId) {
+      return res.status(403).json({
+        error: "You do not have permission to view this ticket's attachments.",
+      });
+    }
+
+    const attachments = await prisma.attachment.findMany({
+      where: { ticketId },
+      // id asc as a tiebreaker keeps order stable when two attachments
+      // share a createdAt (same millisecond) — same reasoning as BR-08.
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      // storedFilename is an internal, server-side detail (the random name
+      // the file is actually saved under) — never expose it. Everything a
+      // client needs to display or fetch the file is public metadata.
+      select: {
+        id: true,
+        ticketId: true,
+        originalFilename: true,
+        mimeType: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
+    });
+
+    res.status(200).json(attachments);
+  } catch (error) {
+    console.error("Failed to retrieve attachments:", error);
+
+    res.status(500).json({ error: "Failed to retrieve attachments" });
+  }
+});
+
+app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.id);
+  const attachmentId = Number(req.params.attachmentId);
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+  if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+    return res.status(400).json({ error: "Invalid attachment id." });
+  }
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    if (ticket.requesterId !== requesterId) {
+      return res.status(403).json({
+        error: "You do not have permission to view this ticket's attachments.",
+      });
+    }
+
+    // Scoped to this ticketId too, not just id — an attachment id that
+    // exists but belongs to a different ticket must 404 here, the same as
+    // one that doesn't exist at all.
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: attachmentId, ticketId },
+    });
+    if (!attachment) {
+      return res.status(404).json({ error: "Attachment not found." });
+    }
+
+    const filePath = path.join(UPLOAD_DIR, attachment.storedFilename);
+    // RFC 6266/5987: `filename=` is the plain (ASCII) fallback a client that
+    // doesn't understand filename* falls back to — it must NOT be percent-
+    // encoded, or it displays literally (e.g. "photo%20one.png"). `filename*`
+    // carries the real name, percent-encoded with its charset, for clients
+    // that support spaces/non-ASCII (Unicode names, accents, etc.).
+    const asciiFallbackFilename = attachment.originalFilename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    const encodedFilename = encodeURIComponent(attachment.originalFilename);
+    res.setHeader("Content-Type", attachment.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${asciiFallbackFilename}"; filename*=UTF-8''${encodedFilename}`
+    );
+    res.sendFile(filePath, (error) => {
+      if (error) {
+        console.error("Failed to send attachment file:", error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to retrieve attachment file" });
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Failed to retrieve attachment:", error);
+
+    res.status(500).json({ error: "Failed to retrieve attachment" });
+  }
+});
+
 export default app;

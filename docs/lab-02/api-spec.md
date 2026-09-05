@@ -78,22 +78,51 @@ orphaned.
 
 ## `GET /api/tickets`
 
-The My Tickets list (Feature 4) — a Requester's own tickets, ownership-scoped.
+The My Tickets list (Feature 4), extended with search, filter, sort, and
+pagination (Feature 5) — a Requester's own tickets, ownership-scoped.
+
+### Query parameters
 
 | Query param | Type | Required | Rule |
 |---|---|---|---|
-| requesterId | integer | yes | must be a positive integer (no active/exists check — an id with zero tickets just returns `[]`) |
+| requesterId | integer | yes | must be a positive integer (no active/exists check — an id with zero tickets just returns an empty list) |
+| search | string | no | case-insensitive substring match against `summary` OR `description` OR `ticketNumber` |
+| categoryId | integer | no | must be a positive integer if present |
+| relatedSystemId | integer | no | must be a positive integer if present |
+| requestedPriority | string | no | one of `LOW`, `MEDIUM`, `HIGH` if present |
+| currentStatus | string | no | exact match, non-empty if present |
+| sortBy | string | no | one of `createdAt` (default), `summary`, `requestedPriority` |
+| sortDir | string | no | `asc` or `desc` (default `desc`) |
+| page | integer | no | positive integer, default `1` |
+| pageSize | integer | no | positive integer up to 50, default `10` |
+
+All filters combine with AND (BR-10). Ordering is `sortBy sortDir`, with
+`id desc` as a tiebreaker (BR-08).
+
+### Responses
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | Valid `requesterId` | An array of ticket objects (shape below) — only rows where `ticket.requesterId` matches, ordered by `createdAt desc, id desc` (BR-08). `[]` if the Requester has no tickets. |
-| `400 Bad Request` | `requesterId` missing, non-integer, or `<= 0` | `{ "error": "requesterId is required." }` |
+| `200 OK` | Valid `requesterId` and any other params valid | `{ tickets, pagination }` (shape below, BR-09) |
+| `400 Bad Request` | `requesterId` missing/non-integer/`<= 0`, or any other param present but invalid | `{ "error": "<message>" }` |
 | `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve tickets" }` |
 
-### Response body — ticket object fields
+### Response body
 
-Each array entry is a full `Ticket` row (no joins/nesting — `categoryId` etc.
-are ids, not embedded objects):
+```
+{
+  "tickets": Ticket[],
+  "pagination": {
+    "page": number,
+    "pageSize": number,
+    "totalItems": number,
+    "totalPages": number
+  }
+}
+```
+
+Each entry in `tickets` is a full `Ticket` row (no joins/nesting —
+`categoryId` etc. are ids, not embedded objects):
 
 | Field | Type | Notes |
 |---|---|---|
@@ -109,26 +138,41 @@ are ids, not embedded objects):
 | createdAt | string | ISO 8601 timestamp. |
 | updatedAt | string | ISO 8601 timestamp. |
 
-Example response for `GET /api/tickets?requesterId=1`:
+`pagination.totalItems` is the count of tickets matching `requesterId` plus
+any filters/search, independent of `page`/`pageSize`; `totalPages` is
+`ceil(totalItems / pageSize)`, minimum `1`.
+
+Example response for
+`GET /api/tickets?requesterId=1&search=battery&sortBy=summary&sortDir=asc&page=1&pageSize=10`:
 
 ```json
-[
-  {
-    "id": 42,
-    "ticketNumber": "TKT-2026-000042",
-    "requesterId": 1,
-    "categoryId": 2,
-    "relatedSystemId": 1,
-    "summary": "Laptop battery drains quickly",
-    "description": "Battery drains much faster than usual, even when idle.",
-    "requestedPriority": "MEDIUM",
-    "currentStatus": "New",
-    "createdAt": "2026-09-04T10:12:03.000Z",
-    "updatedAt": "2026-09-04T10:12:03.000Z"
+{
+  "tickets": [
+    {
+      "id": 42,
+      "ticketNumber": "TKT-2026-000042",
+      "requesterId": 1,
+      "categoryId": 2,
+      "relatedSystemId": 1,
+      "summary": "Laptop battery drains quickly",
+      "description": "Battery drains much faster than usual, even when idle.",
+      "requestedPriority": "MEDIUM",
+      "currentStatus": "New",
+      "createdAt": "2026-09-04T10:12:03.000Z",
+      "updatedAt": "2026-09-04T10:12:03.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 10,
+    "totalItems": 1,
+    "totalPages": 1
   }
-]
+}
 ```
 
-**Deferred to Feature 5** (not implemented here): search, filtering, sort
-options other than the fixed order above, and pagination. This endpoint
-always returns the Requester's complete ticket list in one response.
+**Breaking change from Feature 4**: the `200` body used to be a bare
+`Ticket[]`. It's now `{ tickets, pagination }` — Feature 4's own tests were
+updated to match in the same change that added this (see
+[tests.md](tests.md)), since Feature 4 hadn't shipped to `main` yet when
+Feature 5 was built.

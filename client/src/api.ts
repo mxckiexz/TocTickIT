@@ -42,6 +42,34 @@ export interface Attachment {
   createdAt: string;
 }
 
+export type TicketSortField = "createdAt" | "summary" | "requestedPriority";
+export type SortDir = "asc" | "desc";
+
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface TicketListResponse {
+  tickets: Ticket[];
+  pagination: Pagination;
+}
+
+export interface FetchTicketsParams {
+  requesterId: number;
+  search?: string;
+  categoryId?: number;
+  relatedSystemId?: number;
+  requestedPriority?: Priority;
+  currentStatus?: string;
+  sortBy?: TicketSortField;
+  sortDir?: SortDir;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface CreateTicketInput {
   requesterId: number;
   categoryId: number;
@@ -134,6 +162,32 @@ export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
 
   if (!response.ok) {
     throw new ApiError("Ticket submission failed", response.status, body.errors);
+  }
+
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// Feature 4/5 — My Tickets: list, search, filter, sort, and pagination
+// ---------------------------------------------------------------------------
+export async function fetchTickets(params: FetchTicketsParams): Promise<TicketListResponse> {
+  const query = new URLSearchParams();
+  query.set("requesterId", String(params.requesterId));
+  if (params.search) query.set("search", params.search);
+  if (params.categoryId) query.set("categoryId", String(params.categoryId));
+  if (params.relatedSystemId) query.set("relatedSystemId", String(params.relatedSystemId));
+  if (params.requestedPriority) query.set("requestedPriority", params.requestedPriority);
+  if (params.currentStatus) query.set("currentStatus", params.currentStatus);
+  if (params.sortBy) query.set("sortBy", params.sortBy);
+  if (params.sortDir) query.set("sortDir", params.sortDir);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+
+  const response = await fetch(`${API_URL}/api/tickets?${query.toString()}`);
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Failed to load tickets", response.status);
   }
 
   return body;

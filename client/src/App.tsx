@@ -2,8 +2,10 @@ import { useState } from "react";
 import { checkSystem, Category, Requester } from "./api.js";
 import CreateTicketForm from "./CreateTicketForm.js";
 import DevRequesterPicker from "./DevRequesterPicker.js";
+import MyTickets from "./MyTickets.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
+type TicketView = "none" | "createTicket" | "myTickets";
 
 // Lab 2 stand-in for real auth (arrives in Lab 3) — remember the chosen
 // Requester across reloads so it "stays active" rather than resetting every
@@ -23,7 +25,7 @@ export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [ticketView, setTicketView] = useState<TicketView>("none");
   const [activeRequester, setActiveRequester] = useState<Requester | null>(loadStoredRequester);
 
   function handleSelectRequester(requester: Requester) {
@@ -104,18 +106,51 @@ export default function App() {
 
       <hr className="my-5" />
 
-      {!showCreateForm && (
-        <button className="btn btn-outline-success" onClick={() => setShowCreateForm(true)}>
-          New Ticket
-        </button>
+      {ticketView === "none" && (
+        <div className="btn-group" role="group">
+          <button
+            className="btn btn-outline-success"
+            onClick={() => setTicketView("createTicket")}
+          >
+            New Ticket
+          </button>
+          <button
+            className="btn btn-outline-success"
+            onClick={() => setTicketView("myTickets")}
+          >
+            My Tickets
+          </button>
+        </div>
       )}
 
-      {showCreateForm && !activeRequester && (
+      {ticketView !== "none" && !activeRequester && (
         <DevRequesterPicker onSelect={handleSelectRequester} />
       )}
 
-      {showCreateForm && activeRequester && (
-        <CreateTicketForm requester={activeRequester} onSwitchRequester={handleSwitchRequester} />
+      {ticketView !== "none" && activeRequester && (
+        <div>
+          <div className="btn-group btn-group-sm mb-3" role="group">
+            <button
+              className={`btn ${ticketView === "createTicket" ? "btn-success" : "btn-outline-success"}`}
+              onClick={() => setTicketView("createTicket")}
+            >
+              New Ticket
+            </button>
+            <button
+              className={`btn ${ticketView === "myTickets" ? "btn-success" : "btn-outline-success"}`}
+              onClick={() => setTicketView("myTickets")}
+            >
+              My Tickets
+            </button>
+          </div>
+
+          {ticketView === "createTicket" && (
+            <CreateTicketForm requester={activeRequester} onSwitchRequester={handleSwitchRequester} />
+          )}
+          {ticketView === "myTickets" && (
+            <MyTickets requester={activeRequester} onSwitchRequester={handleSwitchRequester} />
+          )}
+        </div>
       )}
     </div>
   );

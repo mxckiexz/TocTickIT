@@ -1,4 +1,5 @@
 import express, { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import cors from "cors";
 import multer, { MulterError } from "multer";
 import { randomUUID } from "node:crypto";
@@ -220,28 +221,134 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// Feature 4 — View own tickets in My Tickets (GET /api/tickets)
-// Search, filter, sort, and pagination are Feature 5 — this returns the
-// requester's full ticket list, newest first.
+// Feature 4/5 — My Tickets: view, search, filter, sort, and page through a
+// Requester's own tickets (GET /api/tickets)
 // ---------------------------------------------------------------------------
+const TICKET_SORT_FIELDS = ["createdAt", "summary", "requestedPriority"] as const;
+type TicketSortField = (typeof TICKET_SORT_FIELDS)[number];
+const DEFAULT_SORT_BY: TicketSortField = "createdAt";
+const DEFAULT_SORT_DIR = "desc";
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 50;
+
 app.get("/api/tickets", async (req: Request, res: Response) => {
   const requesterId = Number(req.query.requesterId);
-
   if (!Number.isInteger(requesterId) || requesterId <= 0) {
     return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  const where: Record<string, unknown> = { requesterId };
+
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  if (search) {
+    where.OR = [
+      { summary: { contains: search, mode: "insensitive" } },
+      { description: { contains: search, mode: "insensitive" } },
+      { ticketNumber: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  if (req.query.categoryId !== undefined) {
+    const categoryId = Number(req.query.categoryId);
+    if (!Number.isInteger(categoryId) || categoryId <= 0) {
+      return res.status(400).json({ error: "categoryId must be a positive integer." });
+    }
+    where.categoryId = categoryId;
+  }
+
+  if (req.query.relatedSystemId !== undefined) {
+    const relatedSystemId = Number(req.query.relatedSystemId);
+    if (!Number.isInteger(relatedSystemId) || relatedSystemId <= 0) {
+      return res.status(400).json({ error: "relatedSystemId must be a positive integer." });
+    }
+    where.relatedSystemId = relatedSystemId;
+  }
+
+  if (req.query.requestedPriority !== undefined) {
+    if (!REQUESTED_PRIORITIES.includes(req.query.requestedPriority as (typeof REQUESTED_PRIORITIES)[number])) {
+      return res.status(400).json({
+        error: "requestedPriority must be LOW, MEDIUM, or HIGH.",
+      });
+    }
+    where.requestedPriority = req.query.requestedPriority;
+  }
+
+  if (req.query.currentStatus !== undefined) {
+    const currentStatus = typeof req.query.currentStatus === "string" ? req.query.currentStatus.trim() : "";
+    if (!currentStatus) {
+      return res.status(400).json({ error: "currentStatus, if provided, cannot be empty." });
+    }
+    where.currentStatus = currentStatus;
+  }
+
+  const sortByParam = req.query.sortBy;
+  const sortBy: TicketSortField =
+    sortByParam === undefined ? DEFAULT_SORT_BY : (sortByParam as TicketSortField);
+  if (!TICKET_SORT_FIELDS.includes(sortBy)) {
+    return res.status(400).json({
+      error: `sortBy must be one of: ${TICKET_SORT_FIELDS.join(", ")}.`,
+    });
+  }
+
+  const sortDirParam = req.query.sortDir;
+  const sortDirValue = sortDirParam === undefined ? DEFAULT_SORT_DIR : sortDirParam;
+  if (sortDirValue !== "asc" && sortDirValue !== "desc") {
+    return res.status(400).json({ error: "sortDir must be asc or desc." });
+  }
+  const sortDir: Prisma.SortOrder = sortDirValue;
+
+  const pageParam = req.query.page;
+  const page = pageParam === undefined ? 1 : Number(pageParam);
+  if (!Number.isInteger(page) || page <= 0) {
+    return res.status(400).json({ error: "page must be a positive integer." });
+  }
+
+  const pageSizeParam = req.query.pageSize;
+  const pageSize = pageSizeParam === undefined ? DEFAULT_PAGE_SIZE : Number(pageSizeParam);
+  if (!Number.isInteger(pageSize) || pageSize <= 0 || pageSize > MAX_PAGE_SIZE) {
+    return res.status(400).json({
+      error: `pageSize must be a positive integer up to ${MAX_PAGE_SIZE}.`,
+    });
   }
 
   try {
     const prisma = getPrisma();
 
-    const tickets = await prisma.ticket.findMany({
-      where: { requesterId },
-      // id desc as a tiebreaker keeps order stable when two tickets share a
-      // createdAt (same millisecond, or a DB with lower timestamp precision).
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    });
+    // id desc as a tiebreaker keeps order stable when two tickets share the
+    // sorted-on value (e.g. the same createdAt millisecond, or an equal
+    // summary/priority) — BR-08.
+    let orderBy: Prisma.TicketOrderByWithRelationInput[];
+    switch (sortBy) {
+      case "summary":
+        orderBy = [{ summary: sortDir }, { id: "desc" }];
+        break;
+      case "requestedPriority":
+        orderBy = [{ requestedPriority: sortDir }, { id: "desc" }];
+        break;
+      case "createdAt":
+      default:
+        orderBy = [{ createdAt: sortDir }, { id: "desc" }];
+    }
 
-    res.status(200).json(tickets);
+    const [tickets, totalItems] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+
+    res.status(200).json({
+      tickets,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+      },
+    });
   } catch (error) {
     console.error("Failed to retrieve tickets:", error);
 

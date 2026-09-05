@@ -11,6 +11,7 @@ import {
   fetchRelatedSystems,
   uploadAttachment,
 } from "./api.js";
+import RequesterBanner from "./RequesterBanner.js";
 
 const SUMMARY_MAX_LENGTH = 150;
 const DESCRIPTION_MAX_LENGTH = 2000;
@@ -300,21 +301,5 @@ export default function CreateTicketForm({ requester, onSwitchRequester }: Creat
         {submitState === "submitting" ? "Submitting…" : "Submit Ticket"}
       </button>
     </form>
-  );
-}
-
-interface RequesterBannerProps {
-  requester: Requester;
-  onSwitchRequester: () => void;
-}
-
-function RequesterBanner({ requester, onSwitchRequester }: RequesterBannerProps) {
-  return (
-    <p className="text-muted small mb-3">
-      Creating as <strong>{requester.name}</strong> ({requester.email}){" "}
-      <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={onSwitchRequester}>
-        Switch requester
-      </button>
-    </p>
   );
 }

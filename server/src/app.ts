@@ -359,6 +359,47 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// Feature 6 — Ticket Detail screen (GET /api/tickets/:id)
+// Attachments on the detail screen are Feature 7 — this returns the ticket's
+// own fields only.
+// ---------------------------------------------------------------------------
+app.get("/api/tickets/:id", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.id);
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    // Same ownership rule as attachment upload (BR-07): only the owning
+    // Requester may view the ticket's detail.
+    if (ticket.requesterId !== requesterId) {
+      return res.status(403).json({
+        error: "You do not have permission to view this ticket.",
+      });
+    }
+
+    res.status(200).json(ticket);
+  } catch (error) {
+    console.error("Failed to retrieve ticket:", error);
+
+    res.status(500).json({
+      error: "Failed to retrieve ticket",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Feature 2 — Upload a permitted supporting attachment
 // (POST /api/tickets/:id/attachments)
 // ---------------------------------------------------------------------------

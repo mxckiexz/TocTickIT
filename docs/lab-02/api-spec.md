@@ -176,3 +176,50 @@ Example response for
 updated to match in the same change that added this (see
 [tests.md](tests.md)), since Feature 4 hadn't shipped to `main` yet when
 Feature 5 was built.
+
+## `GET /api/tickets/:id`
+
+The Ticket Detail screen (Feature 6) — one ticket's full fields, ownership
+checked the same way as `POST /api/tickets/:id/attachments` (BR-07).
+Attachments are **not** part of this response — that's Feature 7.
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` exists and `requesterId` matches its owner | The full `Ticket` (same field shape as an entry in `GET /api/tickets`'s `tickets` array — see above) |
+| `400 Bad Request` | `:id` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner (BR-11) | `{ "error": "You do not have permission to view this ticket." }` |
+| `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve ticket" }` |
+
+Check order: `:id` shape → `requesterId` shape → ticket exists (404) →
+ownership (403) — same order attachments use, existence before ownership so
+a non-owner can't distinguish "doesn't exist" from "not yours" by response
+shape alone (both are meaningfully different statuses here, unlike some APIs
+that collapse them to 404 for privacy; this one intentionally doesn't, since
+there's no sensitive data to hide by ticket id existing or not).
+
+Example response for `GET /api/tickets/42?requesterId=1`:
+
+```json
+{
+  "id": 42,
+  "ticketNumber": "TKT-2026-000042",
+  "requesterId": 1,
+  "categoryId": 2,
+  "relatedSystemId": 1,
+  "summary": "Laptop battery drains quickly",
+  "description": "Battery drains much faster than usual, even when idle.",
+  "requestedPriority": "MEDIUM",
+  "currentStatus": "New",
+  "createdAt": "2026-09-04T10:12:03.000Z",
+  "updatedAt": "2026-09-04T10:12:03.000Z"
+}
+```

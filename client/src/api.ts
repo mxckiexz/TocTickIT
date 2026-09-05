@@ -193,6 +193,22 @@ export async function fetchTickets(params: FetchTicketsParams): Promise<TicketLi
   return body;
 }
 
+// ---------------------------------------------------------------------------
+// Feature 6 — Ticket Detail screen
+// ---------------------------------------------------------------------------
+export async function fetchTicketDetail(ticketId: number, requesterId: number): Promise<Ticket> {
+  const query = new URLSearchParams({ requesterId: String(requesterId) });
+
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}?${query.toString()}`);
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Failed to load ticket", response.status);
+  }
+
+  return body;
+}
+
 export async function uploadAttachment(
   ticketId: number,
   requesterId: number,

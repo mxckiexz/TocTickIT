@@ -4,8 +4,9 @@
 > first when the contract changes, then update the code and tests to match.
 > Covers Feature 1 (`POST /api/tickets`), Feature 2 (attachment upload),
 > Feature 3 (the ticket-creation UI that ties both into one flow),
-> Feature 4 (`GET /api/tickets`, the My Tickets list), and Feature 5
-> (search, filter, sort, and pagination on that same endpoint).
+> Feature 4 (`GET /api/tickets`, the My Tickets list), Feature 5
+> (search, filter, sort, and pagination on that same endpoint), and
+> Feature 6 (`GET /api/tickets/:id`, the Ticket Detail screen).
 
 ## Scope
 
@@ -26,6 +27,11 @@
   `{ tickets, pagination }` (BR-09) — Feature 4's own tests were updated in
   the same change to match, since this endpoint didn't ship to `main` between
   the two features.
+- **Feature 6** (`feature6`): backend only, `GET /api/tickets/:id` — a single
+  ticket's full detail, ownership-scoped the same way as Feature 4's list,
+  plus the `TicketDetail` React view reached by clicking a ticket in My
+  Tickets. Attachments on this screen are **deferred to Feature 7** — this
+  endpoint returns the ticket's own fields only, no attachment list.
 
 ## Entities
 
@@ -81,6 +87,22 @@
   - **Given** any caller, **when** `sortBy`, `sortDir`, `page`, or `pageSize`
     is present but invalid (unsupported field/direction, non-positive, or
     `pageSize` over the max), **then** the response is `400`.
+- **AC-08** (Feature 6) — Ticket Detail screen, Given–When–Then:
+  - **Given** a Requester owns a ticket, **when** they call
+    `GET /api/tickets/:id` with their own `requesterId`, **then** the
+    response is `200` with that ticket's full fields.
+  - **Given** a Requester does not own a ticket that exists, **when** they
+    call `GET /api/tickets/:id` with their own `requesterId`, **then** the
+    response is `403` and no ticket data is returned (BR-11).
+  - **Given** any caller, **when** `:id` does not reference an existing
+    ticket, **then** the response is `404`.
+  - **Given** any caller, **when** `:id` is not a positive integer or
+    `requesterId` is missing/not a positive integer, **then** the response
+    is `400`.
+  - **Given** a Requester viewing My Tickets, **when** they click a ticket's
+    number, **then** the Ticket Detail screen opens for that ticket, and a
+    "Back to My Tickets" control returns to the list with its previous
+    search/filter/sort/page state intact.
 
 ## Business Rules
 
@@ -121,6 +143,10 @@
   `ticketNumber`. `categoryId`, `relatedSystemId`, `requestedPriority`, and
   `currentStatus` each narrow the result set when supplied; omitted filters
   place no constraint. All filters combine with AND.
+- **BR-11 — Ticket Detail ownership** (Feature 6): `GET /api/tickets/:id`
+  requires `requesterId` and rejects with `403` unless it matches
+  `ticket.requesterId` — the same rule as BR-07's attachment ownership,
+  applied to viewing a ticket's detail instead of adding a file to it.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

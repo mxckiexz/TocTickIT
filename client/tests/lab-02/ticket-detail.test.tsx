@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
@@ -83,17 +83,45 @@ describe("TicketDetail", () => {
     expect(screen.getByText("MEDIUM")).toBeInTheDocument();
   });
 
-  it("returns to the My Tickets list when Back is clicked", async () => {
+  it("keeps the previous search/filter/sort state after Back is clicked", async () => {
     await openMyTicketsWithOneTicket();
-    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    const fetchTicketsSpy = vi.mocked(api.fetchTickets);
 
+    // Put the list into a non-default state before opening the ticket.
+    fireEvent.change(screen.getByLabelText(/Filter by category/i), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText(/Sort by/i), { target: { value: "summary-asc" } });
+    fireEvent.change(screen.getByLabelText(/Search tickets/i), { target: { value: "battery" } });
+
+    await waitFor(() =>
+      expect(fetchTicketsSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryId: 2,
+          sortBy: "summary",
+          sortDir: "asc",
+          search: "battery",
+        })
+      )
+    );
+    const callsBeforeOpening = fetchTicketsSpy.mock.calls.length;
+
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
     await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
     fireEvent.click(screen.getByRole("button", { name: /Back to My Tickets/i }));
+    await screen.findByRole("heading", { name: /My Tickets/i });
 
-    expect(await screen.findByRole("heading", { name: /My Tickets/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "TKT-2026-000001" })).toBeInTheDocument();
+    // The controls still reflect the state set before opening the ticket —
+    // MyTickets never remounted (and never reset) while the detail screen
+    // was showing.
+    expect(screen.getByLabelText(/Filter by category/i)).toHaveValue("2");
+    expect(screen.getByLabelText(/Sort by/i)).toHaveValue("summary-asc");
+    expect(screen.getByLabelText(/Search tickets/i)).toHaveValue("battery");
+
+    // Confirm it's actually preserved state, not a lucky-looking re-fetch:
+    // no additional fetchTickets call happened while going through the
+    // detail screen and back.
+    expect(fetchTicketsSpy.mock.calls.length).toBe(callsBeforeOpening);
   });
 
   it("shows an error message when the detail request is rejected (e.g. ownership)", async () => {

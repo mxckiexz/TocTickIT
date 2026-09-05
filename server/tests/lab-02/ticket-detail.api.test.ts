@@ -106,4 +106,13 @@ describe("GET /api/tickets/:id", () => {
 
     expect(response.body.error).toBeDefined();
   });
+
+  it("rejects a non-numeric requesterId", async () => {
+    const response = await request(app)
+      .get(`/api/tickets/${ticketId}`)
+      .query({ requesterId: "abc" })
+      .expect(400);
+
+    expect(response.body.error).toBeDefined();
+  });
 });

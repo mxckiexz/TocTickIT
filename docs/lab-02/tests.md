@@ -99,6 +99,7 @@ tiebreak).
 | B55 | Negative | AC-08 | `:id` is not numeric | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
 | B56 | Negative | AC-08 | `requesterId` query param omitted | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
 | B57 | Negative | AC-08 | `requesterId=0` | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B58 | Negative | AC-08 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
 
 Run with:
 
@@ -110,13 +111,13 @@ cd server && npm run test
  ✓ tests/lab-01/health.test.ts (1 test)
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
- ✓ tests/lab-02/ticket-detail.api.test.ts (6 tests)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (7 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
 
  Test Files  7 passed (7)
-      Tests  59 passed (59)
+      Tests  60 passed (60)
 ```
 
 ## Frontend test plan
@@ -157,7 +158,7 @@ cd server && npm run test
 |---|---|---|---|---|---|---|
 | F21 | Positive | Design constraint (no side effects until opened) | List renders with one ticket, its row not clicked | `fetchTicketDetail` never called | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F22 | Positive | AC-08 | Click a ticket's Ticket Number | `fetchTicketDetail` called with `(ticketId, requesterId)`; Summary, Description, Category name, Related System name, and Priority all shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
-| F23 | Positive | AC-08 | Click "Back to My Tickets" from the detail screen | Returns to the My Tickets list, same ticket row still there | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F23 | Positive | AC-08 | Set a non-default search/category/sort, open a ticket, click "Back to My Tickets" | Returns to the list with the same search text, category selection, and sort selection still applied — confirmed by the control values, and that no extra `fetchTickets` call fired while the detail screen was open | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F24 | Negative | AC-08, BR-11 | `fetchTicketDetail` rejects (e.g. a 403) | The API's error message is shown in place of the ticket fields | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 
 Run with:
@@ -187,7 +188,7 @@ cd client && npm run test
 | AC-05 — Development Requester picked first, stays active across ticket creations (and now across New Ticket / My Tickets) | F2, F4, F5, F11, F19 |
 | AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29, F12, F13 |
 | AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
-| AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, F22, F23, F24 |
+| AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |

@@ -518,4 +518,105 @@ app.post(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Feature 7 — Inspect a ticket's attachments (list + view/download one)
+// Same ownership rule as the rest of Feature 6/BR-07: only the Requester who
+// owns the ticket may see or fetch its attachments (BR-12).
+// ---------------------------------------------------------------------------
+app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.id);
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    if (ticket.requesterId !== requesterId) {
+      return res.status(403).json({
+        error: "You do not have permission to view this ticket's attachments.",
+      });
+    }
+
+    const attachments = await prisma.attachment.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    res.status(200).json(attachments);
+  } catch (error) {
+    console.error("Failed to retrieve attachments:", error);
+
+    res.status(500).json({ error: "Failed to retrieve attachments" });
+  }
+});
+
+app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.id);
+  const attachmentId = Number(req.params.attachmentId);
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+  if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+    return res.status(400).json({ error: "Invalid attachment id." });
+  }
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    if (ticket.requesterId !== requesterId) {
+      return res.status(403).json({
+        error: "You do not have permission to view this ticket's attachments.",
+      });
+    }
+
+    // Scoped to this ticketId too, not just id — an attachment id that
+    // exists but belongs to a different ticket must 404 here, the same as
+    // one that doesn't exist at all.
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: attachmentId, ticketId },
+    });
+    if (!attachment) {
+      return res.status(404).json({ error: "Attachment not found." });
+    }
+
+    const filePath = path.join(UPLOAD_DIR, attachment.storedFilename);
+    res.setHeader("Content-Type", attachment.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(attachment.originalFilename)}"`
+    );
+    res.sendFile(filePath, (error) => {
+      if (error) {
+        console.error("Failed to send attachment file:", error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to retrieve attachment file" });
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Failed to retrieve attachment:", error);
+
+    res.status(500).json({ error: "Failed to retrieve attachment" });
+  }
+});
+
 export default app;

@@ -231,3 +231,35 @@ export async function uploadAttachment(
 
   return body;
 }
+
+// ---------------------------------------------------------------------------
+// Feature 7 — Inspect a ticket's attachments
+// ---------------------------------------------------------------------------
+export async function fetchTicketAttachments(
+  ticketId: number,
+  requesterId: number
+): Promise<Attachment[]> {
+  const query = new URLSearchParams({ requesterId: String(requesterId) });
+
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?${query.toString()}`);
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Failed to load attachments", response.status);
+  }
+
+  return body;
+}
+
+// Not a fetch — just the URL to view/download one attachment. requesterId is
+// in the query string so the ownership check (BR-12) can run the same way
+// as every other endpoint here, even for a plain <a href> the browser
+// navigates to directly.
+export function ticketAttachmentUrl(
+  ticketId: number,
+  attachmentId: number,
+  requesterId: number
+): string {
+  const query = new URLSearchParams({ requesterId: String(requesterId) });
+  return `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}?${query.toString()}`;
+}

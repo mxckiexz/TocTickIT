@@ -101,6 +101,29 @@ tiebreak).
 | B57 | Negative | AC-08 | `requesterId=0` | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
 | B58 | Negative | AC-08 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
 
+### `inspect-attachments.api.test.ts` — list (Feature 7)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B59 | Positive | AC-09 | The owning Requester lists a ticket's 2 attachments | `200`; both returned, oldest first, each with `ticketId` matching | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B60 | Positive | AC-09 | A ticket with no attachments | `200`; `[]` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B61 | Negative | AC-09, BR-12 | A different Requester lists the same ticket's attachments | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B62 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B63 | Negative | AC-09 | `:id` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B64 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+
+### `inspect-attachments.api.test.ts` — view/download one (Feature 7)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B65 | Positive | AC-09 | The owning Requester downloads a real uploaded file | `200`; `Content-Type` matches the upload, body bytes equal the original file exactly | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B66 | Negative | AC-09, BR-12 | A different Requester requests the same file | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B67 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B68 | Negative | AC-09, BR-12 | `:attachmentId` exists but belongs to a *different* ticket than `:id` | `404` — same as not existing at all | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B69 | Negative | AC-09 | `:attachmentId` does not exist at all | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B70 | Negative | AC-09 | `:attachmentId` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B71 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+
 Run with:
 
 ```bash
@@ -112,12 +135,13 @@ cd server && npm run test
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
  ✓ tests/lab-02/ticket-detail.api.test.ts (7 tests)
+ ✓ tests/lab-02/inspect-attachments.api.test.ts (13 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
 
- Test Files  7 passed (7)
-      Tests  60 passed (60)
+ Test Files  8 passed (8)
+      Tests  73 passed (73)
 ```
 
 ## Frontend test plan
@@ -160,6 +184,9 @@ cd server && npm run test
 | F22 | Positive | AC-08 | Click a ticket's Ticket Number | `fetchTicketDetail` called with `(ticketId, requesterId)`; Summary, Description, Category name, Related System name, and Priority all shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F23 | Positive | AC-08 | Set a non-default search/category/sort, open a ticket, click "Back to My Tickets" | Returns to the list with the same search text, category selection, and sort selection still applied — confirmed by the control values, and that no extra `fetchTickets` call fired while the detail screen was open | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F24 | Negative | AC-08, BR-11 | `fetchTicketDetail` rejects (e.g. a 403) | The API's error message is shown in place of the ticket fields | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F25 | Positive | AC-09 | Ticket has one attachment | `fetchTicketAttachments` called with `(ticketId, requesterId)`; filename shown as a link to `ticketAttachmentUrl(...)`, size shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F26 | Positive | AC-09 | Ticket has no attachments | "No attachments on this ticket." shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F27 | Negative | AC-09, BR-12 | `fetchTicketAttachments` rejects (e.g. a 403) | The API's error message is shown for the attachments section — the ticket's own fields above it stay visible | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 
 Run with:
 
@@ -171,10 +198,10 @@ cd client && npm run test
  ✓ tests/lab-01/App.test.tsx (3 tests)
  ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
  ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
- ✓ tests/lab-02/ticket-detail.test.tsx (4 tests)
+ ✓ tests/lab-02/ticket-detail.test.tsx (7 tests)
 
  Test Files  4 passed (4)
-      Tests  27 passed (27)
+      Tests  30 passed (30)
 ```
 
 ## AC / BR → Test traceability matrix
@@ -189,6 +216,7 @@ cd client && npm run test
 | AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29, F12, F13 |
 | AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
 | AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
+| AC-09 — inspect a ticket's attachments (list + view/download), ownership-checked | B59, B60, B61, B65, B66, B68, F25, F26, F27 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |
@@ -200,6 +228,7 @@ cd client && npm run test
 | BR-09 — My Tickets response envelope (`{ tickets, pagination }`) | B30, B48, F17 |
 | BR-10 — My Tickets search/filter fields combine with AND | B35, B40, B41, B42, B43 |
 | BR-11 — Ticket Detail ownership | B53, F24 |
+| BR-12 — Inspect-attachments ownership, incl. cross-ticket attachment id scoping | B61, B66, B68, F27 |
 
 ## Manual verification
 
@@ -238,7 +267,7 @@ categories/related systems and 3 priorities via the API, then drove the real
 - Test data (the 12 manually-created tickets) was deleted from the DB after
   verification.
 
-**Feature 6 (this round):** with the same active Requester's existing
+**Feature 6:** with the same active Requester's existing
 tickets already in the list:
 - Clicked a Ticket Number (`TKT-2026-000036`) → Ticket Detail screen opened
   showing Summary, Description, Category ("Hardware"), Related System
@@ -250,6 +279,23 @@ tickets already in the list:
   (`requesterId=1`) → `200` with the full ticket; a different active
   Requester (`requesterId=2`) → `403
   {"error":"You do not have permission to view this ticket."}`.
+
+**Feature 7 (this round):**
+- Opened an existing ticket (`TKT-2026-000023`) that already had an
+  attachment from earlier manual testing → the Attachments section showed
+  `fake.png (0.0 KB, uploaded 9/3/2026, ...)` as a link, `href` pointing at
+  `GET /api/tickets/23/attachments/7?requesterId=1`.
+- Clicking that link 500'd (`{"error":"Failed to retrieve attachment
+  file"}`) — traced it to the physical file for that specific old record
+  being gone from `server/uploads/` (leftover demo data from an earlier
+  session, not something either endpoint created or removed). Confirmed
+  this isn't a Feature 7 bug by doing a **clean** round trip instead:
+  created a fresh ticket, uploaded a real file to it via `curl`, then
+  fetched it back through the new download endpoint — `200`, correct
+  `Content-Type`, and the response body byte-for-byte equal to the
+  original file. Cleaned up that test ticket/attachment/file afterward.
+- `curl`'d the download endpoint with a non-owning `requesterId` → `403
+  {"error":"You do not have permission to view this ticket's attachments."}`.
 
 ## Known gaps (not yet covered)
 
@@ -274,3 +320,13 @@ tickets already in the list:
 - Attachments are not shown on the Ticket Detail screen — intentionally
   deferred to Feature 7 (see [specification.md](specification.md) Feature 6
   scope).
+- No test covers the disk-file-missing case for the download endpoint (DB
+  row exists, physical file doesn't — surfaced during manual verification
+  above via stale pre-existing demo data). It behaves correctly (`500` with
+  a JSON error, not a crash), but there's no automated regression test for
+  it — would need to delete a file out from under a real upload mid-test,
+  which felt like testing Node's `fs`/Express's `sendFile` rather than this
+  app's own logic.
+- Adding a new attachment from the Ticket Detail screen, and removing one,
+  are **not** part of Feature 7 — see Features 8 and 9
+  ([specification.md](specification.md)).

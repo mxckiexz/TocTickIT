@@ -106,23 +106,32 @@ tiebreak).
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
 | B59 | Positive | AC-09 | The owning Requester lists a ticket's 2 attachments | `200`; both returned, oldest first, each with `ticketId` matching | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B60 | Positive | AC-09 | A ticket with no attachments | `200`; `[]` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B61 | Negative | AC-09, BR-12 | A different Requester lists the same ticket's attachments | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B62 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B63 | Negative | AC-09 | `:id` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B64 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B60 | Positive | AC-09, BR-12 | Same list request | Each entry has exactly the public fields (`id`, `ticketId`, `originalFilename`, `mimeType`, `sizeBytes`, `createdAt`) — no `storedFilename` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B61 | Boundary | BR-13 | Two attachments on a fresh ticket share the exact same `createdAt` (set explicitly in the fixture) | `200`; the lower `id` sorts first (tiebreak) | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B62 | Positive | AC-09 | A ticket with no attachments | `200`; `[]` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B63 | Negative | AC-09, BR-12 | A different Requester lists the same ticket's attachments | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B64 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B65 | Negative | AC-09 | `:id` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B66 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B67 | Negative | AC-09 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
 
 ### `inspect-attachments.api.test.ts` — view/download one (Feature 7)
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| B65 | Positive | AC-09 | The owning Requester downloads a real uploaded file | `200`; `Content-Type` matches the upload, body bytes equal the original file exactly | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B66 | Negative | AC-09, BR-12 | A different Requester requests the same file | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B67 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B68 | Negative | AC-09, BR-12 | `:attachmentId` exists but belongs to a *different* ticket than `:id` | `404` — same as not existing at all | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B69 | Negative | AC-09 | `:attachmentId` does not exist at all | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B70 | Negative | AC-09 | `:attachmentId` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
-| B71 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B68 | Positive | AC-09 | The owning Requester downloads a real uploaded file | `200`; `Content-Type` matches the upload, body bytes equal the original file exactly | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B69 | Positive | AC-09 | An attachment's `originalFilename` has a space and a non-ASCII character | `Content-Disposition` has an unencoded ASCII `filename=` fallback plus a percent-encoded UTF-8 `filename*=` — see api-spec.md | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B70 | Negative | AC-09, BR-12 | A different Requester requests the same file | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B71 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B72 | Negative | AC-09, BR-12 | `:attachmentId` exists but belongs to a *different* ticket than `:id` | `404` — same as not existing at all | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B73 | Negative | AC-09 | `:attachmentId` does not exist at all | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B74 | Negative | AC-09 | `:attachmentId` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B75 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+
+Both fixtures' `afterAll` also deletes the physical files each test uploaded
+to `server/uploads/` (looked up by `storedFilename` before the DB rows are
+removed) — confirmed manually that the directory's file count is unchanged
+before/after a run of this file (see Manual verification below).
 
 Run with:
 
@@ -135,13 +144,13 @@ cd server && npm run test
  ✓ tests/lab-01/categories.test.ts (1 test)
  ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
  ✓ tests/lab-02/ticket-detail.api.test.ts (7 tests)
- ✓ tests/lab-02/inspect-attachments.api.test.ts (13 tests)
+ ✓ tests/lab-02/inspect-attachments.api.test.ts (17 tests)
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
 
  Test Files  8 passed (8)
-      Tests  73 passed (73)
+      Tests  77 passed (77)
 ```
 
 ## Frontend test plan
@@ -216,7 +225,7 @@ cd client && npm run test
 | AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29, F12, F13 |
 | AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
 | AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
-| AC-09 — inspect a ticket's attachments (list + view/download), ownership-checked | B59, B60, B61, B65, B66, B68, F25, F26, F27 |
+| AC-09 — inspect a ticket's attachments (list + view/download), ownership-checked | B59, B60, B62–B75, F25, F26, F27 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |
@@ -228,7 +237,8 @@ cd client && npm run test
 | BR-09 — My Tickets response envelope (`{ tickets, pagination }`) | B30, B48, F17 |
 | BR-10 — My Tickets search/filter fields combine with AND | B35, B40, B41, B42, B43 |
 | BR-11 — Ticket Detail ownership | B53, F24 |
-| BR-12 — Inspect-attachments ownership, incl. cross-ticket attachment id scoping | B61, B66, B68, F27 |
+| BR-12 — Inspect-attachments ownership, incl. cross-ticket attachment id scoping, incl. public-metadata-only list response | B60, B63, B70, B72, F27 |
+| BR-13 — Inspect-attachments ordering incl. `id asc` tiebreak | B61 |
 
 ## Manual verification
 
@@ -280,7 +290,7 @@ tickets already in the list:
   Requester (`requesterId=2`) → `403
   {"error":"You do not have permission to view this ticket."}`.
 
-**Feature 7 (this round):**
+**Feature 7:**
 - Opened an existing ticket (`TKT-2026-000023`) that already had an
   attachment from earlier manual testing → the Attachments section showed
   `fake.png (0.0 KB, uploaded 9/3/2026, ...)` as a link, `href` pointing at
@@ -296,6 +306,18 @@ tickets already in the list:
   original file. Cleaned up that test ticket/attachment/file afterward.
 - `curl`'d the download endpoint with a non-owning `requesterId` → `403
   {"error":"You do not have permission to view this ticket's attachments."}`.
+
+**Feature 7 review fixes (this round):**
+- `curl`'d `GET /api/tickets/23/attachments?requesterId=1` → confirmed the
+  response no longer includes `storedFilename`, only the public fields.
+- Uploaded a file named `my file.png` and downloaded it back → confirmed
+  the exact header: `Content-Disposition: inline; filename="my file.png";
+  filename*=UTF-8''my%20file.png`.
+- Ran `tests/lab-02/inspect-attachments.api.test.ts` alone and compared
+  `ls server/uploads | wc -l` before/after — identical count, confirming
+  the new `afterAll` cleanup actually deletes every file this test file
+  uploads (previously it only deleted the DB rows).
+- Cleaned up the manual test attachment/file afterward.
 
 ## Known gaps (not yet covered)
 

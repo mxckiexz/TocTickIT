@@ -549,7 +549,20 @@ app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
 
     const attachments = await prisma.attachment.findMany({
       where: { ticketId },
-      orderBy: { createdAt: "asc" },
+      // id asc as a tiebreaker keeps order stable when two attachments
+      // share a createdAt (same millisecond) — same reasoning as BR-08.
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      // storedFilename is an internal, server-side detail (the random name
+      // the file is actually saved under) — never expose it. Everything a
+      // client needs to display or fetch the file is public metadata.
+      select: {
+        id: true,
+        ticketId: true,
+        originalFilename: true,
+        mimeType: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
     });
 
     res.status(200).json(attachments);
@@ -599,10 +612,17 @@ app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: 
     }
 
     const filePath = path.join(UPLOAD_DIR, attachment.storedFilename);
+    // RFC 6266/5987: `filename=` is the plain (ASCII) fallback a client that
+    // doesn't understand filename* falls back to — it must NOT be percent-
+    // encoded, or it displays literally (e.g. "photo%20one.png"). `filename*`
+    // carries the real name, percent-encoded with its charset, for clients
+    // that support spaces/non-ASCII (Unicode names, accents, etc.).
+    const asciiFallbackFilename = attachment.originalFilename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    const encodedFilename = encodeURIComponent(attachment.originalFilename);
     res.setHeader("Content-Type", attachment.mimeType);
     res.setHeader(
       "Content-Disposition",
-      `inline; filename="${encodeURIComponent(attachment.originalFilename)}"`
+      `inline; filename="${asciiFallbackFilename}"; filename*=UTF-8''${encodedFilename}`
     );
     res.sendFile(filePath, (error) => {
       if (error) {

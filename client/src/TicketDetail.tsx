@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ApiError,
-  Attachment,
+  AttachmentSummary,
   Category,
   RelatedSystem,
   Requester,
@@ -37,7 +37,7 @@ export default function TicketDetail({
 
   const [attachmentsState, setAttachmentsState] = useState<LoadState>("loading");
   const [attachmentsError, setAttachmentsError] = useState("");
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
 
   useEffect(() => {
     let cancelled = false;

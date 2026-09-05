@@ -92,7 +92,6 @@ describe("TicketDetail", () => {
         id: 10,
         ticketId: 1,
         originalFilename: "screenshot.png",
-        storedFilename: "abc123.png",
         mimeType: "image/png",
         sizeBytes: 2048,
         createdAt: "2026-09-01T11:00:00.000Z",

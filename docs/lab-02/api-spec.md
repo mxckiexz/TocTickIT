@@ -240,15 +240,19 @@ below to fetch a file's actual bytes). Ownership-scoped the same way as
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | `:id` exists and `requesterId` matches its owner | `Attachment[]`, ordered `createdAt asc` (oldest first — upload order). `[]` if the ticket has none. |
+| `200 OK` | `:id` exists and `requesterId` matches its owner | `AttachmentSummary[]`, ordered `createdAt asc, id asc` (oldest first — upload order, `id` as a tiebreaker). `[]` if the ticket has none. |
 | `400 Bad Request` | `:id` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
 | `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner (BR-12) | `{ "error": "You do not have permission to view this ticket's attachments." }` |
 | `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
 | `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve attachments" }` |
 
-Each `Attachment` has the same shape `POST /api/tickets/:id/attachments`
-already returns on upload: `id`, `ticketId`, `originalFilename`,
-`storedFilename`, `mimeType`, `sizeBytes`, `createdAt`.
+An `AttachmentSummary` is **public metadata only** — `id`, `ticketId`,
+`originalFilename`, `mimeType`, `sizeBytes`, `createdAt`. It deliberately
+excludes `storedFilename`, which `POST /api/tickets/:id/attachments`'s
+`201` response does include — that field is the random name the file is
+actually saved under on disk, an internal server-side detail with no
+reason to reach a client. (Found on review: the list endpoint originally
+returned the same shape as the upload response, `storedFilename` included.)
 
 ## `GET /api/tickets/:id/attachments/:attachmentId`
 
@@ -266,7 +270,7 @@ plus `:attachmentId` must belong to `:id`'s ticket.
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | `:id` and `:attachmentId` both valid, owned, and matched to each other | The raw file bytes, `Content-Type` set to the stored `mimeType`, `Content-Disposition: inline; filename="<originalFilename>"` |
+| `200 OK` | `:id` and `:attachmentId` both valid, owned, and matched to each other | The raw file bytes, `Content-Type` set to the stored `mimeType`, `Content-Disposition` per RFC 6266 (below) |
 | `400 Bad Request` | `:id`/`:attachmentId` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
 | `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner | `{ "error": "You do not have permission to view this ticket's attachments." }` |
 | `404 Not Found` | `:id` doesn't exist, **or** `:attachmentId` doesn't exist, **or** it exists but belongs to a different ticket | `{ "error": "Ticket not found." }` or `{ "error": "Attachment not found." }` |
@@ -277,3 +281,29 @@ exists (404) → ownership (403) → attachment exists **and** belongs to this
 ticket (404) — an attachment id valid for a different ticket 404s exactly
 like one that doesn't exist, so this endpoint never confirms or denies that
 an attachment id exists on some *other* ticket.
+
+### `Content-Disposition` format
+
+```
+inline; filename="<ascii-fallback>"; filename*=UTF-8''<percent-encoded-name>
+```
+
+Per RFC 6266/5987: `filename=` is the plain fallback a client that doesn't
+understand `filename*` falls back to, and it must **not** be
+percent-encoded (a percent-encoded `filename=` displays literally, e.g. a
+browser would save a file as `caf%C3%A9.png` instead of `café.png`).
+`filename*` carries the real `originalFilename`, percent-encoded with its
+charset, for clients that support spaces and non-ASCII names. The
+ASCII fallback replaces every non-printable-ASCII character (and `"`/`\`,
+which would otherwise break the quoted string) with `_`.
+
+Example for an `originalFilename` of `café photo.png`:
+
+```
+Content-Disposition: inline; filename="caf_ photo.png"; filename*=UTF-8''caf%C3%A9%20photo.png
+```
+
+(Found on review: the original implementation put the plain, unencoded
+name in `filename=` with no `filename*` — correct for simple ASCII names,
+but a space or accented character would either display wrong or, in some
+clients, get silently mangled.)

@@ -181,7 +181,16 @@
   as BR-07/BR-11, applied to listing/viewing attachments. The download
   endpoint additionally scopes `:attachmentId` to `:id`'s ticket — an
   attachment id that exists but belongs to a different ticket is `404`, not
-  served.
+  served. The list endpoint also returns **public metadata only** —
+  `storedFilename` (the random name a file is actually saved under on
+  disk) is never included in its response, unlike the upload endpoint's
+  `201` response. Found on review: the list originally returned the same
+  shape as the upload response, `storedFilename` included.
+- **BR-13 — Inspect-attachments ordering** (Feature 7):
+  `GET /api/tickets/:id/attachments` orders by `createdAt asc, id asc` —
+  oldest (upload order) first, with `id` as a tiebreaker so the order stays
+  predictable when two attachments share a `createdAt` (same reasoning as
+  BR-08).
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

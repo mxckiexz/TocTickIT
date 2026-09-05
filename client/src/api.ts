@@ -42,6 +42,10 @@ export interface Attachment {
   createdAt: string;
 }
 
+// What GET /api/tickets/:id/attachments actually returns — public metadata
+// only, no storedFilename (that's an internal, server-side detail).
+export type AttachmentSummary = Omit<Attachment, "storedFilename">;
+
 export type TicketSortField = "createdAt" | "summary" | "requestedPriority";
 export type SortDir = "asc" | "desc";
 
@@ -238,7 +242,7 @@ export async function uploadAttachment(
 export async function fetchTicketAttachments(
   ticketId: number,
   requesterId: number
-): Promise<Attachment[]> {
+): Promise<AttachmentSummary[]> {
   const query = new URLSearchParams({ requesterId: String(requesterId) });
 
   const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?${query.toString()}`);

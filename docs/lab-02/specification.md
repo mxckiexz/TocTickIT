@@ -3,8 +3,9 @@
 > Kept as the source of truth to check the API/tests against — update this file
 > first when the contract changes, then update the code and tests to match.
 > Covers Feature 1 (`POST /api/tickets`), Feature 2 (attachment upload),
-> Feature 3 (the ticket-creation UI that ties both into one flow), and
-> Feature 4 (`GET /api/tickets`, the My Tickets list).
+> Feature 3 (the ticket-creation UI that ties both into one flow),
+> Feature 4 (`GET /api/tickets`, the My Tickets list), and Feature 5
+> (search, filter, sort, and pagination on that same endpoint).
 
 ## Scope
 
@@ -18,10 +19,13 @@
   actually fill in a ticket, optionally attach one supporting file, submit,
   and see the unique Ticket Number that comes back. See [ui-spec.md](ui-spec.md).
 - **Feature 4** (`feature4`): backend only, `GET /api/tickets` — a Requester's
-  own ticket list, ownership-scoped and newest first. Search, filtering,
-  sorting options, and pagination are **explicitly deferred to Feature 5** —
-  this endpoint always returns the full list for the given `requesterId`, in
-  one fixed order.
+  own ticket list, ownership-scoped and newest first.
+- **Feature 5** (`feature5`): search, filter, sort, and pagination on
+  `GET /api/tickets`, plus the `MyTickets` React view that uses them. The
+  response shape changed from a bare `Ticket[]` (Feature 4) to
+  `{ tickets, pagination }` (BR-09) — Feature 4's own tests were updated in
+  the same change to match, since this endpoint didn't ship to `main` between
+  the two features.
 
 ## Entities
 
@@ -60,6 +64,23 @@
     empty array — not an error.
   - **Given** any caller, **when** `requesterId` is missing or not a positive
     integer, **then** the response is `400` and no ticket data is returned.
+- **AC-07** (Feature 5) — search, filter, sort, and pagination, Given–When–Then:
+  - **Given** a Requester has tickets whose summary, description, or ticket
+    number contains a term, **when** they call `GET /api/tickets` with that
+    term as `search`, **then** only those tickets are returned (case-insensitive).
+  - **Given** a Requester has tickets across more than one Category, Related
+    System, or Requested Priority, **when** they call `GET /api/tickets` with
+    `categoryId`, `relatedSystemId`, `requestedPriority`, and/or
+    `currentStatus`, **then** only tickets matching every supplied filter are
+    returned.
+  - **Given** a Requester has more tickets than fit on one page, **when** they
+    call `GET /api/tickets` with `page`/`pageSize`, **then** the response's
+    `tickets` array holds only that page's rows and `pagination` reports the
+    correct `page`, `pageSize`, `totalItems`, and `totalPages` — no ticket is
+    skipped or duplicated across consecutive pages.
+  - **Given** any caller, **when** `sortBy`, `sortDir`, `page`, or `pageSize`
+    is present but invalid (unsupported field/direction, non-positive, or
+    `pageSize` over the max), **then** the response is `400`.
 
 ## Business Rules
 
@@ -86,11 +107,20 @@
   rejected with `403` unless it matches `ticket.requesterId` — one Requester
   cannot attach a file to another Requester's ticket. Added on peer review;
   before this fix the endpoint only checked that the ticket existed.
-- **BR-08 — My Tickets ordering**: `GET /api/tickets` orders by `createdAt
-  desc`, with `id desc` as a tiebreaker, so the order stays predictable when
-  two tickets share a `createdAt` (same millisecond, or a clock with lower
-  precision). Search, filter, sort options, and pagination are **deferred to
-  Feature 5** — not part of this endpoint's contract yet.
+- **BR-08 — My Tickets ordering**: `GET /api/tickets` orders by the chosen
+  `sortBy`/`sortDir` (default `createdAt desc`), with `id desc` as a
+  tiebreaker so the order stays predictable when two tickets share the
+  sorted-on value (e.g. the same `createdAt` millisecond, or an equal
+  `summary`/`requestedPriority`).
+- **BR-09 — My Tickets response envelope** (Feature 5): `GET /api/tickets`
+  returns `{ tickets: Ticket[], pagination: { page, pageSize, totalItems,
+  totalPages } }`, not a bare array. `pageSize` defaults to 10 and is capped
+  at 50; `page` defaults to 1.
+- **BR-10 — My Tickets search/filter fields** (Feature 5): `search` matches
+  (case-insensitive, substring) against `summary`, `description`, or
+  `ticketNumber`. `categoryId`, `relatedSystemId`, `requestedPriority`, and
+  `currentStatus` each narrow the result set when supplied; omitted filters
+  place no constraint. All filters combine with AND.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

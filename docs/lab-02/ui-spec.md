@@ -1,26 +1,32 @@
-# Lab 2 / Feature 3 — UI Spec: Create Ticket Form
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5)
 
 ## Entry point
 
-`App.tsx` shows a **New Ticket** button below the existing Lab 1 health-check
-section. Clicking it opens the ticket flow — nothing is fetched on page load,
-matching the existing "Check System" button's fetch-on-click pattern and
-keeping Lab 1's tests unaffected. What's shown next depends on whether a
-Development Requester is already active (AC-05):
+`App.tsx` shows **New Ticket** and **My Tickets** buttons below the existing
+Lab 1 health-check section. Clicking either opens the ticket flow — nothing
+is fetched on page load, matching the existing "Check System" button's
+fetch-on-click pattern and keeping Lab 1's tests unaffected. What's shown
+next depends on whether a Development Requester is already active (AC-05):
 
 1. **No active Requester** (first time, or after "Switch requester") →
    `DevRequesterPicker` — its own step, fetches `GET /api/requesters`,
    presents a `<select>` + "Continue as this Requester". Nothing about
-   categories/related systems is fetched yet.
-2. **Active Requester present** → straight to `CreateTicketForm`, which
-   fetches `GET /api/categories` and `GET /api/related-systems`.
+   categories/related systems/tickets is fetched yet. This step is shared by
+   both flows — it doesn't matter which button was clicked to get here.
+2. **Active Requester present** → straight to `CreateTicketForm` or
+   `MyTickets` (whichever was picked), plus a small tab switcher ("New
+   Ticket" / "My Tickets") above it so the two views can be swapped without
+   re-picking the Requester or losing it.
 
 The chosen Requester is kept in `App.tsx` state and mirrored to
 `localStorage` (`toktickit.activeRequester`), so it survives a page reload —
-"stays active while creating tickets" per AC-05. `CreateTicketForm` shows it
-in a banner ("Creating as `<name>` (`<email>`)") with a "Switch requester"
-button that clears the stored choice and returns to step 1. Submitting a
-ticket and clicking "Create another ticket" does **not** clear it.
+"stays active" per AC-05, across both ticket creation and browsing My
+Tickets. Both `CreateTicketForm` and `MyTickets` render the same shared
+`RequesterBanner` component (`RequesterBanner.tsx`) with a "Switch requester"
+button that clears the stored choice and returns to step 1 — labeled
+"Creating as …" on the form, "Viewing as …" on the list (`label` prop).
+Submitting a ticket, clicking "Create another ticket", or switching between
+the two tabs does **not** clear the active Requester.
 
 ## Fields (`CreateTicketForm`)
 
@@ -82,3 +88,47 @@ Two issues came back from review before approval:
    Reworked into the two-step flow described above under **Entry point** —
    `DevRequesterPicker` is a separate step, and the choice stays active across
    ticket creations (AC-05) instead of resetting.
+
+## `MyTickets` (Feature 5)
+
+Reached via the **My Tickets** entry button / tab. Once the active Requester
+is known, it fetches `GET /api/categories` and `GET /api/related-systems`
+(for the filter dropdowns' labels — the same lookups `CreateTicketForm`
+uses) and then `GET /api/tickets` with the current search/filter/sort/page
+state.
+
+### Controls
+
+| Control | Type | Effect |
+|---|---|---|
+| Search | `<input type="search">` | Debounced 300ms after the user stops typing, then sent as `search` (AC-07). Matches summary, description, or ticket number. |
+| Category | `<select>` | `categoryId` filter, "All categories" clears it. |
+| Related System | `<select>` | `relatedSystemId` filter, "All related systems" clears it. |
+| Priority | `<select>` | `requestedPriority` filter (`LOW`/`MEDIUM`/`HIGH`), "All priorities" clears it. |
+| Sort | `<select>` | One dropdown covering both `sortBy` and `sortDir` as a single choice: Newest first (default, `createdAt desc`), Oldest first (`createdAt asc`), Summary A–Z (`summary asc`), Summary Z–A (`summary desc`). |
+| Previous / Next | buttons | Page navigation. Disabled at the first/last page respectively (`pagination.page`/`totalPages` from the response). |
+
+There is no `currentStatus` filter control in the UI even though the API
+supports one (see [api-spec.md](api-spec.md)) — every ticket today is
+`"New"` (BR-05, no status-transition feature exists yet), so a status filter
+would have exactly one useful value. Easy to add once Feature 6/7 introduce
+status changes.
+
+Changing search, any filter, or sort resets to page 1 — otherwise a filter
+narrow enough to have fewer pages than the current page number would land on
+an empty/out-of-range page.
+
+### Results table
+
+Columns: Ticket Number, Summary, Category (name, resolved from the fetched
+category list by id — the API returns ids, not names), Related System
+(same), Priority, Status, Created (localized date/time). Below the table:
+"Page `<page>` of `<totalPages>` (`<totalItems>` tickets)" plus the
+Previous/Next buttons.
+
+Empty states:
+- No tickets at all for this Requester, or none matching the current
+  search/filters → "No tickets match your search and filters." (same message
+  either way — the controls are right there to relax them).
+- Filter/category/related-system lookups fail to load → an error banner
+  ("Unable to load My Tickets…"), same pattern as `CreateTicketForm`.

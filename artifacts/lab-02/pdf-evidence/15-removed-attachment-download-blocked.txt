@@ -1,0 +1,3 @@
+GET http://localhost:3000/api/tickets/951/attachments/608?requesterId=1
+Status: 404
+Body: {"error":"Attachment not found."}

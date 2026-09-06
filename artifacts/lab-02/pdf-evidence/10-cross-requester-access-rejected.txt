@@ -1,0 +1,3 @@
+GET /api/tickets/951?requesterId=2
+Status: 403
+Body: {"error":"You do not have permission to view this ticket."}

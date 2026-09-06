@@ -95,6 +95,7 @@ describe("TicketDetail", () => {
         mimeType: "image/png",
         sizeBytes: 2048,
         createdAt: "2026-09-01T11:00:00.000Z",
+        removedAt: null,
       },
     ]);
 
@@ -204,6 +205,7 @@ describe("TicketDetail", () => {
         mimeType: "image/png",
         sizeBytes: 2048,
         createdAt: "2026-09-01T11:00:00.000Z",
+        removedAt: null,
       },
     ]);
 
@@ -228,6 +230,7 @@ describe("TicketDetail", () => {
           mimeType: "image/png",
           sizeBytes: 1024,
           createdAt: "2026-09-06T09:00:00.000Z",
+          removedAt: null,
         },
       ]);
     const uploadSpy = vi.spyOn(api, "uploadAttachment").mockResolvedValue({
@@ -238,6 +241,7 @@ describe("TicketDetail", () => {
       mimeType: "image/png",
       sizeBytes: 1024,
       createdAt: "2026-09-06T09:00:00.000Z",
+      removedAt: null,
     });
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
@@ -264,6 +268,7 @@ describe("TicketDetail", () => {
         mimeType: "image/png",
         sizeBytes: 2048,
         createdAt: "2026-09-01T11:00:00.000Z",
+        removedAt: null,
       },
     ]);
     vi.spyOn(api, "uploadAttachment").mockRejectedValue(
@@ -301,6 +306,7 @@ describe("TicketDetail", () => {
         mimeType: "image/png",
         sizeBytes: 100,
         createdAt: "2026-09-01T11:00:00.000Z",
+        removedAt: null,
       }))
     );
 
@@ -311,5 +317,105 @@ describe("TicketDetail", () => {
     expect(screen.getByText(/already has the maximum of 5 attachments/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Add an attachment/)).toBeDisabled();
     expect(screen.getByRole("button", { name: "Upload" })).toBeDisabled();
+  });
+
+  it("removes an attachment after confirming, and refreshes the list", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    const fetchAttachmentsSpy = vi
+      .spyOn(api, "fetchTicketAttachments")
+      .mockResolvedValueOnce([
+        {
+          id: 10,
+          ticketId: 1,
+          originalFilename: "screenshot.png",
+          mimeType: "image/png",
+          sizeBytes: 2048,
+          createdAt: "2026-09-01T11:00:00.000Z",
+          removedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const removeSpy = vi.spyOn(api, "removeAttachment").mockResolvedValue({
+      id: 10,
+      ticketId: 1,
+      originalFilename: "screenshot.png",
+      mimeType: "image/png",
+      sizeBytes: 2048,
+      createdAt: "2026-09-01T11:00:00.000Z",
+      removedAt: "2026-09-06T12:00:00.000Z",
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+    await screen.findByRole("link", { name: "screenshot.png" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(1, 10, 1));
+    await waitFor(() =>
+      expect(screen.queryByRole("link", { name: "screenshot.png" })).not.toBeInTheDocument()
+    );
+    expect(await screen.findByText("No attachments on this ticket.")).toBeInTheDocument();
+    expect(fetchAttachmentsSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not remove the attachment when the confirmation is cancelled", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
+      {
+        id: 10,
+        ticketId: 1,
+        originalFilename: "screenshot.png",
+        mimeType: "image/png",
+        sizeBytes: 2048,
+        createdAt: "2026-09-01T11:00:00.000Z",
+        removedAt: null,
+      },
+    ]);
+    const removeSpy = vi.spyOn(api, "removeAttachment");
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+    await screen.findByRole("link", { name: "screenshot.png" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "screenshot.png" })).toBeInTheDocument();
+  });
+
+  it("shows an error message when removal is rejected, leaving the attachment in place", async () => {
+    await openMyTicketsWithOneTicket();
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
+    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
+      {
+        id: 10,
+        ticketId: 1,
+        originalFilename: "screenshot.png",
+        mimeType: "image/png",
+        sizeBytes: 2048,
+        createdAt: "2026-09-01T11:00:00.000Z",
+        removedAt: null,
+      },
+    ]);
+    vi.spyOn(api, "removeAttachment").mockRejectedValue(
+      new ApiError("You do not have permission to remove attachments from this ticket.", 403)
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+    await screen.findByRole("link", { name: "screenshot.png" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+    expect(
+      await screen.findByText("You do not have permission to remove attachments from this ticket.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "screenshot.png" })).toBeInTheDocument();
   });
 });

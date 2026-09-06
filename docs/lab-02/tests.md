@@ -133,6 +133,30 @@ to `server/uploads/` (looked up by `storedFilename` before the DB rows are
 removed) — confirmed manually that the directory's file count is unchanged
 before/after a run of this file (see Manual verification below).
 
+### `remove-attachment.api.test.ts` (Feature 9)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B76 | Positive | AC-11, BR-14 | The owning Requester removes their own attachment | `200`; `removedAt` set in the response and the DB row; the row itself still exists (`originalFilename` intact); the physical file is deleted from disk | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B77 | Positive | AC-11, BR-14 | List the ticket's attachments after removing one | Removed attachment's id is absent from the list | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B78 | Positive | AC-11, BR-14 | Download a removed attachment | `404` — same as never having existed | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B79 | Boundary | AC-11, BR-14 | Ticket at the 5-active-attachment limit (6th upload rejected `409`); remove 1, then retry the 6th upload | Removal frees a slot — the previously-rejected 6th upload now succeeds `201` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B80 | Negative | AC-11, BR-14 | A different Requester attempts the removal | `403`; the attachment's row is untouched (`removedAt` still `null`) | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B81 | Negative | AC-11, BR-14 | `:attachmentId` exists but belongs to a *different* ticket than `:id` | `404` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B82 | Negative | AC-11, BR-14 | Removing an attachment a second time | `404` on the second call | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B83 | Negative | AC-11 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B84 | Negative | AC-11 | `:attachmentId` does not exist at all | `404` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B85 | Negative | AC-11 | `:id` is not numeric | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B86 | Negative | AC-11 | `:attachmentId` is not numeric | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B87 | Negative | AC-11 | `requesterId` query param omitted | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B88 | Negative | AC-11 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+
+This file's own `afterAll` also deletes the physical files for every
+attachment created during the run that's still active at the end (a
+rejected removal, e.g. B80/B81, correctly leaves the file on disk) —
+confirmed manually the same way as the Feature 7 fixtures (see Manual
+verification below).
+
 Run with:
 
 ```bash
@@ -148,9 +172,10 @@ cd server && npm run test
  ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
  ✓ tests/lab-02/attachments.api.test.ts (8 tests)
  ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
+ ✓ tests/lab-02/remove-attachment.api.test.ts (13 tests)
 
- Test Files  8 passed (8)
-      Tests  77 passed (77)
+ Test Files  9 passed (9)
+      Tests  90 passed (90)
 ```
 
 ## Frontend test plan
@@ -200,6 +225,9 @@ cd server && npm run test
 | F29 | Positive | AC-10 | Pick a file and click Upload | `uploadAttachment` called with `(ticketId, requesterId, file)`; `fetchTicketAttachments` called again (refresh) and the new file appears as a link | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F30 | Negative | AC-10 | Ticket already has 1 attachment; `uploadAttachment` rejects (e.g. a 415) | The API's error message is shown; the existing attachment is still shown afterward, and `fetchTicketAttachments` was not called again (proving the list wasn't just re-fetched to the same state) | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F31 | Positive | AC-10 | Ticket already has 5 attachments | File input and Upload button both disabled; a message states the limit is reached | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F32 | Positive | AC-11 | Click "Remove" on an attachment and confirm | `removeAttachment` called with `(ticketId, attachmentId, requesterId)`; `fetchTicketAttachments` called again (refresh) and the removed attachment no longer appears | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F33 | Positive | AC-11 | Click "Remove" and cancel the confirmation | `removeAttachment` is **not** called; the attachment is still shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F34 | Negative | AC-11 | `removeAttachment` rejects (e.g. a 403) | The API's error message is shown; the attachment stays in the list | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 
 Run with:
 
@@ -211,10 +239,10 @@ cd client && npm run test
  ✓ tests/lab-01/App.test.tsx (3 tests)
  ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
  ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
- ✓ tests/lab-02/ticket-detail.test.tsx (11 tests)
+ ✓ tests/lab-02/ticket-detail.test.tsx (14 tests)
 
  Test Files  4 passed (4)
-      Tests  34 passed (34)
+      Tests  37 passed (37)
 ```
 
 ## AC / BR → Test traceability matrix
@@ -231,6 +259,7 @@ cd client && npm run test
 | AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
 | AC-09 — inspect a ticket's attachments (list + view/download), ownership-checked | B59, B60, B62–B75, F25, F26, F27 |
 | AC-10 — add an attachment to an existing ticket from Ticket Detail | F28, F29, F30, F31 |
+| AC-11 — remove one of a Requester's own attachments (soft removal) | B76–B88, F32, F33, F34 |
 | BR-01 — Ticket Number format | B1 |
 | BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
 | BR-03 — summary/description length limits | B4, B10, B11 |
@@ -244,6 +273,7 @@ cd client && npm run test
 | BR-11 — Ticket Detail ownership | B53, F24 |
 | BR-12 — Inspect-attachments ownership, incl. cross-ticket attachment id scoping, incl. public-metadata-only list response | B60, B63, B70, B72, F27 |
 | BR-13 — Inspect-attachments ordering incl. `id asc` tiebreak | B61 |
+| BR-14 — Attachment removal ownership and soft-delete rules, incl. removed attachments excluded from list/download/active-count, incl. double-removal and cross-ticket scoping | B76–B84, F32, F34 |
 
 ## Manual verification
 
@@ -336,6 +366,29 @@ itself is the exact same, already browser-verified function `CreateTicketForm`
 uses (see Feature 3's manual verification) and the endpoint it calls was
 already verified end-to-end via `curl` in Feature 2/7.
 
+**Feature 9:** opened `TKT-2026-000023` in a browser — it had one attachment
+(`fake.png`) left over from earlier manual testing:
+- Clicked "Remove" → confirmed via the native `window.confirm` dialog →
+  the attachment disappeared from the Attachments section and the "Add an
+  attachment" label updated from `(1/5)` to `(0/5)`.
+- `curl`'d `GET /api/tickets/23/attachments/7?requesterId=1` (the just-removed
+  attachment's download URL) directly afterward → `404
+  {"error":"Attachment not found."}`, confirming the removal is enforced
+  server-side, not just hidden client-side.
+- Confirmed via the Prisma DB (through the passing automated test suite,
+  which asserts this directly) that removal never deletes the `Attachment`
+  row — only sets `removedAt` — while the physical file is actually gone
+  from `server/uploads/`.
+
+Before writing the automated test file, a self-check (comparing
+`ls server/uploads | wc -l` before/after running the new file alone,
+same method as Feature 7's review fix) surfaced that its first draft's
+`afterAll` deleted only DB rows, leaking the physical files of every
+attachment left active at the end of the run (rejected-removal tests, and
+the 5-limit test's unremoved uploads) — 7 files on that run. Fixed by
+adding the same `deleteUploadedFiles`-style helper Feature 7's fixtures
+use, and reran the file alone to confirm the count no longer changes.
+
 ## Known gaps (not yet covered)
 
 - No test exercises the `500` paths (DB failure) — would need a mocked Prisma
@@ -363,10 +416,17 @@ already verified end-to-end via `curl` in Feature 2/7.
   it — would need to delete a file out from under a real upload mid-test,
   which felt like testing Node's `fs`/Express's `sendFile` rather than this
   app's own logic.
-- Removing an attachment from the Ticket Detail screen (with the required
-  soft-removal rules) is **not** part of Feature 8 — see Feature 9
-  ([specification.md](specification.md)). Adding one is now covered (this
-  feature).
+- There is no "undo" for a removal — once `removedAt` is set there's no
+  endpoint or UI control to restore an attachment, matching BR-14/the
+  labsheet's soft-removal requirement as written. If a future feature adds
+  restoration, this file should gain tests for it.
+- The `server/uploads/` directory (gitignored) has a handful of orphaned
+  files with no corresponding DB row, left over from an early, since-fixed
+  draft of `remove-attachment.api.test.ts` whose `afterAll` didn't clean up
+  physical files (caught via the same before/after file-count self-check
+  Feature 7's review introduced, before this feature was opened for
+  review). Harmless — not referenced by any row, not part of the app's
+  behavior — but noted here rather than silently left unmentioned.
 - No automated test drives Feature 8's actual browser file picker (see
   Manual verification above) — the upload flow is covered with a real
   `File` object and a mocked `uploadAttachment`/`fetchTicketAttachments`

@@ -7,8 +7,9 @@
 > Feature 4 (`GET /api/tickets`, the My Tickets list), Feature 5
 > (search, filter, sort, and pagination on that same endpoint), Feature 6
 > (`GET /api/tickets/:id`, the Ticket Detail screen), Feature 7
-> (inspecting a ticket's attachments from that screen), and Feature 8
-> (adding a new attachment to an existing ticket from that same screen).
+> (inspecting a ticket's attachments from that screen), Feature 8
+> (adding a new attachment to an existing ticket from that same screen),
+> and Feature 9 (soft-removing one of a Requester's own attachments).
 
 ## Scope
 
@@ -51,6 +52,17 @@
   *existing* ticket's detail screen, as opposed to Feature 3's "attach
   while creating a new ticket" flow). A successful upload refreshes the
   attachments list in place.
+- **Feature 9**
+  (`feature/9-remove-one-of-their-own-permitted-attachments-using-the-required-soft-removal-rules`):
+  `DELETE /api/tickets/:id/attachments/:attachmentId`, ownership-scoped the
+  same way as Features 6–8 (BR-14), plus a "Remove" control per attachment
+  on `TicketDetail`. As flagged during Feature 7's review, removal is a
+  **soft** removal: the `Attachment` row is kept (`removedAt` set instead
+  of the row being deleted) so its metadata is retained, but the physical
+  file is deleted from disk and every read path (list, download, the
+  upload endpoint's active-count check) treats a removed attachment as
+  gone — a removed attachment no longer counts toward the 5-active
+  limit, freeing a slot for a new upload.
 
 ## Entities
 
@@ -154,6 +166,28 @@
     views its detail screen, **then** the file input and Upload button are
     disabled and a message explains the limit is reached — a client-side
     convenience only; the server's `409` remains the actual enforcement.
+- **AC-11** (Feature 9) — Remove one of a Requester's own attachments,
+  Given–When–Then:
+  - **Given** a Requester owns a ticket and one of its active attachments,
+    **when** they call `DELETE /api/tickets/:id/attachments/:attachmentId`
+    with their own `requesterId`, **then** the response is `200`, the
+    attachment's `removedAt` is set, its row is retained, and its physical
+    file is deleted from disk (BR-14).
+  - **Given** an attachment has been removed, **when** anyone calls the
+    list endpoint, the download endpoint, or the upload endpoint's
+    active-count check for that ticket, **then** the removed attachment is
+    treated as gone — it does not appear in the list, its download `404`s,
+    and it does not count toward the 5-active-attachment limit.
+  - **Given** any caller, **when** the `requesterId` does not match the
+    ticket's owner, **then** the response is `403` and the attachment is
+    left untouched.
+  - **Given** any caller, **when** `:attachmentId` does not exist, belongs
+    to a different ticket than `:id`, or is already removed, **then** the
+    response is `404`.
+  - **Given** a Requester viewing the Ticket Detail screen, **when** they
+    click "Remove" next to one of their attachments and confirm, **then**
+    the attachment is removed and the Attachments section refreshes to no
+    longer show it; cancelling the confirmation makes no API call.
 
 ## Business Rules
 
@@ -215,6 +249,20 @@
   oldest (upload order) first, with `id` as a tiebreaker so the order stays
   predictable when two attachments share a `createdAt` (same reasoning as
   BR-08).
+
+- **BR-14 — Attachment removal ownership and soft-delete rules** (Feature 9):
+  `DELETE /api/tickets/:id/attachments/:attachmentId` requires `requesterId`
+  and rejects with `403` unless it matches `ticket.requesterId` — same rule
+  as BR-07/BR-11/BR-12, applied to removing an attachment. Removal is
+  **soft**: the row is never deleted, only its `removedAt` timestamp is
+  set, so metadata (original filename, size, upload time) is retained for
+  the ticket's history; the physical file on disk *is* deleted, and every
+  other endpoint that reads attachments (list, download, the upload
+  endpoint's active-count check) filters on `removedAt: null`, so a
+  removed attachment behaves as if it doesn't exist anywhere except the
+  raw database row. Removing an already-removed attachment, or one
+  belonging to a different ticket, is `404` — indistinguishable from an
+  attachment id that never existed.
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

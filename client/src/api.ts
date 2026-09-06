@@ -40,6 +40,7 @@ export interface Attachment {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  removedAt: string | null;
 }
 
 // What GET /api/tickets/:id/attachments actually returns — public metadata
@@ -266,4 +267,28 @@ export function ticketAttachmentUrl(
 ): string {
   const query = new URLSearchParams({ requesterId: String(requesterId) });
   return `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}?${query.toString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Feature 9 — Remove one of a Requester's own attachments (soft removal)
+// ---------------------------------------------------------------------------
+export async function removeAttachment(
+  ticketId: number,
+  attachmentId: number,
+  requesterId: number
+): Promise<AttachmentSummary> {
+  const query = new URLSearchParams({ requesterId: String(requesterId) });
+
+  const response = await fetch(
+    `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}?${query.toString()}`,
+    { method: "DELETE" }
+  );
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Failed to remove attachment", response.status);
+  }
+
+  return body;
 }

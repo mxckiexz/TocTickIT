@@ -8,6 +8,7 @@ import {
   Ticket,
   fetchTicketAttachments,
   fetchTicketDetail,
+  removeAttachment,
   ticketAttachmentUrl,
   uploadAttachment,
 } from "./api.js";
@@ -52,6 +53,11 @@ export default function TicketDetail({
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadState, setUploadState] = useState<"idle" | "uploading">("idle");
   const [uploadError, setUploadError] = useState("");
+
+  // Tracks which attachment's Remove button is mid-request, so only that
+  // one row shows a busy state instead of disabling the whole list.
+  const [removingId, setRemovingId] = useState<number | null>(null);
+  const [removeError, setRemoveError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +128,28 @@ export default function TicketDetail({
       );
     } finally {
       setUploadState("idle");
+    }
+  }
+
+  async function handleRemove(attachment: AttachmentSummary) {
+    if (removingId !== null) return;
+    if (!window.confirm(`Remove "${attachment.originalFilename}"? This cannot be undone.`)) {
+      return;
+    }
+
+    setRemovingId(attachment.id);
+    setRemoveError("");
+
+    try {
+      await removeAttachment(ticketId, attachment.id, requester.id);
+      setAttachmentsRefreshKey((key) => key + 1);
+    } catch (error) {
+      console.error("Failed to remove attachment:", error);
+      setRemoveError(
+        error instanceof ApiError ? error.message : "Unable to remove the attachment."
+      );
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -202,7 +230,7 @@ export default function TicketDetail({
           {attachmentsState === "ready" && attachments.length > 0 && (
             <ul className="list-unstyled">
               {attachments.map((attachment) => (
-                <li key={attachment.id} className="mb-1">
+                <li key={attachment.id} className="mb-1 d-flex align-items-center gap-2">
                   <a
                     href={ticketAttachmentUrl(ticket.id, attachment.id, requester.id)}
                     target="_blank"
@@ -214,9 +242,23 @@ export default function TicketDetail({
                     ({formatSize(attachment.sizeBytes)}, uploaded{" "}
                     {new Date(attachment.createdAt).toLocaleString()})
                   </span>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm text-danger p-0"
+                    disabled={removingId !== null}
+                    onClick={() => handleRemove(attachment)}
+                  >
+                    {removingId === attachment.id ? "Removing…" : "Remove"}
+                  </button>
                 </li>
               ))}
             </ul>
+          )}
+
+          {removeError && (
+            <div className="alert alert-danger py-1 px-2 small" role="alert">
+              {removeError}
+            </div>
           )}
 
           {attachmentsState === "ready" && (

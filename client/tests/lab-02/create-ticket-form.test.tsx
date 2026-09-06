@@ -185,6 +185,7 @@ describe("Development Requester + CreateTicketForm", () => {
       mimeType: "image/png",
       sizeBytes: 1024,
       createdAt: new Date().toISOString(),
+      removedAt: null,
     });
     await openFormAsRequester();
 

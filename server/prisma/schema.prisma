@@ -68,13 +68,18 @@ model Ticket {
 }
 
 model Attachment {
-  id               Int      @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   ticketId         Int
   originalFilename String
   storedFilename   String
   mimeType         String
   sizeBytes        Int
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
+  // Soft removal (Feature 9): null means active. Set instead of deleting the
+  // row, so metadata is retained; the physical file is deleted from disk
+  // when this is set, and every read path (list, download, the upload
+  // endpoint's active-count check) treats a non-null removedAt as gone.
+  removedAt        DateTime?
 
   ticket Ticket @relation(fields: [ticketId], references: [id])
 

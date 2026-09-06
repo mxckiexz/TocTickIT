@@ -1,4 +1,4 @@
-# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8)
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8) + Remove Attachment (Feature 9)
 
 ## Entry point
 
@@ -202,7 +202,8 @@ carries the ownership check via `requesterId`, same as every other endpoint
 in this app.
 
 Adding a new attachment from this screen, and removing one, are **not**
-part of Feature 7 — see Features 8 and 9.
+part of Feature 7 — see Features 8 and 9. Each attachment row also carries
+a "Remove" button (Feature 9), placed after the size/date text.
 
 ## Add an attachment (Feature 8)
 
@@ -233,3 +234,33 @@ exactly as it was — a rejected upload never touches it.
 At the 5-attachment limit, a line under the form states the limit is
 reached, in addition to the disabled controls — the label's `(5/5)` alone
 was judged too easy to miss.
+
+## Remove an attachment (Feature 9)
+
+A "Remove" link-styled button on each attachment row in the Attachments
+list (below the `<dl>`, alongside the existing view/download link and
+size/date text).
+
+| Control | Notes |
+|---|---|
+| "Remove" button | One per attachment. Disabled (whole-list, not just its own row) while any removal is in flight, showing "Removing…" on the row actually being removed. |
+
+Clicking it opens a native `window.confirm("Remove \"<originalFilename>\"?
+This cannot be undone.")` before doing anything — soft removal still means
+the Requester can't get the file back through the UI once it's gone
+(BR-14), so this is a deliberate, one extra step to avoid an accidental
+click. Cancelling the dialog makes no API call and leaves the list
+untouched.
+
+On confirming, `removeAttachment(ticketId, attachment.id, requester.id)`
+is called (`DELETE /api/tickets/:id/attachments/:attachmentId`). On
+success:
+- `attachmentsRefreshKey` is bumped — the same re-fetch mechanism Feature 8
+  uses for uploads — so the list re-fetches and the removed attachment
+  disappears (the list endpoint now excludes it, per BR-14), rather than
+  removing it from client state by id and risking drift from the server's
+  actual ordering/filtering.
+
+On failure (`403`/`404`/anything else), the API's own error message is
+shown in an alert below the attachments list, and the list is left exactly
+as it was — a rejected removal never touches it.

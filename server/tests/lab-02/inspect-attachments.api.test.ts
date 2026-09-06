@@ -113,8 +113,9 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
     for (const attachment of response.body) {
       expect(attachment).not.toHaveProperty("storedFilename");
       expect(Object.keys(attachment).sort()).toEqual(
-        ["createdAt", "id", "mimeType", "originalFilename", "sizeBytes", "ticketId"].sort()
+        ["createdAt", "id", "mimeType", "originalFilename", "removedAt", "sizeBytes", "ticketId"].sort()
       );
+      expect(attachment.removedAt).toBeNull();
     }
   });
 

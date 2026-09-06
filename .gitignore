@@ -18,3 +18,6 @@ server/uploads/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+# submission build output (regenerate with scripts/build-submission-pdf.mjs)
+/TokTickIT_Lab2_Submission.pdf
+/_submission.html

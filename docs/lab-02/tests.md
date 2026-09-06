@@ -251,6 +251,27 @@ cd client && npm run test
       Tests  40 passed (40)
 ```
 
+## E2E test plan (`e2e/lab-02/`, Playwright against the real dev servers + Postgres)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| E2E-01 | E2E | AC-01, AC-04, AC-05, AC-06, AC-08 | A Requester picks a Development Requester, creates a ticket, then finds and opens that same ticket from My Tickets | Ticket Number matches `TKT-\d{4}-\d{6}`; a Ticket Date is shown; searching My Tickets by that Ticket Number finds exactly one row; opening it shows the same Summary just submitted | `e2e/lab-02/requester-ticket-flow.spec.ts` | passed |
+
+Run with (requires both dev servers reachable, or let Playwright's
+`webServer` config in `playwright.config.ts` start them):
+
+```bash
+npx playwright test
+```
+
+```
+Running 1 test using 1 worker
+
+  ✓  1 [chromium] › e2e/lab-02/requester-ticket-flow.spec.ts:7:5 › a Requester creates a ticket and later finds it in My Tickets (2.0s)
+
+  1 passed (2.9s)
+```
+
 ## AC / BR → Test traceability matrix
 
 | Acceptance Criterion / Business Rule | Covered by |

@@ -149,8 +149,11 @@ export default function CreateTicketForm({ requester, onSwitchRequester }: Creat
         <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} />
         <div className="alert alert-success" role="status">
           <p className="mb-1">Ticket created successfully.</p>
-          <p className="mb-3">
+          <p className="mb-1">
             Your Ticket Number: <strong>{createdTicket.ticketNumber}</strong>
+          </p>
+          <p className="mb-3 text-muted small">
+            Ticket Date: {new Date(createdTicket.createdAt).toLocaleString()}
           </p>
           {attachmentWarning && <p className="text-danger mb-3">{attachmentWarning}</p>}
           <button

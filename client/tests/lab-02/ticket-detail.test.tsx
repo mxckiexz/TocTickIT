@@ -253,17 +253,26 @@ describe("TicketDetail", () => {
     expect(fetchAttachmentsSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("shows an error message when the upload is rejected (e.g. unsupported type)", async () => {
+  it("shows an error message when the upload is rejected, leaving the existing attachment list unchanged", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
+    const fetchAttachmentsSpy = vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
+      {
+        id: 10,
+        ticketId: 1,
+        originalFilename: "screenshot.png",
+        mimeType: "image/png",
+        sizeBytes: 2048,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      },
+    ]);
     vi.spyOn(api, "uploadAttachment").mockRejectedValue(
       new ApiError("Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.", 415)
     );
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
     await screen.findByRole("heading", { name: "TKT-2026-000001" });
-    await screen.findByText("No attachments on this ticket.");
+    await screen.findByRole("link", { name: "screenshot.png" });
 
     const file = new File(["not an image"], "malware.exe", {
       type: "application/x-msdownload",
@@ -274,6 +283,11 @@ describe("TicketDetail", () => {
     expect(
       await screen.findByText("Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.")
     ).toBeInTheDocument();
+    // The existing attachment is still there — a rejected upload doesn't
+    // touch the list, and (since fetchTicketAttachments wasn't called
+    // again) it wasn't just a lucky re-fetch that happened to look the same.
+    expect(screen.getByRole("link", { name: "screenshot.png" })).toBeInTheDocument();
+    expect(fetchAttachmentsSpy).toHaveBeenCalledTimes(1);
   });
 
   it("disables the upload control once the ticket has the maximum of 5 attachments", async () => {

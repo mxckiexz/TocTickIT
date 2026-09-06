@@ -198,7 +198,7 @@ cd server && npm run test
 | F27 | Negative | AC-09, BR-12 | `fetchTicketAttachments` rejects (e.g. a 403) | The API's error message is shown for the attachments section — the ticket's own fields above it stay visible | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F28 | Positive | AC-10 | Ticket has 1 of 5 attachments | "Add an attachment (1/5)…" label shown; Upload button disabled with no file chosen | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F29 | Positive | AC-10 | Pick a file and click Upload | `uploadAttachment` called with `(ticketId, requesterId, file)`; `fetchTicketAttachments` called again (refresh) and the new file appears as a link | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
-| F30 | Negative | AC-10 | `uploadAttachment` rejects (e.g. a 415) | The API's error message is shown; the existing attachments list is unaffected | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F30 | Negative | AC-10 | Ticket already has 1 attachment; `uploadAttachment` rejects (e.g. a 415) | The API's error message is shown; the existing attachment is still shown afterward, and `fetchTicketAttachments` was not called again (proving the list wasn't just re-fetched to the same state) | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F31 | Positive | AC-10 | Ticket already has 5 attachments | File input and Upload button both disabled; a message states the limit is reached | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 
 Run with:

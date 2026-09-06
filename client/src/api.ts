@@ -41,6 +41,7 @@ export interface Attachment {
   sizeBytes: number;
   createdAt: string;
   removedAt: string | null;
+  removalReason: string | null;
 }
 
 // What GET /api/tickets/:id/attachments actually returns — public metadata
@@ -275,13 +276,18 @@ export function ticketAttachmentUrl(
 export async function removeAttachment(
   ticketId: number,
   attachmentId: number,
-  requesterId: number
+  requesterId: number,
+  reason?: string
 ): Promise<AttachmentSummary> {
   const query = new URLSearchParams({ requesterId: String(requesterId) });
 
   const response = await fetch(
     `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}?${query.toString()}`,
-    { method: "DELETE" }
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason ?? null }),
+    }
   );
 
   const body = await response.json();

@@ -56,13 +56,14 @@
   (`feature/9-remove-one-of-their-own-permitted-attachments-using-the-required-soft-removal-rules`):
   `DELETE /api/tickets/:id/attachments/:attachmentId`, ownership-scoped the
   same way as Features 6–8 (BR-14), plus a "Remove" control per attachment
-  on `TicketDetail`. As flagged during Feature 7's review, removal is a
-  **soft** removal: the `Attachment` row is kept (`removedAt` set instead
-  of the row being deleted) so its metadata is retained, but the physical
-  file is deleted from disk and every read path (list, download, the
-  upload endpoint's active-count check) treats a removed attachment as
-  gone — a removed attachment no longer counts toward the 5-active
-  limit, freeing a slot for a new upload.
+  on `TicketDetail` with an in-app confirmation modal (not a native
+  browser popup) carrying an optional removal-reason field (BR-15). As
+  flagged during Feature 7's review, removal is a **soft** removal: the
+  `Attachment` row is kept (`removedAt`, and now `removalReason`, set
+  instead of the row being deleted) so its metadata stays visible in the
+  list — the download endpoint and the upload endpoint's active-count
+  check are what actually treat a removed attachment as gone, freeing a
+  slot for a new upload.
 
 ## Entities
 
@@ -174,20 +175,30 @@
     attachment's `removedAt` is set, its row is retained, and its physical
     file is deleted from disk (BR-14).
   - **Given** an attachment has been removed, **when** anyone calls the
-    list endpoint, the download endpoint, or the upload endpoint's
-    active-count check for that ticket, **then** the removed attachment is
-    treated as gone — it does not appear in the list, its download `404`s,
-    and it does not count toward the 5-active-attachment limit.
+    download endpoint or the upload endpoint's active-count check for that
+    ticket, **then** the removed attachment is treated as gone for those
+    two purposes — its download `404`s and it does not count toward the
+    5-active-attachment limit — but it is **not** hidden from the list
+    endpoint: `GET /api/tickets/:id/attachments` still returns it, with a
+    non-null `removedAt`, matching the handout's own example ("A removed
+    Attachment remains visible as metadata but cannot be downloaded").
   - **Given** any caller, **when** the `requesterId` does not match the
     ticket's owner, **then** the response is `403` and the attachment is
     left untouched.
   - **Given** any caller, **when** `:attachmentId` does not exist, belongs
     to a different ticket than `:id`, or is already removed, **then** the
     response is `404`.
+  - **Given** a request body includes an optional `reason` string, **when**
+    the removal succeeds, **then** it is stored as the attachment's
+    `removalReason` and returned in the response (BR-15); omitting it
+    records `null` — a reason is never required.
   - **Given** a Requester viewing the Ticket Detail screen, **when** they
-    click "Remove" next to one of their attachments and confirm, **then**
-    the attachment is removed and the Attachments section refreshes to no
-    longer show it; cancelling the confirmation makes no API call.
+    click "Remove" next to one of their active attachments, **then** an
+    in-app confirmation dialog opens (not a native browser popup) with an
+    optional reason field; confirming removes the attachment and the
+    Attachments section refreshes to show it as a struck-through,
+    non-downloadable row instead of disappearing; cancelling makes no API
+    call.
 
 ## Business Rules
 
@@ -255,14 +266,31 @@
   and rejects with `403` unless it matches `ticket.requesterId` — same rule
   as BR-07/BR-11/BR-12, applied to removing an attachment. Removal is
   **soft**: the row is never deleted, only its `removedAt` timestamp is
-  set, so metadata (original filename, size, upload time) is retained for
-  the ticket's history; the physical file on disk *is* deleted, and every
-  other endpoint that reads attachments (list, download, the upload
-  endpoint's active-count check) filters on `removedAt: null`, so a
-  removed attachment behaves as if it doesn't exist anywhere except the
-  raw database row. Removing an already-removed attachment, or one
-  belonging to a different ticket, is `404` — indistinguishable from an
-  attachment id that never existed.
+  set, so metadata (original filename, size, upload time, and now
+  `removalReason`) is retained for the ticket's history — and, per the
+  handout's own example, **stays visible**: `GET /api/tickets/:id/attachments`
+  still returns a removed attachment, `removedAt` non-null, alongside active
+  ones. The physical file on disk *is* deleted, the download endpoint
+  404s for it, and the upload endpoint's active-count check filters on
+  `removedAt: null` so a removed attachment frees up a slot in the
+  5-active limit — only the list endpoint keeps showing it. Removing an
+  already-removed attachment, or one belonging to a different ticket, is
+  `404` — indistinguishable from an attachment id that never existed.
+
+  *(Revision note: the first implementation filtered removed attachments
+  out of the list endpoint too, treating them as fully gone everywhere.
+  Peer review flagged this as inconsistent with the handout's explicit
+  example, which describes a removed attachment as visible metadata that
+  merely can't be downloaded — fixed as described above.)*
+
+- **BR-15 — Optional removal reason** (Feature 9, handout section 4.5):
+  `DELETE /api/tickets/:id/attachments/:attachmentId` accepts an optional
+  `reason` string in the JSON request body (not a query param, since it's
+  free text rather than an id). It's trimmed, capped at 500 characters
+  (`400` if longer), and stored as `removalReason` — `null` when omitted
+  or blank. A reason is never required to complete a removal; this is a
+  capture-only field with no other behavioral effect (e.g. it isn't
+  searchable/filterable anywhere else in the app).
 
 See [api-spec.md](api-spec.md) for the exact request/response contract and
 [tests.md](tests.md) for how each rule is covered by tests.

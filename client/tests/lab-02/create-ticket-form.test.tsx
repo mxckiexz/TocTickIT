@@ -186,6 +186,7 @@ describe("Development Requester + CreateTicketForm", () => {
       sizeBytes: 1024,
       createdAt: new Date().toISOString(),
       removedAt: null,
+      removalReason: null,
     });
     await openFormAsRequester();
 

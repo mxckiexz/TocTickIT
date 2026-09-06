@@ -548,9 +548,11 @@ app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
     }
 
     const attachments = await prisma.attachment.findMany({
-      // removedAt: null — soft-removed attachments (Feature 9) never appear
-      // in the list, the same as if they'd been hard-deleted.
-      where: { ticketId, removedAt: null },
+      // Includes removed attachments too (BR-14, per the handout's example:
+      // "A removed Attachment remains visible as metadata but cannot be
+      // downloaded") — removedAt/removalReason tell the caller which ones
+      // are removed; the download endpoint is what actually blocks access.
+      where: { ticketId },
       // id asc as a tiebreaker keeps order stable when two attachments
       // share a createdAt (same millisecond) — same reasoning as BR-08.
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -565,6 +567,7 @@ app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
         sizeBytes: true,
         createdAt: true,
         removedAt: true,
+        removalReason: true,
       },
     });
 
@@ -647,10 +650,11 @@ app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: 
 // ---------------------------------------------------------------------------
 // Feature 9 — Remove one of a Requester's own attachments (soft removal)
 // Same ownership rule as Feature 7/8 (BR-12). Required soft-removal rules
-// (BR-14): the Attachment row is never deleted — removedAt is set instead,
-// so its metadata is retained — but the physical file is deleted from disk
-// and every read path (list, download, the upload count check) treats a
-// removed attachment as gone.
+// (BR-14): the Attachment row is never deleted — removedAt (and an optional
+// removalReason, handout section 4.5) is set instead, so its metadata is
+// retained and still shows up in the list — but the physical file is
+// deleted from disk, the download endpoint 404s for it, and the upload
+// endpoint's active-count check treats it as gone.
 // ---------------------------------------------------------------------------
 app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: Response) => {
   const ticketId = Number(req.params.id);
@@ -666,6 +670,19 @@ app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, re
   if (!Number.isInteger(requesterId) || requesterId <= 0) {
     return res.status(400).json({ error: "requesterId is required." });
   }
+
+  // Removal reason (handout section 4.5): optional free text, sent as a
+  // JSON body rather than a query param since it's arbitrary prose, not an
+  // id. Absent/blank is fine — it's recorded as null, not required.
+  const rawReason = req.body?.reason;
+  if (rawReason !== undefined && rawReason !== null && typeof rawReason !== "string") {
+    return res.status(400).json({ error: "reason must be a string." });
+  }
+  const trimmedReason = typeof rawReason === "string" ? rawReason.trim() : "";
+  if (trimmedReason.length > 500) {
+    return res.status(400).json({ error: "Removal reason must be at most 500 characters." });
+  }
+  const removalReason = trimmedReason.length > 0 ? trimmedReason : null;
 
   try {
     const prisma = getPrisma();
@@ -692,7 +709,7 @@ app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, re
 
     const updated = await prisma.attachment.update({
       where: { id: attachment.id },
-      data: { removedAt: new Date() },
+      data: { removedAt: new Date(), removalReason },
       select: {
         id: true,
         ticketId: true,
@@ -701,6 +718,7 @@ app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, re
         sizeBytes: true,
         createdAt: true,
         removedAt: true,
+        removalReason: true,
       },
     });
 

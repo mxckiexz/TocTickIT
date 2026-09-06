@@ -121,7 +121,7 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
     expect(existsSync(filePath)).toBe(false);
   });
 
-  it("no longer appears in the attachment list after removal", async () => {
+  it("still appears in the attachment list after removal, marked with removedAt (BR-14: visible as metadata)", async () => {
     const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "list-me-then-remove.png");
 
     await request(app)
@@ -134,8 +134,53 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
       .query({ requesterId: ownerRequesterId })
       .expect(200);
 
-    const ids = listResponse.body.map((a: { id: number }) => a.id);
-    expect(ids).not.toContain(uploaded.id);
+    const entry = listResponse.body.find((a: { id: number }) => a.id === uploaded.id);
+    expect(entry).toBeDefined();
+    expect(entry.removedAt).not.toBeNull();
+    expect(entry.originalFilename).toBe("list-me-then-remove.png");
+    expect(entry).not.toHaveProperty("storedFilename");
+  });
+
+  it("captures an optional removal reason", async () => {
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "with-reason.png");
+
+    const response = await request(app)
+      .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
+      .query({ requesterId: ownerRequesterId })
+      .send({ reason: "Uploaded the wrong file" })
+      .expect(200);
+
+    expect(response.body.removalReason).toBe("Uploaded the wrong file");
+
+    const row = await getPrisma().attachment.findUniqueOrThrow({ where: { id: uploaded.id } });
+    expect(row.removalReason).toBe("Uploaded the wrong file");
+  });
+
+  it("records a null removal reason when none is given", async () => {
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "no-reason.png");
+
+    const response = await request(app)
+      .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
+      .query({ requesterId: ownerRequesterId })
+      .expect(200);
+
+    expect(response.body.removalReason).toBeNull();
+  });
+
+  it("rejects a removal reason over 500 characters", async () => {
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "reason-too-long.png");
+
+    const response = await request(app)
+      .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
+      .query({ requesterId: ownerRequesterId })
+      .send({ reason: "a".repeat(501) })
+      .expect(400);
+
+    expect(response.body.error).toBeDefined();
+
+    // Rejected — the attachment itself is untouched.
+    const row = await getPrisma().attachment.findUniqueOrThrow({ where: { id: uploaded.id } });
+    expect(row.removedAt).toBeNull();
   });
 
   it("blocks downloading a removed attachment (404, same as not existing)", async () => {

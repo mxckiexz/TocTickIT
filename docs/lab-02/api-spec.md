@@ -63,7 +63,7 @@ call it again to add more, up to the per-ticket limit.
 
 | Status | When | Body |
 |---|---|---|
-| `201 Created` | File accepted | The created `Attachment` (`id`, `ticketId`, `originalFilename`, `storedFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt: null`). |
+| `201 Created` | File accepted | The created `Attachment` (`id`, `ticketId`, `originalFilename`, `storedFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt: null`, `removalReason: null`). |
 | `400 Bad Request` | Missing/invalid ticket id, missing/invalid `requesterId`, or no file sent | `{ "error": "<message>" }` |
 | `403 Forbidden` | `requesterId` doesn't match `ticket.requesterId` (BR-07) | `{ "error": "You do not have permission to add attachments to this ticket." }` |
 | `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
@@ -245,22 +245,34 @@ below to fetch a file's actual bytes). Ownership-scoped the same way as
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | `:id` exists and `requesterId` matches its owner | `AttachmentSummary[]`, **active attachments only** (`removedAt: null` — Feature 9), ordered `createdAt asc, id asc` (oldest first — upload order, `id` as a tiebreaker). `[]` if the ticket has no active attachments. |
+| `200 OK` | `:id` exists and `requesterId` matches its owner | `AttachmentSummary[]`, **both active and removed attachments** (BR-14 — a removed one is still metadata, per the handout: it just can't be downloaded), ordered `createdAt asc, id asc` (oldest first — upload order, `id` as a tiebreaker). `[]` only if the ticket has no attachments at all, active or removed. |
 | `400 Bad Request` | `:id` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
 | `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner (BR-12) | `{ "error": "You do not have permission to view this ticket's attachments." }` |
 | `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
 | `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve attachments" }` |
 
 An `AttachmentSummary` is **public metadata only** — `id`, `ticketId`,
-`originalFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt`. It
-deliberately excludes `storedFilename`, which `POST /api/tickets/:id/attachments`'s
-`201` response does include — that field is the random name the file is
-actually saved under on disk, an internal server-side detail with no
-reason to reach a client. (Found on review: the list endpoint originally
-returned the same shape as the upload response, `storedFilename` included.)
-`removedAt` is always `null` here since Feature 9 (BR-14): a removed
-attachment is filtered out of this list entirely rather than shown with a
-non-null `removedAt`.
+`originalFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt`,
+`removalReason`. It deliberately excludes `storedFilename`, which
+`POST /api/tickets/:id/attachments`'s `201` response does include — that
+field is the random name the file is actually saved under on disk, an
+internal server-side detail with no reason to reach a client. (Found on
+review: the list endpoint originally returned the same shape as the
+upload response, `storedFilename` included.)
+
+`removedAt`/`removalReason` are non-null exactly for attachments that
+have been soft-removed (Feature 9, BR-14/BR-15) — the client is expected
+to render those differently (e.g. struck through, no download link)
+rather than treat their presence as an error. A removed attachment still
+counts toward nothing else this endpoint does (ordering is unaffected)
+— it's the download endpoint and the upload endpoint's active-count
+check that actually gate on `removedAt`, not this one.
+
+*(Revision note: an earlier version of this endpoint filtered removed
+attachments out entirely, on the theory that "gone" should mean gone
+everywhere. Peer review pointed out the handout's own example says a
+removed attachment "remains visible as metadata but cannot be
+downloaded" — fixed to match, as described above.)*
 
 ## `GET /api/tickets/:id/attachments/:attachmentId`
 
@@ -330,28 +342,43 @@ ownership rule as the list/download endpoints (BR-14), plus
 |---|---|---|---|
 | requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
 
+### Request body
+
+```json
+{ "reason": "Uploaded the wrong file" }
+```
+
+| Field | Type | Required | Rule |
+|---|---|---|---|
+| reason | string | no | trimmed; ≤ 500 characters (`400` if longer, BR-15). Omitted, `null`, or blank all record `removalReason: null` — a reason is never required. |
+
+A JSON body, not a query param, since it's free text (unlike `requesterId`,
+which is an id). Sent as `Content-Type: application/json`.
+
 ### Responses
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | `:id` and `:attachmentId` both valid, owned, active, and matched to each other | The updated `Attachment` (public metadata shape — same fields as `AttachmentSummary` — with `removedAt` now set to the removal time) |
-| `400 Bad Request` | `:id`/`:attachmentId` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `200 OK` | `:id` and `:attachmentId` both valid, owned, active, and matched to each other | The updated `Attachment` (public metadata shape — same fields as `AttachmentSummary` — with `removedAt` now set to the removal time and `removalReason` set to the request's `reason`, or `null`) |
+| `400 Bad Request` | `:id`/`:attachmentId` not a positive integer, `requesterId` missing/non-integer/`<= 0`, `reason` present but not a string, or `reason` over 500 characters | `{ "error": "<message>" }` |
 | `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner | `{ "error": "You do not have permission to remove attachments from this ticket." }` |
 | `404 Not Found` | `:id` doesn't exist, **or** `:attachmentId` doesn't exist, belongs to a different ticket, or is already removed | `{ "error": "Ticket not found." }` or `{ "error": "Attachment not found." }` |
 | `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to remove attachment" }` |
 
-Check order: same as the download endpoint — `:id`/`:attachmentId` shape →
-`requesterId` shape → ticket exists (404) → ownership (403) → attachment
-exists, belongs to this ticket, **and is currently active** (404).
+Check order: `:id`/`:attachmentId` shape → `requesterId` shape → `reason`
+shape/length → ticket exists (404) → ownership (403) → attachment exists,
+belongs to this ticket, **and is currently active** (404).
 
-On success, the attachment's `removedAt` is set to the current time and
-its physical file is deleted from disk (best-effort — a failed `unlink` is
-logged server-side but does not fail the request, since the row update,
-which is what every other endpoint's `removedAt` filter relies on, already
-succeeded). The row itself is **never deleted** — its metadata remains
-queryable, just excluded from the list/download/upload-count paths (BR-14).
+On success, the attachment's `removedAt` is set to the current time,
+`removalReason` is set from the request body (or `null`), and the
+physical file is deleted from disk (best-effort — a failed `unlink` is
+logged server-side but does not fail the request, since the row update
+already succeeded). The row itself is **never deleted** and stays visible
+through the list endpoint (BR-14) — only the download endpoint and the
+upload endpoint's active-count check treat it as gone.
 
-Example response for `DELETE /api/tickets/23/attachments/7?requesterId=1`:
+Example response for `DELETE /api/tickets/23/attachments/7?requesterId=1`
+with `{ "reason": "Uploaded the wrong file" }`:
 
 ```json
 {
@@ -361,6 +388,7 @@ Example response for `DELETE /api/tickets/23/attachments/7?requesterId=1`:
   "mimeType": "image/png",
   "sizeBytes": 2048,
   "createdAt": "2026-09-03T14:49:34.000Z",
-  "removedAt": "2026-09-06T12:00:00.000Z"
+  "removedAt": "2026-09-06T12:00:00.000Z",
+  "removalReason": "Uploaded the wrong file"
 }
 ```

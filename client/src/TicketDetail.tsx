@@ -58,6 +58,16 @@ export default function TicketDetail({
   // one row shows a busy state instead of disabling the whole list.
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [removeError, setRemoveError] = useState("");
+  // The attachment awaiting confirmation in the in-app removal modal (below)
+  // — null when the modal is closed. A native window.confirm() doesn't
+  // match the app's look, and it has no room for the optional reason field.
+  const [pendingRemoval, setPendingRemoval] = useState<AttachmentSummary | null>(null);
+  const [removalReasonInput, setRemovalReasonInput] = useState("");
+
+  // Only active (non-removed) attachments count toward the 5-attachment
+  // limit — a removed one stays in `attachments` (BR-14: still visible as
+  // metadata) but shouldn't block adding a new file.
+  const activeAttachments = attachments.filter((attachment) => !attachment.removedAt);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,17 +141,29 @@ export default function TicketDetail({
     }
   }
 
-  async function handleRemove(attachment: AttachmentSummary) {
+  function openRemoveModal(attachment: AttachmentSummary) {
     if (removingId !== null) return;
-    if (!window.confirm(`Remove "${attachment.originalFilename}"? This cannot be undone.`)) {
-      return;
-    }
+    setRemoveError("");
+    setRemovalReasonInput("");
+    setPendingRemoval(attachment);
+  }
 
+  function cancelRemoveModal() {
+    setPendingRemoval(null);
+    setRemovalReasonInput("");
+  }
+
+  async function confirmRemoveModal() {
+    if (!pendingRemoval) return;
+    const attachment = pendingRemoval;
+    const reason = removalReasonInput.trim();
+
+    setPendingRemoval(null);
     setRemovingId(attachment.id);
     setRemoveError("");
 
     try {
-      await removeAttachment(ticketId, attachment.id, requester.id);
+      await removeAttachment(ticketId, attachment.id, requester.id, reason || undefined);
       setAttachmentsRefreshKey((key) => key + 1);
     } catch (error) {
       console.error("Failed to remove attachment:", error);
@@ -150,6 +172,7 @@ export default function TicketDetail({
       );
     } finally {
       setRemovingId(null);
+      setRemovalReasonInput("");
     }
   }
 
@@ -229,29 +252,42 @@ export default function TicketDetail({
 
           {attachmentsState === "ready" && attachments.length > 0 && (
             <ul className="list-unstyled">
-              {attachments.map((attachment) => (
-                <li key={attachment.id} className="mb-1 d-flex align-items-center gap-2">
-                  <a
-                    href={ticketAttachmentUrl(ticket.id, attachment.id, requester.id)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {attachment.originalFilename}
-                  </a>{" "}
-                  <span className="text-muted small">
-                    ({formatSize(attachment.sizeBytes)}, uploaded{" "}
-                    {new Date(attachment.createdAt).toLocaleString()})
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-link btn-sm text-danger p-0"
-                    disabled={removingId !== null}
-                    onClick={() => handleRemove(attachment)}
-                  >
-                    {removingId === attachment.id ? "Removing…" : "Remove"}
-                  </button>
-                </li>
-              ))}
+              {attachments.map((attachment) =>
+                attachment.removedAt ? (
+                  <li key={attachment.id} className="mb-1 text-muted">
+                    <span style={{ textDecoration: "line-through" }}>
+                      {attachment.originalFilename}
+                    </span>{" "}
+                    <span className="small">
+                      ({formatSize(attachment.sizeBytes)}, removed{" "}
+                      {new Date(attachment.removedAt).toLocaleString()}
+                      {attachment.removalReason ? ` — ${attachment.removalReason}` : ""})
+                    </span>
+                  </li>
+                ) : (
+                  <li key={attachment.id} className="mb-1 d-flex align-items-center gap-2">
+                    <a
+                      href={ticketAttachmentUrl(ticket.id, attachment.id, requester.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {attachment.originalFilename}
+                    </a>{" "}
+                    <span className="text-muted small">
+                      ({formatSize(attachment.sizeBytes)}, uploaded{" "}
+                      {new Date(attachment.createdAt).toLocaleString()})
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm text-danger p-0"
+                      disabled={removingId !== null}
+                      onClick={() => openRemoveModal(attachment)}
+                    >
+                      {removingId === attachment.id ? "Removing…" : "Remove"}
+                    </button>
+                  </li>
+                )
+              )}
             </ul>
           )}
 
@@ -264,8 +300,8 @@ export default function TicketDetail({
           {attachmentsState === "ready" && (
             <form className="mt-2" onSubmit={handleUploadSubmit}>
               <label htmlFor="newAttachment" className="form-label small mb-1">
-                Add an attachment ({attachments.length}/{MAX_ATTACHMENTS_PER_TICKET}) — JPG, PNG,
-                WEBP, or PDF, up to 5MB
+                Add an attachment ({activeAttachments.length}/{MAX_ATTACHMENTS_PER_TICKET}) — JPG,
+                PNG, WEBP, or PDF, up to 5MB
               </label>
               <div className="d-flex gap-2">
                 <input
@@ -274,7 +310,7 @@ export default function TicketDetail({
                   type="file"
                   className="form-control form-control-sm"
                   accept=".jpg,.jpeg,.png,.webp,.pdf"
-                  disabled={attachments.length >= MAX_ATTACHMENTS_PER_TICKET}
+                  disabled={activeAttachments.length >= MAX_ATTACHMENTS_PER_TICKET}
                   onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
                 />
                 <button
@@ -283,13 +319,13 @@ export default function TicketDetail({
                   disabled={
                     !uploadFile ||
                     uploadState === "uploading" ||
-                    attachments.length >= MAX_ATTACHMENTS_PER_TICKET
+                    activeAttachments.length >= MAX_ATTACHMENTS_PER_TICKET
                   }
                 >
                   {uploadState === "uploading" ? "Uploading…" : "Upload"}
                 </button>
               </div>
-              {attachments.length >= MAX_ATTACHMENTS_PER_TICKET && (
+              {activeAttachments.length >= MAX_ATTACHMENTS_PER_TICKET && (
                 <p className="text-muted small mt-1 mb-0">
                   This ticket already has the maximum of {MAX_ATTACHMENTS_PER_TICKET} attachments.
                 </p>
@@ -301,6 +337,48 @@ export default function TicketDetail({
               )}
             </form>
           )}
+        </div>
+      )}
+
+      {pendingRemoval && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1050 }}
+          onClick={cancelRemoveModal}
+        >
+          <div
+            className="bg-body rounded shadow p-3 border border-success"
+            style={{ maxWidth: 420, width: "90%" }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="h6">Remove attachment?</h3>
+            <p className="mb-2">
+              Remove "<strong>{pendingRemoval.originalFilename}</strong>"? This cannot be undone.
+            </p>
+            <label htmlFor="removalReason" className="form-label small mb-1">
+              Reason (optional)
+            </label>
+            <textarea
+              id="removalReason"
+              className="form-control form-control-sm mb-3"
+              rows={2}
+              maxLength={500}
+              value={removalReasonInput}
+              onChange={(event) => setRemovalReasonInput(event.target.value)}
+            />
+            <div className="d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-success btn-sm"
+                onClick={cancelRemoveModal}
+              >
+                Cancel
+              </button>
+              <button type="button" className="btn btn-success btn-sm" onClick={confirmRemoveModal}>
+                Remove attachment
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

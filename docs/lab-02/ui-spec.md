@@ -1,4 +1,4 @@
-# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8)
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8) + Remove Attachment (Feature 9)
 
 ## Entry point
 
@@ -189,20 +189,32 @@ together, but the UI doesn't assume that.
 |---|---|
 | Loading | "Loading attachments…" |
 | Error (e.g. `403`) | The API's own message, in an alert — the ticket's own fields above it stay visible |
-| Loaded, empty | "No attachments on this ticket." |
-| Loaded, non-empty | A list: `<originalFilename>` as a link, `(<size> KB, uploaded <date>)` |
+| Loaded, empty | "No attachments on this ticket." (only when the list has **no entries at all** — an active attachment or a removed one both count as "not empty", Feature 9) |
+| Loaded, non-empty | A list mixing two row shapes, in the order the API returns them (`createdAt asc, id asc`) — see below |
 
-Each filename is a real `<a href>` to
+**Active attachment row**: `<originalFilename>` as a real `<a href>` to
 `GET /api/tickets/:id/attachments/:attachmentId?requesterId=<active
 requester>` (`ticketAttachmentUrl()` in `api.ts`), opened in a new tab
 (`target="_blank"`) — the browser handles displaying or downloading it
 based on the response's `Content-Type`/`Content-Disposition`, same as any
 other file link. No client-side fetch-and-blob dance; the URL itself
 carries the ownership check via `requesterId`, same as every other endpoint
-in this app.
+in this app. Followed by `(<size> KB, uploaded <date>)` and a "Remove"
+button (Feature 9).
 
-Adding a new attachment from this screen, and removing one, are **not**
-part of Feature 7 — see Features 8 and 9.
+**Removed attachment row** (`removedAt` non-null, Feature 9): rendered as
+plain, grayed-out (`text-muted`) text with the filename struck through
+(`text-decoration: line-through`) — not a link, since it can no longer be
+downloaded — followed by `(<size> KB, removed <date>)`, with
+` — <removalReason>` appended when a reason was recorded (BR-15). No
+Remove button (already removed). This matches the handout's example: a
+removed attachment "remains visible as metadata but cannot be
+downloaded" — Feature 7's original list simply didn't have a removed
+state to render yet; Feature 9 added this row shape rather than hiding
+the entry.
+
+Adding a new attachment from this screen is **not** part of Feature 7 —
+see Feature 8.
 
 ## Add an attachment (Feature 8)
 
@@ -212,8 +224,8 @@ shown once the attachments section itself has loaded (`attachmentsState ===
 
 | Control | Notes |
 |---|---|
-| Label | "Add an attachment (`<count>`/5) — JPG, PNG, WEBP, or PDF, up to 5MB" — the count updates live from the same `attachments` state the list above renders from. |
-| `<input type="file">` | `accept=".jpg,.jpeg,.png,.webp,.pdf"` (UX hint only, same as `CreateTicketForm`'s attachment field — the server is the real gate). Disabled once `attachments.length >= 5`. |
+| Label | "Add an attachment (`<count>`/5) — JPG, PNG, WEBP, or PDF, up to 5MB" — `<count>` is the number of **active** attachments only (Feature 9: a removed one doesn't occupy a slot), derived by filtering the same `attachments` state the list above renders from. |
+| `<input type="file">` | `accept=".jpg,.jpeg,.png,.webp,.pdf"` (UX hint only, same as `CreateTicketForm`'s attachment field — the server is the real gate). Disabled once the active count reaches 5. |
 | "Upload" button | Disabled with no file chosen, while a request is in flight ("Uploading…"), or at the 5-attachment limit. |
 
 Submitting calls `uploadAttachment(ticketId, requester.id, file)` — the same
@@ -233,3 +245,49 @@ exactly as it was — a rejected upload never touches it.
 At the 5-attachment limit, a line under the form states the limit is
 reached, in addition to the disabled controls — the label's `(5/5)` alone
 was judged too easy to miss.
+
+## Remove an attachment (Feature 9)
+
+A "Remove" link-styled button on each **active** attachment row in the
+Attachments list (below the `<dl>`, alongside the existing view/download
+link and size/date text). Removed rows don't get one — already removed.
+
+| Control | Notes |
+|---|---|
+| "Remove" button | One per active attachment. Disabled (whole-list, not just its own row) while any removal is in flight, showing "Removing…" on the row actually being removed. |
+
+Clicking it opens an **in-app modal** (a fixed-position overlay + card,
+not a native `window.confirm()`) — styled with the app's own green accent
+buttons (`btn-success`/`btn-outline-success`, matching every other primary
+action in the app) so it doesn't look like a generic browser popup dropped
+into an otherwise-themed page:
+
+| Modal element | Notes |
+|---|---|
+| Heading | "Remove attachment?" |
+| Body text | `Remove "<originalFilename>"? This cannot be undone.` |
+| "Reason (optional)" `<textarea>` | Free text, `maxLength=500` (client-side hint matching the server's cap, BR-15). Empty is fine — a reason is never required. |
+| "Cancel" button | Closes the modal, clears the typed reason, makes no API call. |
+| "Remove attachment" button | Confirms — see below. Named differently from the row's "Remove" button so the two aren't ambiguous to assistive tech. |
+
+Clicking outside the card (on the dimmed overlay) also cancels, same as
+"Cancel".
+
+On confirming, `removeAttachment(ticketId, attachment.id, requester.id,
+reason)` is called (`DELETE /api/tickets/:id/attachments/:attachmentId`,
+`reason` trimmed, sent as `undefined` when blank so the request body's
+`reason` is `null`). On success:
+- `attachmentsRefreshKey` is bumped — the same re-fetch mechanism Feature 8
+  uses for uploads — so the list re-fetches. The removed attachment stays
+  in the list (BR-14) but its row switches to the removed-row rendering
+  described in the Attachments section above, rather than disappearing.
+
+On failure (`403`/`404`/anything else), the API's own error message is
+shown in an alert below the attachments list, and the list is left exactly
+as it was — a rejected removal never touches it.
+
+*(Revision note: the first version of this control used a native
+`window.confirm()` with no reason field. Peer review flagged that it
+didn't match the app's Zen Green theme and that the handout's
+removal-reason requirement (section 4.5) wasn't handled at all — replaced
+with the in-app modal described above, which does both.)*

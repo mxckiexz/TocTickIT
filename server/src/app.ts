@@ -490,7 +490,7 @@ app.post(
       }
 
       const activeAttachmentCount = await prisma.attachment.count({
-        where: { ticketId },
+        where: { ticketId, removedAt: null },
       });
       if (activeAttachmentCount >= MAX_ACTIVE_ATTACHMENTS_PER_TICKET) {
         unlink(file.path, () => {});
@@ -548,6 +548,10 @@ app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
     }
 
     const attachments = await prisma.attachment.findMany({
+      // Includes removed attachments too (BR-14, per the handout's example:
+      // "A removed Attachment remains visible as metadata but cannot be
+      // downloaded") — removedAt/removalReason tell the caller which ones
+      // are removed; the download endpoint is what actually blocks access.
       where: { ticketId },
       // id asc as a tiebreaker keeps order stable when two attachments
       // share a createdAt (same millisecond) — same reasoning as BR-08.
@@ -562,6 +566,8 @@ app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
         mimeType: true,
         sizeBytes: true,
         createdAt: true,
+        removedAt: true,
+        removalReason: true,
       },
     });
 
@@ -603,9 +609,11 @@ app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: 
 
     // Scoped to this ticketId too, not just id — an attachment id that
     // exists but belongs to a different ticket must 404 here, the same as
-    // one that doesn't exist at all.
+    // one that doesn't exist at all. removedAt: null blocks downloading a
+    // soft-removed attachment (Feature 9) the same way — it 404s rather
+    // than serving a file that's supposed to be gone.
     const attachment = await prisma.attachment.findFirst({
-      where: { id: attachmentId, ticketId },
+      where: { id: attachmentId, ticketId, removedAt: null },
     });
     if (!attachment) {
       return res.status(404).json({ error: "Attachment not found." });
@@ -636,6 +644,95 @@ app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: 
     console.error("Failed to retrieve attachment:", error);
 
     res.status(500).json({ error: "Failed to retrieve attachment" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Feature 9 — Remove one of a Requester's own attachments (soft removal)
+// Same ownership rule as Feature 7/8 (BR-12). Required soft-removal rules
+// (BR-14): the Attachment row is never deleted — removedAt (and an optional
+// removalReason, handout section 4.5) is set instead, so its metadata is
+// retained and still shows up in the list — but the physical file is
+// deleted from disk, the download endpoint 404s for it, and the upload
+// endpoint's active-count check treats it as gone.
+// ---------------------------------------------------------------------------
+app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.id);
+  const attachmentId = Number(req.params.attachmentId);
+  const requesterId = Number(req.query.requesterId);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+  if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+    return res.status(400).json({ error: "Invalid attachment id." });
+  }
+  if (!Number.isInteger(requesterId) || requesterId <= 0) {
+    return res.status(400).json({ error: "requesterId is required." });
+  }
+
+  // Removal reason (handout section 4.5): optional free text, sent as a
+  // JSON body rather than a query param since it's arbitrary prose, not an
+  // id. Absent/blank is fine — it's recorded as null, not required.
+  const rawReason = req.body?.reason;
+  if (rawReason !== undefined && rawReason !== null && typeof rawReason !== "string") {
+    return res.status(400).json({ error: "reason must be a string." });
+  }
+  const trimmedReason = typeof rawReason === "string" ? rawReason.trim() : "";
+  if (trimmedReason.length > 500) {
+    return res.status(400).json({ error: "Removal reason must be at most 500 characters." });
+  }
+  const removalReason = trimmedReason.length > 0 ? trimmedReason : null;
+
+  try {
+    const prisma = getPrisma();
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    if (ticket.requesterId !== requesterId) {
+      return res.status(403).json({
+        error: "You do not have permission to remove attachments from this ticket.",
+      });
+    }
+
+    // Scoped to ticketId and removedAt: null — an attachment id that's
+    // already removed, or belongs to a different ticket, 404s here the
+    // same as one that never existed (matches the download endpoint).
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: attachmentId, ticketId, removedAt: null },
+    });
+    if (!attachment) {
+      return res.status(404).json({ error: "Attachment not found." });
+    }
+
+    const updated = await prisma.attachment.update({
+      where: { id: attachment.id },
+      data: { removedAt: new Date(), removalReason },
+      select: {
+        id: true,
+        ticketId: true,
+        originalFilename: true,
+        mimeType: true,
+        sizeBytes: true,
+        createdAt: true,
+        removedAt: true,
+        removalReason: true,
+      },
+    });
+
+    // Best-effort: the row is the source of truth once removedAt is set,
+    // regardless of whether the physical file happened to still be there.
+    unlink(path.join(UPLOAD_DIR, attachment.storedFilename), (error) => {
+      if (error) console.error("Failed to delete removed attachment's file:", error);
+    });
+
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error("Failed to remove attachment:", error);
+
+    res.status(500).json({ error: "Failed to remove attachment" });
   }
 });
 

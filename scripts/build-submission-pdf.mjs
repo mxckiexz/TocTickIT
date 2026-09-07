@@ -173,9 +173,7 @@ ${pre(gitLog)}
 <h2>GitHub Issues — sprint decomposition, all in Done</h2>
 <p>Nine issues, one per backlog feature, each closed with the <code>Done</code> label:</p>
 <ul>${issuesList}</ul>
-<div class="note">
-<strong>GitHub Projects (Kanban board):</strong> not yet created — the CLI token used for this session lacks the <code>project</code> OAuth scope needed to create a GitHub Projects (v2) board programmatically. The 9 issues above exist and are labeled with the required Kanban statuses (Backlog/Specified/Started/PR Review/Fixing/Done); a Project board view grouping them can be added from the GitHub web UI in a couple of minutes (New project → board view → add existing issues).
-</div>
+${img(path.join(EVIDENCE, "00-github-project-board.png"), "GitHub Projects board (github.com/users/mxckiexz/projects/2) — all 16 tracked items (9 features + supporting infra/fix work) in Status: Done.")}
 </div>
 
 <div class="subsection">

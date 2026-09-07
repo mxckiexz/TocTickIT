@@ -54,6 +54,7 @@ test("01-06 Development Requester + Create Ticket states", async ({ page }) => {
   await page.getByRole("button", { name: "Submit Ticket" }).click();
   await expect(page.getByText("Ticket created successfully.")).toBeVisible();
   await shot(page, "04-create-ticket-invalid-attachment-result");
+  fs.unlinkSync(badFile);
 
   // Confirm the created ticket really has this Requester's id (BR-06/AC-05).
   const requesterIdCell = await page.evaluate(() => {

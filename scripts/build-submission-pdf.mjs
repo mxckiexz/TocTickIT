@@ -51,7 +51,7 @@ const gitLog = sh("git log --oneline --graph --all -40", REPO);
 
 console.log("Gathering directory tree...");
 const rawTree = sh(
-  `find . -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -path '*/test-results/*' -not -path '*/playwright-report/*' -not -path '*/.claude/*' -not -path '*/server/uploads/*' | sort`,
+  `find . -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -path '*/test-results/*' -not -path '*/playwright-report/*' -not -path '*/.claude/*' -not -path '*/server/uploads/*' -not -name 'TokTickIT_Lab2_Submission.pdf' -not -name '_submission.html' | sort`,
   REPO
 );
 const uploadCount = fs.existsSync(path.join(REPO, "server", "uploads"))
@@ -120,10 +120,6 @@ const prLinks = [
   )
   .join("\n");
 
-// NOTE: if you've since created the GitHub Projects Kanban board and taken
-// the IDE directory-structure screenshot, replace the two <div class="note">
-// blocks below (search "GitHub Projects (Kanban board)" and "Note:") with
-// the actual board screenshot / IDE screenshot before regenerating.
 const html = `<!doctype html>
 <html>
 <head>
@@ -173,9 +169,7 @@ ${pre(gitLog)}
 <h2>GitHub Issues — sprint decomposition, all in Done</h2>
 <p>Nine issues, one per backlog feature, each closed with the <code>Done</code> label:</p>
 <ul>${issuesList}</ul>
-<div class="note">
-<strong>GitHub Projects (Kanban board):</strong> not yet created — the CLI token used for this session lacks the <code>project</code> OAuth scope needed to create a GitHub Projects (v2) board programmatically. The 9 issues above exist and are labeled with the required Kanban statuses (Backlog/Specified/Started/PR Review/Fixing/Done); a Project board view grouping them can be added from the GitHub web UI in a couple of minutes (New project → board view → add existing issues).
-</div>
+${img(path.join(EVIDENCE, "00-github-project-board.png"), "GitHub Projects board (github.com/users/mxckiexz/projects/2) — all 16 tracked items (9 features + supporting infra/fix work) in Status: Done.")}
 </div>
 
 <div class="subsection">
@@ -195,10 +189,9 @@ ${pre(gitignoreRaw)}
 
 <div class="subsection">
 <h2>Repository directory structure</h2>
+${img(path.join(EVIDENCE, "16-ide-directory-structure.png"), "VS Code Explorer — repository directory structure.")}
+<p style="font-size:11px;color:#555">Full listing (generated from the actual repository, not truncated by the sidebar's scroll position):</p>
 ${pre(treeFinal)}
-<div class="note">
-<strong>Note:</strong> the listing above is generated from the actual repository (<code>find</code> + a tree-style formatter), not a screenshot of an IDE window. A literal screenshot of the project explorer in VS Code (or the IDE actually used) should be added here before final submission — that's a capture only the student can take of their own editor.
-</div>
 </div>
 
 <h1>Answer Part 2: Spec DD</h1>

@@ -1,5 +1,69 @@
 # Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8) + Remove Attachment (Feature 9)
 
+## Zen Green Theme
+
+Implemented in `client/src/theme.css` (imported once, in `main.tsx`, after
+`bootstrap.min.css` so its declarations win the cascade) plus two structural
+classes applied in `App.tsx`. Later Lab 2 screens (and later labs) must
+reuse these tokens/classes rather than inventing new ones.
+
+### Color tokens
+
+| Token | Value | Used for |
+|---|---|---|
+| Primary green | `#006B3C` | App header background (`.zg-app-header`), solid buttons' resting state (`.btn-success`), strong emphasis text (`.text-success`) |
+| Secondary green | `#0B7A46` | Links (`a`), hover/active/focus state on `.btn-success`/`.btn-outline-success`, focus rings |
+| Pale green | `#EAF6EF` | `.alert-success` background — success confirmations |
+| Page background | `#F5F7F6` | `body` background |
+| Surface / cards | White, `1px solid #dfe7e2`, restrained `box-shadow` | `.zg-surface` — the main content card below the app header |
+| Text | `#16281F` (dark charcoal-green) | `body` text color — deliberately not pure black |
+| Read-only field | `#F0F3EF` (soft gray-green) | `.form-control:disabled`, `[readonly]`, `.form-select:disabled` |
+| Error | `#842029` (dark red) | `.alert-danger` text |
+| Warning | Bootstrap's default amber (`.alert-warning`/`bg-warning`) | Not yet used by any Lab 2 screen — reserved for a future feature that needs it |
+| Success | Pale-green background + primary-green text (see above), never color-only — always paired with explicit wording like "Ticket created successfully." | Confirmation states |
+
+### Typography and spacing
+
+Base font is the browser/OS default sans-serif via Bootstrap's own font
+stack (no custom `font-family` override) at Bootstrap's default `1rem` body
+size; headings use Bootstrap's `h1`–`h6` scale (`className="h3"`, `"h5"`,
+`"h6"` etc., picked per screen — see each section below). Spacing between
+sections uses Bootstrap's spacing utilities (`mt-4`, `mb-3`, `gap-2`, …)
+rather than custom margins, so spacing stays consistent by construction.
+
+### Field, button, and focus states
+
+- **Editable field**: Bootstrap's default `.form-control`/`.form-select` —
+  white background, `#dee2e6` neutral border.
+- **Read-only / disabled field**: `--zg-readonly-bg` (`#F0F3EF`) background,
+  full-opacity text (Bootstrap's default `disabled` styling dims text to
+  ~65% opacity; overridden back to fully readable per the spec's "clearly
+  distinct but still readable" requirement).
+- **Focus**: every focusable control (`.form-control`, `.form-select`,
+  `.btn`) gets a secondary-green focus ring (`box-shadow` in
+  `rgba(11,122,70,0.25)`) instead of Bootstrap's default blue, so keyboard
+  focus is always visible and on-theme (section 8.3's "Focus indicators
+  must remain visible for keyboard users").
+- **Button hierarchy**: primary action = `.btn-success` (solid primary
+  green); secondary/tertiary action = `.btn-outline-success`; destructive
+  action (Remove) = `.btn-link.text-danger` sized down, kept deliberately
+  off the green palette so a destructive action doesn't read as a normal
+  green "go ahead" button; disabled = Bootstrap's native `disabled`
+  attribute (visually dimmed, unclickable, per section 8.3).
+- **Error**: validation messages render immediately below their field
+  (`CreateTicketForm`'s `errors.<field>` — see Submit flow below), in
+  `--zg-error` (`#842029`), never as a single top-of-form message only.
+
+### Accessibility notes
+
+- Every button has visible text (no icon-only controls anywhere in Lab 2).
+- Disabled controls use the native `disabled` attribute (not just a visual
+  style), so they're unreachable by keyboard tab order and announced as
+  disabled by assistive tech.
+- Focus indicators (above) are never removed/hidden.
+- Success/error states are never color-only — each is paired with explicit
+  text ("Ticket created successfully.", the API's own error message, etc.).
+
 ## Entry point
 
 `App.tsx` shows **New Ticket** and **My Tickets** buttons below the existing

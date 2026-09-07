@@ -235,6 +235,19 @@ cd server && npm run test
 | F36 | Positive | AC-11, BR-14 | `fetchTicketAttachments` resolves with one already-removed attachment | Rendered as plain (non-link) text with a "removed …" caption including its reason; no Remove button on that row | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 | F37 | Positive | AC-11, BR-14 | Ticket has 1 active + 1 removed attachment | "Add an attachment (1/5)…" — only the active one counts toward the limit; the file input is not disabled | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
 
+### `api.test.ts` (Lab 1 — `checkSystem()` regression, Issue 2 & 4)
+
+Mocks `fetch` directly rather than the api module, so the real `checkSystem()`
+body runs — `App.test.tsx`'s own tests mock `checkSystem` itself and so never
+exercised this function, which is exactly how it shipped only checking
+`/api/health` and hardcoding `categories: []` (caught on review of the Lab 2
+compliance PR).
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F38 | Positive | Lab 1, Issue 2 & 4 (not a Lab 2 AC/BR) | Health check succeeds | `fetch` called for both `/api/health` and `/api/categories`; resolves to `{ online: true, categories }` with the real categories from the response | `client/tests/lab-01/api.test.ts` | passed |
+| F39 | Negative | Lab 1, Issue 2 & 4 (not a Lab 2 AC/BR) | Health check fails (non-2xx) | Rejects with "Backend unavailable"; `/api/categories` is never fetched (`fetch` called exactly once) | `client/tests/lab-01/api.test.ts` | passed |
+
 Run with:
 
 ```bash
@@ -243,12 +256,34 @@ cd client && npm run test
 
 ```
  ✓ tests/lab-01/App.test.tsx (3 tests)
+ ✓ tests/lab-01/api.test.ts (2 tests)
  ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
  ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
  ✓ tests/lab-02/ticket-detail.test.tsx (17 tests)
 
- Test Files  4 passed (4)
-      Tests  40 passed (40)
+ Test Files  5 passed (5)
+      Tests  42 passed (42)
+```
+
+## E2E test plan (`e2e/lab-02/`, Playwright against the real dev servers + Postgres)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| E2E-01 | E2E | AC-01, AC-04, AC-05, AC-06, AC-08 | A Requester picks a Development Requester, creates a ticket, then finds and opens that same ticket from My Tickets | Ticket Number matches `TKT-\d{4}-\d{6}`; a Ticket Date is shown; searching My Tickets by that Ticket Number finds exactly one row; opening it shows the same Summary just submitted | `e2e/lab-02/requester-ticket-flow.spec.ts` | passed |
+
+Run with (requires both dev servers reachable, or let Playwright's
+`webServer` config in `playwright.config.ts` start them):
+
+```bash
+npx playwright test
+```
+
+```
+Running 1 test using 1 worker
+
+  ✓  1 [chromium] › e2e/lab-02/requester-ticket-flow.spec.ts:7:5 › a Requester creates a ticket and later finds it in My Tickets (2.0s)
+
+  1 passed (2.9s)
 ```
 
 ## AC / BR → Test traceability matrix

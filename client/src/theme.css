@@ -1,0 +1,112 @@
+/*
+ * Zen Green Theme (docs/lab-02/ui-spec.md "Zen Green Theme" section).
+ * Loaded after bootstrap.min.css in main.tsx so these declarations win the
+ * cascade — Bootstrap 5.3 scopes its component colors as CSS custom
+ * properties on the class itself (e.g. `.btn-success { --bs-btn-bg: ... }`),
+ * so re-declaring those same custom properties here overrides them without
+ * needing to touch every component's className.
+ */
+
+:root {
+  --zg-primary-green: #006b3c;
+  --zg-secondary-green: #0b7a46;
+  --zg-pale-green: #eaf6ef;
+  --zg-page-bg: #f5f7f6;
+  --zg-text: #16281f; /* dark charcoal-green, not pure black */
+  --zg-readonly-bg: #f0f3ef; /* soft gray-green */
+  --zg-error: #842029; /* dark red */
+}
+
+body {
+  background-color: var(--zg-page-bg);
+  color: var(--zg-text);
+}
+
+a {
+  color: var(--zg-secondary-green);
+}
+a:hover,
+a:focus {
+  color: var(--zg-primary-green);
+}
+
+.text-success {
+  color: var(--zg-primary-green) !important;
+}
+
+/* Primary actions (solid green) use the primary green; hover/focus/active
+   states use the secondary green so the two tokens stay visually distinct. */
+.btn-success {
+  --bs-btn-bg: var(--zg-primary-green);
+  --bs-btn-border-color: var(--zg-primary-green);
+  --bs-btn-hover-bg: var(--zg-secondary-green);
+  --bs-btn-hover-border-color: var(--zg-secondary-green);
+  --bs-btn-active-bg: var(--zg-secondary-green);
+  --bs-btn-active-border-color: var(--zg-secondary-green);
+  --bs-btn-disabled-bg: var(--zg-primary-green);
+  --bs-btn-disabled-border-color: var(--zg-primary-green);
+  --bs-btn-focus-shadow-rgb: 11, 122, 70;
+}
+
+.btn-outline-success {
+  --bs-btn-color: var(--zg-primary-green);
+  --bs-btn-border-color: var(--zg-primary-green);
+  --bs-btn-hover-bg: var(--zg-secondary-green);
+  --bs-btn-hover-border-color: var(--zg-secondary-green);
+  --bs-btn-active-bg: var(--zg-secondary-green);
+  --bs-btn-active-border-color: var(--zg-secondary-green);
+  --bs-btn-focus-shadow-rgb: 11, 122, 70;
+}
+
+/* Focus rings (keyboard accessibility, section 8.3) use the secondary green
+   rather than Bootstrap's default blue, so a focused control still reads as
+   part of this theme. */
+.form-control:focus,
+.form-select:focus,
+.btn:focus-visible {
+  border-color: var(--zg-secondary-green);
+  box-shadow: 0 0 0 0.25rem rgba(11, 122, 70, 0.25);
+}
+
+/* Success confirmations: pale-green surface, primary-green text — readable
+   without relying on color alone (an icon/label always accompanies it). */
+.alert-success {
+  --bs-alert-bg: var(--zg-pale-green);
+  --bs-alert-border-color: var(--zg-secondary-green);
+  --bs-alert-color: var(--zg-primary-green);
+}
+
+.alert-danger {
+  --bs-alert-color: var(--zg-error);
+}
+
+/* Editable vs read-only fields (section: "Editable field" / "Read-only
+   field" tokens) — a disabled/readonly control gets a distinct, still
+   legible shading instead of looking identical to an active one. */
+.form-control:disabled,
+.form-control[readonly],
+.form-select:disabled {
+  background-color: var(--zg-readonly-bg);
+  color: var(--zg-text);
+  opacity: 1;
+}
+
+/* App header / surface cards — the app shell (App.tsx) wraps its header in
+   `.zg-app-header` and main content in `.zg-surface`. */
+.zg-app-header {
+  background-color: var(--zg-primary-green);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+.zg-app-header .text-success {
+  color: #fff !important;
+}
+
+.zg-surface {
+  background-color: #fff;
+  border: 1px solid #dfe7e2;
+  border-radius: 0 0 0.5rem 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 1.5rem;
+}

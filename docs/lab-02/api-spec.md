@@ -1,0 +1,394 @@
+# Lab 2 — API Spec
+
+## `POST /api/tickets`
+
+### Request body
+
+```json
+{
+  "requesterId": 1,
+  "categoryId": 1,
+  "relatedSystemId": 1,
+  "summary": "Laptop battery drains quickly",
+  "description": "Battery drains much faster than usual, even when idle.",
+  "requestedPriority": "MEDIUM"
+}
+```
+
+| Field | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must reference an active Requester |
+| categoryId | integer | yes | must reference an active Category |
+| relatedSystemId | integer | yes | must reference an active RelatedSystem |
+| summary | string | yes | trimmed non-empty, ≤ 150 chars |
+| description | string | yes | trimmed non-empty, ≤ 2000 chars |
+| requestedPriority | string | yes | one of `LOW`, `MEDIUM`, `HIGH` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `201 Created` | Valid submission, no recent duplicate | The created `Ticket` (includes `id`, `ticketNumber`, `currentStatus: "New"`, timestamps). |
+| `200 OK` | Valid submission that exactly matches a ticket the same Requester submitted in the last 10 seconds (BR-02) | The **existing** `Ticket` — no new row is created. |
+| `400 Bad Request` | Any required field missing/invalid, or requesterId/categoryId/relatedSystemId not found or not active | `{ "errors": { "<field>": "<message>" } }` — one entry per failing field. Field-presence/format errors are checked before existence/active-state errors. |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to create ticket" }` |
+
+### Ticket Number format
+
+`TKT-<createdAt year>-<id zero-padded to 6 digits>`, e.g. `TKT-2026-000042`.
+Regex: `^TKT-\d{4}-\d{6}$`.
+
+## `GET /api/categories`
+
+Returns only **active** categories, `[{ id, name }]`, ordered by `id` ascending.
+Inactive categories are intentionally excluded so a ticket form never offers a
+choice that `POST /api/tickets` would then reject.
+
+## `GET /api/related-systems`
+
+Same shape and same active-only filtering as `GET /api/categories`:
+`[{ id, name }]`, ordered by `id` ascending.
+
+## `GET /api/requesters`
+
+Active Requesters only: `[{ id, name, email }]`, ordered by `id` ascending.
+Lab 2 has no real authentication yet, so the client uses this to let the user
+pick which Requester they're acting as (see the `Requester` model comment in
+`server/prisma/schema.prisma`).
+
+## `POST /api/tickets/:id/attachments`
+
+Multipart upload, fields `requesterId` (text) and `file`. One file per call —
+call it again to add more, up to the per-ticket limit.
+
+| Status | When | Body |
+|---|---|---|
+| `201 Created` | File accepted | The created `Attachment` (`id`, `ticketId`, `originalFilename`, `storedFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt: null`, `removalReason: null`). |
+| `400 Bad Request` | Missing/invalid ticket id, missing/invalid `requesterId`, or no file sent | `{ "error": "<message>" }` |
+| `403 Forbidden` | `requesterId` doesn't match `ticket.requesterId` (BR-07) | `{ "error": "You do not have permission to add attachments to this ticket." }` |
+| `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
+| `409 Conflict` | Ticket already has 5 **active** attachments (Feature 9: a removed attachment doesn't count) | `{ "error": "A ticket can have at most 5 active attachments." }` |
+| `413 Payload Too Large` | File over 5MB | `{ "error": "File exceeds the 5MB limit." }` |
+| `415 Unsupported Media Type` | Mime type not JPG/PNG/WEBP/PDF | `{ "error": "Unsupported file type. Allowed: JPG, PNG, WEBP, PDF." }` |
+
+Check order: ticket id shape → `requesterId` shape → file present → mime type
+→ ticket exists (404) → ownership (403) → attachment count (409). A rejected
+file is deleted from disk immediately in every case — nothing is left
+orphaned.
+
+This is also the endpoint Feature 8's "Add an attachment" control on the
+Ticket Detail screen calls — no new backend contract for that feature, only
+a new caller. `client/src/api.ts`'s `uploadAttachment()` (Feature 3) is
+reused as-is.
+
+## `GET /api/tickets`
+
+The My Tickets list (Feature 4), extended with search, filter, sort, and
+pagination (Feature 5) — a Requester's own tickets, ownership-scoped.
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer (no active/exists check — an id with zero tickets just returns an empty list) |
+| search | string | no | case-insensitive substring match against `summary` OR `description` OR `ticketNumber` |
+| categoryId | integer | no | must be a positive integer if present |
+| relatedSystemId | integer | no | must be a positive integer if present |
+| requestedPriority | string | no | one of `LOW`, `MEDIUM`, `HIGH` if present |
+| currentStatus | string | no | exact match, non-empty if present |
+| sortBy | string | no | one of `createdAt` (default), `summary`, `requestedPriority` |
+| sortDir | string | no | `asc` or `desc` (default `desc`) |
+| page | integer | no | positive integer, default `1` |
+| pageSize | integer | no | positive integer up to 50, default `10` |
+
+All filters combine with AND (BR-10). Ordering is `sortBy sortDir`, with
+`id desc` as a tiebreaker (BR-08).
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | Valid `requesterId` and any other params valid | `{ tickets, pagination }` (shape below, BR-09) |
+| `400 Bad Request` | `requesterId` missing/non-integer/`<= 0`, or any other param present but invalid | `{ "error": "<message>" }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve tickets" }` |
+
+### Response body
+
+```
+{
+  "tickets": Ticket[],
+  "pagination": {
+    "page": number,
+    "pageSize": number,
+    "totalItems": number,
+    "totalPages": number
+  }
+}
+```
+
+Each entry in `tickets` is a full `Ticket` row (no joins/nesting —
+`categoryId` etc. are ids, not embedded objects):
+
+| Field | Type | Notes |
+|---|---|---|
+| id | integer | |
+| ticketNumber | string | Format `TKT-<year>-<6-digit sequence>`, e.g. `TKT-2026-000042` (BR-01). |
+| requesterId | integer | Always equal to the `requesterId` query param, by construction. |
+| categoryId | integer | |
+| relatedSystemId | integer | |
+| summary | string | ≤ 150 chars (BR-03). |
+| description | string | ≤ 2000 chars (BR-03). |
+| requestedPriority | string | One of `LOW`, `MEDIUM`, `HIGH` (BR-04). |
+| currentStatus | string | `"New"` for every ticket returned by this endpoint today (BR-05) — no status transitions exist yet. |
+| createdAt | string | ISO 8601 timestamp. |
+| updatedAt | string | ISO 8601 timestamp. |
+
+`pagination.totalItems` is the count of tickets matching `requesterId` plus
+any filters/search, independent of `page`/`pageSize`; `totalPages` is
+`ceil(totalItems / pageSize)`, minimum `1`.
+
+Example response for
+`GET /api/tickets?requesterId=1&search=battery&sortBy=summary&sortDir=asc&page=1&pageSize=10`:
+
+```json
+{
+  "tickets": [
+    {
+      "id": 42,
+      "ticketNumber": "TKT-2026-000042",
+      "requesterId": 1,
+      "categoryId": 2,
+      "relatedSystemId": 1,
+      "summary": "Laptop battery drains quickly",
+      "description": "Battery drains much faster than usual, even when idle.",
+      "requestedPriority": "MEDIUM",
+      "currentStatus": "New",
+      "createdAt": "2026-09-04T10:12:03.000Z",
+      "updatedAt": "2026-09-04T10:12:03.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 10,
+    "totalItems": 1,
+    "totalPages": 1
+  }
+}
+```
+
+**Breaking change from Feature 4**: the `200` body used to be a bare
+`Ticket[]`. It's now `{ tickets, pagination }` — Feature 4's own tests were
+updated to match in the same change that added this (see
+[tests.md](tests.md)), since Feature 4 hadn't shipped to `main` yet when
+Feature 5 was built.
+
+## `GET /api/tickets/:id`
+
+The Ticket Detail screen (Feature 6) — one ticket's full fields, ownership
+checked the same way as `POST /api/tickets/:id/attachments` (BR-07).
+Attachments are **not** part of this response — that's Feature 7.
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` exists and `requesterId` matches its owner | The full `Ticket` (same field shape as an entry in `GET /api/tickets`'s `tickets` array — see above) |
+| `400 Bad Request` | `:id` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner (BR-11) | `{ "error": "You do not have permission to view this ticket." }` |
+| `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve ticket" }` |
+
+Check order: `:id` shape → `requesterId` shape → ticket exists (404) →
+ownership (403) — same order attachments use, existence before ownership so
+a non-owner can't distinguish "doesn't exist" from "not yours" by response
+shape alone (both are meaningfully different statuses here, unlike some APIs
+that collapse them to 404 for privacy; this one intentionally doesn't, since
+there's no sensitive data to hide by ticket id existing or not).
+
+Example response for `GET /api/tickets/42?requesterId=1`:
+
+```json
+{
+  "id": 42,
+  "ticketNumber": "TKT-2026-000042",
+  "requesterId": 1,
+  "categoryId": 2,
+  "relatedSystemId": 1,
+  "summary": "Laptop battery drains quickly",
+  "description": "Battery drains much faster than usual, even when idle.",
+  "requestedPriority": "MEDIUM",
+  "currentStatus": "New",
+  "createdAt": "2026-09-04T10:12:03.000Z",
+  "updatedAt": "2026-09-04T10:12:03.000Z"
+}
+```
+
+## `GET /api/tickets/:id/attachments`
+
+Feature 7 — lists a ticket's attachments (metadata only; use the endpoint
+below to fetch a file's actual bytes). Ownership-scoped the same way as
+`GET /api/tickets/:id` (BR-12).
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` exists and `requesterId` matches its owner | `AttachmentSummary[]`, **both active and removed attachments** (BR-14 — a removed one is still metadata, per the handout: it just can't be downloaded), ordered `createdAt asc, id asc` (oldest first — upload order, `id` as a tiebreaker). `[]` only if the ticket has no attachments at all, active or removed. |
+| `400 Bad Request` | `:id` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner (BR-12) | `{ "error": "You do not have permission to view this ticket's attachments." }` |
+| `404 Not Found` | `:id` doesn't reference an existing ticket | `{ "error": "Ticket not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to retrieve attachments" }` |
+
+An `AttachmentSummary` is **public metadata only** — `id`, `ticketId`,
+`originalFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt`,
+`removalReason`. It deliberately excludes `storedFilename`, which
+`POST /api/tickets/:id/attachments`'s `201` response does include — that
+field is the random name the file is actually saved under on disk, an
+internal server-side detail with no reason to reach a client. (Found on
+review: the list endpoint originally returned the same shape as the
+upload response, `storedFilename` included.)
+
+`removedAt`/`removalReason` are non-null exactly for attachments that
+have been soft-removed (Feature 9, BR-14/BR-15) — the client is expected
+to render those differently (e.g. struck through, no download link)
+rather than treat their presence as an error. A removed attachment still
+counts toward nothing else this endpoint does (ordering is unaffected)
+— it's the download endpoint and the upload endpoint's active-count
+check that actually gate on `removedAt`, not this one.
+
+*(Revision note: an earlier version of this endpoint filtered removed
+attachments out entirely, on the theory that "gone" should mean gone
+everywhere. Peer review pointed out the handout's own example says a
+removed attachment "remains visible as metadata but cannot be
+downloaded" — fixed to match, as described above.)*
+
+## `GET /api/tickets/:id/attachments/:attachmentId`
+
+Feature 7 — streams one attachment's actual file content, for viewing
+inline or downloading. Same ownership rule as the list endpoint (BR-12),
+plus `:attachmentId` must belong to `:id`'s ticket.
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` and `:attachmentId` both valid, owned, and matched to each other | The raw file bytes, `Content-Type` set to the stored `mimeType`, `Content-Disposition` per RFC 6266 (below) |
+| `400 Bad Request` | `:id`/`:attachmentId` not a positive integer, or `requesterId` missing/non-integer/`<= 0` | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner | `{ "error": "You do not have permission to view this ticket's attachments." }` |
+| `404 Not Found` | `:id` doesn't exist, **or** `:attachmentId` doesn't exist, **or** it exists but belongs to a different ticket, **or** it has been removed (Feature 9) | `{ "error": "Ticket not found." }` or `{ "error": "Attachment not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure, or the stored file is missing from disk | `{ "error": "Failed to retrieve attachment" }` or `{ "error": "Failed to retrieve attachment file" }` |
+
+Check order: `:id`/`:attachmentId` shape → `requesterId` shape → ticket
+exists (404) → ownership (403) → attachment exists, belongs to this
+ticket, **and is not removed** (404) — an attachment id valid for a
+different ticket, or a removed attachment, 404s exactly like one that
+doesn't exist, so this endpoint never confirms or denies that an
+attachment id exists on some *other* ticket, or that it once existed but
+was removed.
+
+### `Content-Disposition` format
+
+```
+inline; filename="<ascii-fallback>"; filename*=UTF-8''<percent-encoded-name>
+```
+
+Per RFC 6266/5987: `filename=` is the plain fallback a client that doesn't
+understand `filename*` falls back to, and it must **not** be
+percent-encoded (a percent-encoded `filename=` displays literally, e.g. a
+browser would save a file as `caf%C3%A9.png` instead of `café.png`).
+`filename*` carries the real `originalFilename`, percent-encoded with its
+charset, for clients that support spaces and non-ASCII names. The
+ASCII fallback replaces every non-printable-ASCII character (and `"`/`\`,
+which would otherwise break the quoted string) with `_`.
+
+Example for an `originalFilename` of `café photo.png`:
+
+```
+Content-Disposition: inline; filename="caf_ photo.png"; filename*=UTF-8''caf%C3%A9%20photo.png
+```
+
+(Found on review: the original implementation put the plain, unencoded
+name in `filename=` with no `filename*` — correct for simple ASCII names,
+but a space or accented character would either display wrong or, in some
+clients, get silently mangled.)
+
+## `DELETE /api/tickets/:id/attachments/:attachmentId`
+
+Feature 9 — soft-removes one of a Requester's own attachments. Same
+ownership rule as the list/download endpoints (BR-14), plus
+`:attachmentId` must belong to `:id`'s ticket and not already be removed.
+
+### Query parameters
+
+| Query param | Type | Required | Rule |
+|---|---|---|---|
+| requesterId | integer | yes | must be a positive integer; must match the ticket's `requesterId` |
+
+### Request body
+
+```json
+{ "reason": "Uploaded the wrong file" }
+```
+
+| Field | Type | Required | Rule |
+|---|---|---|---|
+| reason | string | no | trimmed; ≤ 500 characters (`400` if longer, BR-15). Omitted, `null`, or blank all record `removalReason: null` — a reason is never required. |
+
+A JSON body, not a query param, since it's free text (unlike `requesterId`,
+which is an id). Sent as `Content-Type: application/json`.
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | `:id` and `:attachmentId` both valid, owned, active, and matched to each other | The updated `Attachment` (public metadata shape — same fields as `AttachmentSummary` — with `removedAt` now set to the removal time and `removalReason` set to the request's `reason`, or `null`) |
+| `400 Bad Request` | `:id`/`:attachmentId` not a positive integer, `requesterId` missing/non-integer/`<= 0`, `reason` present but not a string, or `reason` over 500 characters | `{ "error": "<message>" }` |
+| `403 Forbidden` | `:id` exists but `requesterId` doesn't match its owner | `{ "error": "You do not have permission to remove attachments from this ticket." }` |
+| `404 Not Found` | `:id` doesn't exist, **or** `:attachmentId` doesn't exist, belongs to a different ticket, or is already removed | `{ "error": "Ticket not found." }` or `{ "error": "Attachment not found." }` |
+| `500 Internal Server Error` | Unexpected server/DB failure | `{ "error": "Failed to remove attachment" }` |
+
+Check order: `:id`/`:attachmentId` shape → `requesterId` shape → `reason`
+shape/length → ticket exists (404) → ownership (403) → attachment exists,
+belongs to this ticket, **and is currently active** (404).
+
+On success, the attachment's `removedAt` is set to the current time,
+`removalReason` is set from the request body (or `null`), and the
+physical file is deleted from disk (best-effort — a failed `unlink` is
+logged server-side but does not fail the request, since the row update
+already succeeded). The row itself is **never deleted** and stays visible
+through the list endpoint (BR-14) — only the download endpoint and the
+upload endpoint's active-count check treat it as gone.
+
+Example response for `DELETE /api/tickets/23/attachments/7?requesterId=1`
+with `{ "reason": "Uploaded the wrong file" }`:
+
+```json
+{
+  "id": 7,
+  "ticketId": 23,
+  "originalFilename": "screenshot.png",
+  "mimeType": "image/png",
+  "sizeBytes": 2048,
+  "createdAt": "2026-09-03T14:49:34.000Z",
+  "removedAt": "2026-09-06T12:00:00.000Z",
+  "removalReason": "Uploaded the wrong file"
+}
+```

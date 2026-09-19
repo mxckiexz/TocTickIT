@@ -9,6 +9,15 @@ dist/
 build/
 # prisma
 server/prisma/*.db
+# uploaded attachments
+server/uploads/
 # logs & OS
 *.log
 .DS_Store
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+# submission build output (regenerate with scripts/build-submission-pdf.mjs)
+/TokTickIT_Lab2_Submission.pdf
+/_submission.html

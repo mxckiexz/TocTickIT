@@ -1,0 +1,357 @@
+# Lab 2 — UI Spec: Create Ticket Form (Feature 3) + My Tickets (Feature 5) + Ticket Detail (Feature 6) + Attachments (Feature 7) + Add Attachment (Feature 8) + Remove Attachment (Feature 9)
+
+## Zen Green Theme
+
+Implemented in `client/src/theme.css` (imported once, in `main.tsx`, after
+`bootstrap.min.css` so its declarations win the cascade) plus two structural
+classes applied in `App.tsx`. Later Lab 2 screens (and later labs) must
+reuse these tokens/classes rather than inventing new ones.
+
+### Color tokens
+
+| Token | Value | Used for |
+|---|---|---|
+| Primary green | `#006B3C` | App header background (`.zg-app-header`), solid buttons' resting state (`.btn-success`), strong emphasis text (`.text-success`) |
+| Secondary green | `#0B7A46` | Links (`a`), hover/active/focus state on `.btn-success`/`.btn-outline-success`, focus rings |
+| Pale green | `#EAF6EF` | `.alert-success` background — success confirmations |
+| Page background | `#F5F7F6` | `body` background |
+| Surface / cards | White, `1px solid #dfe7e2`, restrained `box-shadow` | `.zg-surface` — the main content card below the app header |
+| Text | `#16281F` (dark charcoal-green) | `body` text color — deliberately not pure black |
+| Read-only field | `#F0F3EF` (soft gray-green) | `.form-control:disabled`, `[readonly]`, `.form-select:disabled` |
+| Error | `#842029` (dark red) | `.alert-danger` text |
+| Warning | Bootstrap's default amber (`.alert-warning`/`bg-warning`) | Not yet used by any Lab 2 screen — reserved for a future feature that needs it |
+| Success | Pale-green background + primary-green text (see above), never color-only — always paired with explicit wording like "Ticket created successfully." | Confirmation states |
+
+### Typography and spacing
+
+Base font is the browser/OS default sans-serif via Bootstrap's own font
+stack (no custom `font-family` override) at Bootstrap's default `1rem` body
+size; headings use Bootstrap's `h1`–`h6` scale (`className="h3"`, `"h5"`,
+`"h6"` etc., picked per screen — see each section below). Spacing between
+sections uses Bootstrap's spacing utilities (`mt-4`, `mb-3`, `gap-2`, …)
+rather than custom margins, so spacing stays consistent by construction.
+
+### Field, button, and focus states
+
+- **Editable field**: Bootstrap's default `.form-control`/`.form-select` —
+  white background, `#dee2e6` neutral border.
+- **Read-only / disabled field**: `--zg-readonly-bg` (`#F0F3EF`) background,
+  full-opacity text (Bootstrap's default `disabled` styling dims text to
+  ~65% opacity; overridden back to fully readable per the spec's "clearly
+  distinct but still readable" requirement).
+- **Focus**: every focusable control (`.form-control`, `.form-select`,
+  `.btn`) gets a secondary-green focus ring (`box-shadow` in
+  `rgba(11,122,70,0.25)`) instead of Bootstrap's default blue, so keyboard
+  focus is always visible and on-theme (section 8.3's "Focus indicators
+  must remain visible for keyboard users").
+- **Button hierarchy**: primary action = `.btn-success` (solid primary
+  green); secondary/tertiary action = `.btn-outline-success`; destructive
+  action (Remove) = `.btn-link.text-danger` sized down, kept deliberately
+  off the green palette so a destructive action doesn't read as a normal
+  green "go ahead" button; disabled = Bootstrap's native `disabled`
+  attribute (visually dimmed, unclickable, per section 8.3).
+- **Error**: validation messages render immediately below their field
+  (`CreateTicketForm`'s `errors.<field>` — see Submit flow below), in
+  `--zg-error` (`#842029`), never as a single top-of-form message only.
+
+### Accessibility notes
+
+- Every button has visible text (no icon-only controls anywhere in Lab 2).
+- Disabled controls use the native `disabled` attribute (not just a visual
+  style), so they're unreachable by keyboard tab order and announced as
+  disabled by assistive tech.
+- Focus indicators (above) are never removed/hidden.
+- Success/error states are never color-only — each is paired with explicit
+  text ("Ticket created successfully.", the API's own error message, etc.).
+
+## Entry point
+
+`App.tsx` shows **New Ticket** and **My Tickets** buttons below the existing
+Lab 1 health-check section. Clicking either opens the ticket flow — nothing
+is fetched on page load, matching the existing "Check System" button's
+fetch-on-click pattern and keeping Lab 1's tests unaffected. What's shown
+next depends on whether a Development Requester is already active (AC-05):
+
+1. **No active Requester** (first time, or after "Switch requester") →
+   `DevRequesterPicker` — its own step, fetches `GET /api/requesters`,
+   presents a `<select>` + "Continue as this Requester". Nothing about
+   categories/related systems/tickets is fetched yet. This step is shared by
+   both flows — it doesn't matter which button was clicked to get here.
+2. **Active Requester present** → straight to `CreateTicketForm` or
+   `MyTickets` (whichever was picked), plus a small tab switcher ("New
+   Ticket" / "My Tickets") above it so the two views can be swapped without
+   re-picking the Requester or losing it.
+
+The chosen Requester is kept in `App.tsx` state and mirrored to
+`localStorage` (`toktickit.activeRequester`), so it survives a page reload —
+"stays active" per AC-05, across both ticket creation and browsing My
+Tickets. Both `CreateTicketForm` and `MyTickets` render the same shared
+`RequesterBanner` component (`RequesterBanner.tsx`) with a "Switch requester"
+button that clears the stored choice and returns to step 1 — labeled
+"Creating as …" on the form, "Viewing as …" on the list (`label` prop).
+Submitting a ticket, clicking "Create another ticket", or switching between
+the two tabs does **not** clear the active Requester.
+
+## Fields (`CreateTicketForm`)
+
+There is no Requester field in this form — it comes from the active
+Development Requester (AC-05) instead.
+
+| Field | Control | Source | Notes |
+|---|---|---|---|
+| Category | `<select>` | `GET /api/categories` | |
+| Related System | `<select>` | `GET /api/related-systems` | |
+| Summary | `<input maxlength=150>` | — | Live `(n/150)` counter next to the label. |
+| Description | `<textarea maxlength=2000>` | — | Live `(n/2000)` counter. |
+| Requested Priority | `<select>` | `LOW`/`MEDIUM`/`HIGH` | Defaults to `MEDIUM`. |
+| Supporting attachment | `<input type="file">` | — | Optional, single file, `accept=".jpg,.jpeg,.png,.webp,.pdf"` as a UX hint only — the server is the real gate. Uploaded with the active Requester's id (BR-07). |
+
+## Submit flow
+
+1. `POST /api/tickets` with the six fields above.
+2. If it 400s, each `errors.<field>` from the response is shown directly under
+   that field (see [api-spec.md](api-spec.md)); the form stays filled in so
+   nothing is lost, and the button re-enables.
+3. If it succeeds (`201`, or `200` on BR-02 duplicate-resubmission) and a file
+   was selected, `POST /api/tickets/:id/attachments` is called with the new
+   ticket's id. A failure here does **not** hide the created ticket — the
+   confirmation still shows, with a warning appended (the ticket exists
+   either way; losing sight of its number would be worse than a stuck
+   attachment).
+4. On success: confirmation view — "Ticket created successfully. Your Ticket
+   Number: **`<ticketNumber>`**" — with a "Create another ticket" button that
+   resets the form.
+
+## Duplicate-submission (BR-02)
+
+The submit button is disabled and reads "Submitting…" for the duration of the
+request, so a double-click can't fire two requests from the UI. The backend's
+10-second dedup window (BR-02) is the actual guarantee; this is belt-and-braces
+on top of it, per the note this file used to carry as a TODO.
+
+## BR-06 (found while building this)
+
+An unselected `<select>` reads as `""`, and the form sends `Number(value)` for
+the three id fields — `Number("")` is `0`, which is a syntactically valid
+integer. The backend originally only checked `Number.isInteger`, so a fully
+empty submission reported "Summary is required." / "Description is required."
+but silently accepted `requesterId/categoryId/relatedSystemId: 0`. Fixed in
+`server/src/app.ts` to also require the id to be `> 0`; see
+[specification.md](specification.md) BR-06.
+
+## BR-07 (peer review)
+
+Two issues came back from review before approval:
+
+1. `POST /api/tickets/:id/attachments` checked that the ticket existed but not
+   that the caller owned it — any Requester id could attach a file to any
+   ticket. Fixed: the endpoint now requires `requesterId` and rejects with
+   `403` unless it matches `ticket.requesterId` (see
+   [specification.md](specification.md) BR-07 and [api-spec.md](api-spec.md)).
+2. The Requester picker was inside `CreateTicketForm` (re-picked per ticket).
+   Reworked into the two-step flow described above under **Entry point** —
+   `DevRequesterPicker` is a separate step, and the choice stays active across
+   ticket creations (AC-05) instead of resetting.
+
+## `MyTickets` (Feature 5)
+
+Reached via the **My Tickets** entry button / tab. Once the active Requester
+is known, it fetches `GET /api/categories` and `GET /api/related-systems`
+(for the filter dropdowns' labels — the same lookups `CreateTicketForm`
+uses) and then `GET /api/tickets` with the current search/filter/sort/page
+state.
+
+### Controls
+
+| Control | Type | Effect |
+|---|---|---|
+| Search | `<input type="search">` | Debounced 300ms after the user stops typing, then sent as `search` (AC-07). Matches summary, description, or ticket number. |
+| Category | `<select>` | `categoryId` filter, "All categories" clears it. |
+| Related System | `<select>` | `relatedSystemId` filter, "All related systems" clears it. |
+| Priority | `<select>` | `requestedPriority` filter (`LOW`/`MEDIUM`/`HIGH`), "All priorities" clears it. |
+| Status | `<select>` | `currentStatus` filter, "All statuses" clears it. Only "New" is offered as a value today — every ticket is `"New"` (BR-05, no status-transition feature exists yet) — but the control is there so it's ready once a future feature introduces more statuses; just add `<option>`s. |
+| Sort | `<select>` | One dropdown covering both `sortBy` and `sortDir` as a single choice: Newest first (default, `createdAt desc`), Oldest first (`createdAt asc`), Summary A–Z (`summary asc`), Summary Z–A (`summary desc`). |
+| Previous / Next | buttons | Page navigation. Disabled at the first/last page respectively (`pagination.page`/`totalPages` from the response). |
+
+Changing search, any filter, or sort resets to page 1 — otherwise a filter
+narrow enough to have fewer pages than the current page number would land on
+an empty/out-of-range page.
+
+### Results table
+
+Columns: Ticket Number, Summary, Category (name, resolved from the fetched
+category list by id — the API returns ids, not names), Related System
+(same), Priority, Status, Created (localized date/time). Below the table:
+"Page `<page>` of `<totalPages>` (`<totalItems>` tickets)" plus the
+Previous/Next buttons.
+
+The Ticket Number cell is a link-styled button — clicking it opens
+`TicketDetail` for that row (AC-08, Feature 6) instead of navigating (there's
+no router; `MyTickets` just swaps which component it renders based on a
+`selectedTicketId` state).
+
+Empty states:
+- No tickets at all for this Requester, or none matching the current
+  search/filters → "No tickets match your search and filters." (same message
+  either way — the controls are right there to relax them).
+- Filter/category/related-system lookups fail to load → an error banner
+  ("Unable to load My Tickets…"), same pattern as `CreateTicketForm`.
+
+## `TicketDetail` (Feature 6)
+
+Reached only from `MyTickets` — clicking a row's Ticket Number sets
+`selectedTicketId`, and `MyTickets` renders `TicketDetail` in place of the
+list (same component, same active Requester, same fetched
+categories/related-systems passed down as props so the detail screen
+doesn't re-fetch them). There is no independent URL/route for a ticket's
+detail — refreshing the page or sharing a link returns to My Tickets, not
+back into the detail screen. Acceptable for this lab; would need a router
+(e.g. `/tickets/:id`) to fix, out of scope here.
+
+Fetches `GET /api/tickets/:id?requesterId=<active requester>` on mount (and
+whenever `ticketId` changes, i.e. clicking a different row while already on
+the detail screen would refetch, though nothing in the UI currently triggers
+that from within the screen itself).
+
+### Layout
+
+A definition list (`<dl>`): Summary, Description (`white-space: pre-wrap` so
+line breaks in the original text are preserved), Category, Related System
+(both names, resolved the same way as the list table), Requested Priority,
+Status, Created, Last Updated — all from the `Ticket` fields BR-11 gates
+access to. The Attachments section below it is Feature 7.
+
+A "← Back to My Tickets" link-styled button above the content clears
+`selectedTicketId`, returning to the list with whatever search/filter/sort/
+page state it had before (that state lives in `MyTickets`, untouched by
+opening/closing the detail screen).
+
+### States
+
+| State | Shown |
+|---|---|
+| Loading | "Loading ticket…" |
+| `403` (BR-11) | The API's own message: "You do not have permission to view this ticket." |
+| `404` | The API's own message: "Ticket not found." |
+| Other error | "Unable to load this ticket." |
+| Loaded | The layout above |
+
+The 403/404 messages are passed through verbatim from the API response
+rather than replaced with a generic one — there's nothing sensitive to hide
+by being specific here (see [api-spec.md](api-spec.md)'s note on why
+existence and ownership get distinct statuses instead of collapsing to 404).
+
+## Attachments section (Feature 7)
+
+Below the `<dl>` in `TicketDetail`. Fetched in a **separate** effect from the
+ticket's own fields (`GET /api/tickets/:id/attachments?requesterId=…`), so a
+hiccup on one doesn't block the other — both endpoints run the same
+ownership check anyway (BR-12), so in practice they succeed or fail
+together, but the UI doesn't assume that.
+
+| State | Shown |
+|---|---|
+| Loading | "Loading attachments…" |
+| Error (e.g. `403`) | The API's own message, in an alert — the ticket's own fields above it stay visible |
+| Loaded, empty | "No attachments on this ticket." (only when the list has **no entries at all** — an active attachment or a removed one both count as "not empty", Feature 9) |
+| Loaded, non-empty | A list mixing two row shapes, in the order the API returns them (`createdAt asc, id asc`) — see below |
+
+**Active attachment row**: `<originalFilename>` as a real `<a href>` to
+`GET /api/tickets/:id/attachments/:attachmentId?requesterId=<active
+requester>` (`ticketAttachmentUrl()` in `api.ts`), opened in a new tab
+(`target="_blank"`) — the browser handles displaying or downloading it
+based on the response's `Content-Type`/`Content-Disposition`, same as any
+other file link. No client-side fetch-and-blob dance; the URL itself
+carries the ownership check via `requesterId`, same as every other endpoint
+in this app. Followed by `(<size> KB, uploaded <date>)` and a "Remove"
+button (Feature 9).
+
+**Removed attachment row** (`removedAt` non-null, Feature 9): rendered as
+plain, grayed-out (`text-muted`) text with the filename struck through
+(`text-decoration: line-through`) — not a link, since it can no longer be
+downloaded — followed by `(<size> KB, removed <date>)`, with
+` — <removalReason>` appended when a reason was recorded (BR-15). No
+Remove button (already removed). This matches the handout's example: a
+removed attachment "remains visible as metadata but cannot be
+downloaded" — Feature 7's original list simply didn't have a removed
+state to render yet; Feature 9 added this row shape rather than hiding
+the entry.
+
+Adding a new attachment from this screen is **not** part of Feature 7 —
+see Feature 8.
+
+## Add an attachment (Feature 8)
+
+A small `<form>` right below the attachments list in `TicketDetail`, always
+shown once the attachments section itself has loaded (`attachmentsState ===
+"ready"`) — regardless of whether the list is empty or not.
+
+| Control | Notes |
+|---|---|
+| Label | "Add an attachment (`<count>`/5) — JPG, PNG, WEBP, or PDF, up to 5MB" — `<count>` is the number of **active** attachments only (Feature 9: a removed one doesn't occupy a slot), derived by filtering the same `attachments` state the list above renders from. |
+| `<input type="file">` | `accept=".jpg,.jpeg,.png,.webp,.pdf"` (UX hint only, same as `CreateTicketForm`'s attachment field — the server is the real gate). Disabled once the active count reaches 5. |
+| "Upload" button | Disabled with no file chosen, while a request is in flight ("Uploading…"), or at the 5-attachment limit. |
+
+Submitting calls `uploadAttachment(ticketId, requester.id, file)` — the same
+function `CreateTicketForm` already uses (Feature 3), reused as-is; no new
+`api.ts` function needed. On success:
+- The file input is cleared (given a fresh `key`, since a native
+  `<input type="file">` can't be reset by just clearing React state).
+- `attachmentsRefreshKey` is bumped, which re-runs the attachments-loading
+  effect from Feature 7 — the list re-fetches with the new file included,
+  in its correct place (BR-13's `createdAt asc, id asc`), rather than the
+  new file being appended client-side with a guessed shape.
+
+On failure (`415`/`413`/`409`/anything else), the API's own error message
+is shown in an alert below the form, and the attachments list above is left
+exactly as it was — a rejected upload never touches it.
+
+At the 5-attachment limit, a line under the form states the limit is
+reached, in addition to the disabled controls — the label's `(5/5)` alone
+was judged too easy to miss.
+
+## Remove an attachment (Feature 9)
+
+A "Remove" link-styled button on each **active** attachment row in the
+Attachments list (below the `<dl>`, alongside the existing view/download
+link and size/date text). Removed rows don't get one — already removed.
+
+| Control | Notes |
+|---|---|
+| "Remove" button | One per active attachment. Disabled (whole-list, not just its own row) while any removal is in flight, showing "Removing…" on the row actually being removed. |
+
+Clicking it opens an **in-app modal** (a fixed-position overlay + card,
+not a native `window.confirm()`) — styled with the app's own green accent
+buttons (`btn-success`/`btn-outline-success`, matching every other primary
+action in the app) so it doesn't look like a generic browser popup dropped
+into an otherwise-themed page:
+
+| Modal element | Notes |
+|---|---|
+| Heading | "Remove attachment?" |
+| Body text | `Remove "<originalFilename>"? This cannot be undone.` |
+| "Reason (optional)" `<textarea>` | Free text, `maxLength=500` (client-side hint matching the server's cap, BR-15). Empty is fine — a reason is never required. |
+| "Cancel" button | Closes the modal, clears the typed reason, makes no API call. |
+| "Remove attachment" button | Confirms — see below. Named differently from the row's "Remove" button so the two aren't ambiguous to assistive tech. |
+
+Clicking outside the card (on the dimmed overlay) also cancels, same as
+"Cancel".
+
+On confirming, `removeAttachment(ticketId, attachment.id, requester.id,
+reason)` is called (`DELETE /api/tickets/:id/attachments/:attachmentId`,
+`reason` trimmed, sent as `undefined` when blank so the request body's
+`reason` is `null`). On success:
+- `attachmentsRefreshKey` is bumped — the same re-fetch mechanism Feature 8
+  uses for uploads — so the list re-fetches. The removed attachment stays
+  in the list (BR-14) but its row switches to the removed-row rendering
+  described in the Attachments section above, rather than disappearing.
+
+On failure (`403`/`404`/anything else), the API's own error message is
+shown in an alert below the attachments list, and the list is left exactly
+as it was — a rejected removal never touches it.
+
+*(Revision note: the first version of this control used a native
+`window.confirm()` with no reason field. Peer review flagged that it
+didn't match the app's Zen Green theme and that the handout's
+removal-reason requirement (section 4.5) wasn't handled at all — replaced
+with the in-app modal described above, which does both.)*

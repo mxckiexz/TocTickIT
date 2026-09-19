@@ -13,5 +13,80 @@ datasource db {
 model Category {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+  tickets   Ticket[]
+}
+
+model RelatedSystem {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  tickets   Ticket[]
+}
+
+// Lab 2 stands in for real authentication (arrives in Lab 3): the client picks
+// one active Requester from this table to act as the current "logged-in" user.
+model Requester {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  tickets   Ticket[]
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Ticket {
+  id                Int      @id @default(autoincrement())
+  ticketNumber      String   @unique
+  requesterId       Int
+  categoryId        Int
+  relatedSystemId   Int
+  summary           String
+  description       String
+  requestedPriority Priority
+  currentStatus     String   @default("New")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  requester     Requester     @relation(fields: [requesterId], references: [id])
+  category      Category      @relation(fields: [categoryId], references: [id])
+  relatedSystem RelatedSystem @relation(fields: [relatedSystemId], references: [id])
+  attachments   Attachment[]
+
+  @@index([requesterId])
+  @@index([categoryId])
+  @@index([relatedSystemId])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id               Int       @id @default(autoincrement())
+  ticketId         Int
+  originalFilename String
+  storedFilename   String
+  mimeType         String
+  sizeBytes        Int
+  createdAt        DateTime  @default(now())
+  // Soft removal (Feature 9): null means active. Set instead of deleting the
+  // row, so metadata is retained (still returned by the list endpoint); the
+  // physical file is deleted from disk when this is set, and the download
+  // endpoint plus the upload endpoint's active-count check both treat a
+  // non-null removedAt as gone.
+  removedAt        DateTime?
+  // Optional free text captured when the Requester removes an attachment
+  // (handout section 4.5's "removal-reason requirements"). Null when no
+  // reason was given, or for an attachment that's never been removed.
+  removalReason    String?
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
 }

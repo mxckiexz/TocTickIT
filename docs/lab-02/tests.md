@@ -1,0 +1,512 @@
+# Lab 2 — Test Plan and Evidence
+
+Each test below has a stable Test ID (`B#` = backend, `F#` = frontend) so it
+can be referenced from the AC/BR traceability matrix at the bottom of this
+file without repeating the "What It Tests" text. "Expected Result" is the
+plan; "Final" is what actually happened when it was run — see the run output
+further down for the full suite confirmation.
+
+**Type** classifies each case as **Positive** (valid input, expects success),
+**Negative** (invalid input, expects a client error), or **Boundary** (an
+exact edge value or limit — e.g. a length cap, a count limit, or an ordering
+tiebreak).
+
+## Backend test plan (`server/tests/lab-02/`, Vitest + Supertest against a real Postgres via Prisma)
+
+### `create-ticket.api.test.ts`
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B1 | Positive | AC-01, BR-01, BR-05 | Valid ticket submission | `201`; unique `ticketNumber` matching `TKT-\d{4}-\d{6}`; `currentStatus: "New"` | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B2 | Negative | AC-02 | Submission with `{}` (all required fields missing) | `400`; `errors` has one message per missing field | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B3 | Negative | AC-02, BR-06 | `requesterId`/`categoryId`/`relatedSystemId` sent as `0` | `400`; treated as missing, not as a valid id | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B4 | Negative | BR-03 | `summary` is whitespace only | `400`; `errors.summary` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B5 | Negative | BR-04 | `requestedPriority` outside `LOW`/`MEDIUM`/`HIGH` | `400`; `errors.requestedPriority` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B6 | Negative | AC-03 | `requesterId` references an inactive Requester | `400`; `errors.requesterId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B7 | Negative | AC-03 | `requesterId` does not exist | `400`; `errors.requesterId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B8 | Negative | AC-03 | `categoryId` references an inactive Category | `400`; `errors.categoryId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B9 | Negative | AC-03 | `relatedSystemId` references an inactive Related System | `400`; `errors.relatedSystemId` set | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B10 | Boundary | BR-03 | `summary` at exactly 150 / 151 chars | 150 → `201`; 151 → `400 errors.summary` | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B11 | Boundary | BR-03 | `description` at exactly 2000 / 2001 chars | 2000 → `201`; 2001 → `400 errors.description` | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+| B12 | Positive | BR-02 | Same Requester resubmits identical content within 10s | `200` with the **existing** ticket, no second row created | `server/tests/lab-02/create-ticket.api.test.ts` | passed |
+
+### `lookup-lists.api.test.ts` (Feature 3)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B13 | Positive | Feature 3 | `GET /api/related-systems` | `200`; only active related systems, ordered by `id` asc | `server/tests/lab-02/lookup-lists.api.test.ts` | passed |
+| B14 | Positive | Feature 3 | `GET /api/requesters` | `200`; only active requesters, ordered by `id` asc | `server/tests/lab-02/lookup-lists.api.test.ts` | passed |
+
+### `attachments.api.test.ts` (Feature 2, extended on review with BR-07)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B15 | Positive | Feature 2 | Upload a permitted file (owner's `requesterId`) | `201`; returns the `Attachment`, `storedFilename` differs from the original | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B16 | Negative | Feature 2 | Upload an unsupported file type | `415` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B17 | Negative | Feature 2 | Upload a file over 5MB | `413` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B18 | Negative | Feature 2 | Upload with no file attached | `400` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B19 | Negative | BR-07 | Upload with no `requesterId` field | `400` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B20 | Negative | Feature 2 | Upload to a ticket id that does not exist | `404` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B21 | Negative | BR-07 | Upload with a `requesterId` that does not own the ticket | `403`; no `Attachment` row created | `server/tests/lab-02/attachments.api.test.ts` | passed |
+| B22 | Boundary | Feature 2 | Upload a 6th file to the same ticket (limit is 5) | `409` | `server/tests/lab-02/attachments.api.test.ts` | passed |
+
+### `my-tickets.api.test.ts` — core My Tickets (Feature 4)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B23 | Positive | AC-06 | Requester A requests their own tickets | `200`; every returned ticket has `requesterId === A`, Requester B's ticket is absent | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B24 | Positive | AC-06 | Requester B requests their own tickets | `200`; contains B's ticket, not Requester A's | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B25 | Positive | BR-08 | Requester A has 2+ tickets created at different times | `200`; `createdAt` strictly descending (default sort) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B26 | Boundary | BR-08 | Two tickets share the exact same `createdAt` (set explicitly in the fixture) | `200`; the higher `id` sorts first (tiebreak) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B27 | Positive | AC-06 | A Requester with zero tickets (dedicated fixture, cleaned up in `afterAll` — not a "found to currently have none" seeded row) requests their list | `200`; `tickets: []` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B28 | Negative | AC-06 | `requesterId` query param omitted | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B29 | Negative | AC-06 | `requesterId=0` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B30 | Positive | BR-09 | Any valid request | Response body always has `pagination: { page, pageSize, totalItems, totalPages }` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+
+### `my-tickets.api.test.ts` — search, filter, sort, and pagination (Feature 5)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B31 | Positive | AC-07 | `search` matches a word in `summary` | Only the matching ticket returned | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B32 | Positive | AC-07 | `search` in a different case than stored | Same match as B31 (case-insensitive) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B33 | Positive | AC-07 | `search` matches a unique term only present in `description` | Only that ticket returned | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B34 | Positive | AC-07 | `search` matches a fixture's own `ticketNumber` | Only that ticket returned | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B35 | Positive | BR-10 | `search` matches nothing | `200`; `tickets: []`, `pagination.totalItems: 0` — not an error | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B36 | Positive | AC-07 | `categoryId` filter | Only tickets in that category | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B37 | Positive | AC-07 | `relatedSystemId` filter | Only tickets on that related system | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B38 | Positive | AC-07 | `requestedPriority` filter | Only tickets at that priority | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B39 | Positive | AC-07 | `currentStatus=New` filter | All fixture tickets (all are `"New"`) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B40 | Positive | BR-10 | `currentStatus` value no ticket currently has | `200`; `tickets: []` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B41 | Positive | BR-10 | `categoryId` + `search` together | Only tickets matching **both** (AND) | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B42 | Negative | AC-07 | `categoryId=not-a-number` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B43 | Negative | AC-07 | `requestedPriority=URGENT` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B44 | Positive | BR-08 | `sortBy=summary&sortDir=asc` | `tickets` alphabetically ascending by `summary` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B45 | Positive | BR-08 | `sortBy=summary&sortDir=desc` | `tickets` alphabetically descending by `summary` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B46 | Negative | AC-07 | `sortBy=id` (not a supported field) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B47 | Negative | AC-07 | `sortDir=sideways` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B48 | Positive | BR-09 | 5 tickets, `pageSize=2`, pages 1–3 requested in turn | Pages hold 2, 2, 1 tickets; `pagination` matches on page 1 (`totalItems:5, totalPages:3`); the 5 ids across all 3 pages are all distinct — no gap, no duplicate | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B49 | Negative | AC-07 | `page=0` | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B50 | Negative | AC-07 | `pageSize=51` (over the 50 max) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+| B51 | Negative | AC-07 | `pageSize=lots` (non-numeric) | `400` | `server/tests/lab-02/my-tickets.api.test.ts` | passed |
+
+### `ticket-detail.api.test.ts` (Feature 6)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B52 | Positive | AC-08 | The owning Requester requests a ticket's detail | `200`; full ticket fields returned | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B53 | Negative | AC-08, BR-11 | A different Requester requests the same ticket | `403`; no ticket data returned | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B54 | Negative | AC-08 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B55 | Negative | AC-08 | `:id` is not numeric | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B56 | Negative | AC-08 | `requesterId` query param omitted | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B57 | Negative | AC-08 | `requesterId=0` | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+| B58 | Negative | AC-08 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/ticket-detail.api.test.ts` | passed |
+
+### `inspect-attachments.api.test.ts` — list (Feature 7)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B59 | Positive | AC-09 | The owning Requester lists a ticket's 2 attachments | `200`; both returned, oldest first, each with `ticketId` matching | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B60 | Positive | AC-09, BR-12 | Same list request | Each entry has exactly the public fields (`id`, `ticketId`, `originalFilename`, `mimeType`, `sizeBytes`, `createdAt`, `removedAt`, `removalReason`) — no `storedFilename` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B61 | Boundary | BR-13 | Two attachments on a fresh ticket share the exact same `createdAt` (set explicitly in the fixture) | `200`; the lower `id` sorts first (tiebreak) | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B62 | Positive | AC-09 | A ticket with no attachments | `200`; `[]` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B63 | Negative | AC-09, BR-12 | A different Requester lists the same ticket's attachments | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B64 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B65 | Negative | AC-09 | `:id` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B66 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B67 | Negative | AC-09 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+
+### `inspect-attachments.api.test.ts` — view/download one (Feature 7)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B68 | Positive | AC-09 | The owning Requester downloads a real uploaded file | `200`; `Content-Type` matches the upload, body bytes equal the original file exactly | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B69 | Positive | AC-09 | An attachment's `originalFilename` has a space and a non-ASCII character | `Content-Disposition` has an unencoded ASCII `filename=` fallback plus a percent-encoded UTF-8 `filename*=` — see api-spec.md | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B70 | Negative | AC-09, BR-12 | A different Requester requests the same file | `403` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B71 | Negative | AC-09 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B72 | Negative | AC-09, BR-12 | `:attachmentId` exists but belongs to a *different* ticket than `:id` | `404` — same as not existing at all | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B73 | Negative | AC-09 | `:attachmentId` does not exist at all | `404` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B74 | Negative | AC-09 | `:attachmentId` is not numeric | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+| B75 | Negative | AC-09 | `requesterId` query param omitted | `400` | `server/tests/lab-02/inspect-attachments.api.test.ts` | passed |
+
+Both fixtures' `afterAll` also deletes the physical files each test uploaded
+to `server/uploads/` (looked up by `storedFilename` before the DB rows are
+removed) — confirmed manually that the directory's file count is unchanged
+before/after a run of this file (see Manual verification below).
+
+### `remove-attachment.api.test.ts` (Feature 9)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| B76 | Positive | AC-11, BR-14 | The owning Requester removes their own attachment | `200`; `removedAt` set in the response and the DB row; the row itself still exists (`originalFilename` intact); the physical file is deleted from disk | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B77 | Positive | AC-11, BR-14 | List the ticket's attachments after removing one | Removed attachment's id is still present, with `removedAt` set and no `storedFilename` (BR-14: stays visible as metadata, per the handout's example) | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B78 | Positive | AC-11, BR-14 | Download a removed attachment | `404` — same as never having existed | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B79 | Boundary | AC-11, BR-14 | Ticket at the 5-active-attachment limit (6th upload rejected `409`); remove 1, then retry the 6th upload | Removal frees a slot — the previously-rejected 6th upload now succeeds `201` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B80 | Negative | AC-11, BR-14 | A different Requester attempts the removal | `403`; the attachment's row is untouched (`removedAt` still `null`) | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B81 | Negative | AC-11, BR-14 | `:attachmentId` exists but belongs to a *different* ticket than `:id` | `404` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B82 | Negative | AC-11, BR-14 | Removing an attachment a second time | `404` on the second call | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B83 | Negative | AC-11 | `:id` references a ticket that does not exist | `404` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B84 | Negative | AC-11 | `:attachmentId` does not exist at all | `404` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B85 | Negative | AC-11 | `:id` is not numeric | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B86 | Negative | AC-11 | `:attachmentId` is not numeric | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B87 | Negative | AC-11 | `requesterId` query param omitted | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B88 | Negative | AC-11 | `requesterId=abc` (non-numeric) | `400` | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B89 | Positive | AC-11, BR-15 | Remove with `{ reason: "..." }` in the request body | `200`; `removalReason` set to that text in the response and the DB row | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B90 | Positive | BR-15 | Remove with no `reason` in the body | `200`; `removalReason` is `null` — a reason was never required | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+| B91 | Boundary | BR-15 | Remove with a 501-character `reason` | `400`; the attachment is untouched (`removedAt` still `null`) | `server/tests/lab-02/remove-attachment.api.test.ts` | passed |
+
+This file's own `afterAll` also deletes the physical files for every
+attachment created during the run that's still active at the end (a
+rejected removal, e.g. B80/B81, correctly leaves the file on disk) —
+confirmed manually the same way as the Feature 7 fixtures (see Manual
+verification below).
+
+Run with:
+
+```bash
+cd server && npm run test
+```
+
+```
+ ✓ tests/lab-01/health.test.ts (1 test)
+ ✓ tests/lab-01/categories.test.ts (1 test)
+ ✓ tests/lab-02/lookup-lists.api.test.ts (2 tests)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (7 tests)
+ ✓ tests/lab-02/inspect-attachments.api.test.ts (17 tests)
+ ✓ tests/lab-02/create-ticket.api.test.ts (12 tests)
+ ✓ tests/lab-02/attachments.api.test.ts (8 tests)
+ ✓ tests/lab-02/my-tickets.api.test.ts (29 tests)
+ ✓ tests/lab-02/remove-attachment.api.test.ts (16 tests)
+
+ Test Files  9 passed (9)
+      Tests  93 passed (93)
+```
+
+## Frontend test plan
+
+### `create-ticket-form.test.tsx` (Vitest + React Testing Library)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F1 | Positive | Design constraint (no side effects until opened) | App renders, nothing clicked yet | `fetchCategories`/`fetchRequesters`/etc. are never called | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F2 | Positive | AC-05 | Click "New Ticket" with no active Requester | Development Requester picker shown first; ticket form (and its Requester field) not shown yet | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F3 | Positive | AC-04 | Pick a Requester, fill the form, submit | `createTicket` called with that Requester's id; returned `ticketNumber` displayed | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F4 | Positive | AC-05 | Click "Create another ticket" after a successful submission | Same Requester still active — no re-prompt | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F5 | Positive | AC-05 | Click "Switch requester" | Returns to the Development Requester picker | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F6 | Positive | BR-02 (client side) | Submit while the request is in flight | Submit button reads "Submitting…" and is disabled until it resolves | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F7 | Negative | AC-02 | `createTicket` rejects with field errors | Errors shown inline per field; no ticket-created state shown | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F8 | Positive | BR-07 | Submit with a file attached | `uploadAttachment` called with `(ticketId, requesterId, file)` after the ticket is created | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+| F9 | Negative | Graceful degradation (not a formal AC/BR) | `uploadAttachment` rejects | Ticket Number still shown; a warning about the failed attachment is shown alongside it | `client/tests/lab-02/create-ticket-form.test.tsx` | passed |
+
+### `my-tickets.test.tsx` (Feature 5)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F10 | Positive | Design constraint (no side effects until opened) | App renders, "My Tickets" not clicked | `fetchTickets` never called | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F11 | Positive | AC-05 | Click "My Tickets" with no active Requester | Same `DevRequesterPicker` as the New Ticket flow (reused, not duplicated) | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F12 | Positive | AC-06 | Pick a Requester | `fetchTickets` called with that Requester's id; list renders, default sort `createdAt desc` | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F13 | Positive | AC-06 | `fetchTickets` resolves with `tickets: []` | "No tickets match your search and filters." shown | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F14 | Positive | AC-07 | Type into the search box | `fetchTickets` is **not** called per keystroke; called once, ~300ms after typing stops, with the final value | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F15 | Positive | AC-07 | Change the category filter | Re-fetches with `categoryId` set and `page` reset to 1 | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F16 | Positive | AC-07, BR-08 | Change the sort dropdown | Re-fetches with the matching `sortBy`/`sortDir` pair | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F17 | Positive | AC-07, BR-09 | Click "Next" then check button state | Re-fetches with `page: 2`; "Previous" enables, "Next" disables once on the last page | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F18 | Positive | AC-07 | On page 2, change a filter | Re-fetches with `page` reset to 1, not still on page 2 | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F19 | Positive | AC-05 | Open "New Ticket" first, then click the "My Tickets" tab | Switches view **without** re-showing the Requester picker — same active Requester carries over | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+| F20 | Positive | AC-07 | Change the status filter | "All statuses" option present; re-fetches with `currentStatus: "New"` and `page` reset to 1 | `client/tests/lab-02/my-tickets.test.tsx` | passed |
+
+### `ticket-detail.test.tsx` (Feature 6)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F21 | Positive | Design constraint (no side effects until opened) | List renders with one ticket, its row not clicked | `fetchTicketDetail` never called | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F22 | Positive | AC-08 | Click a ticket's Ticket Number | `fetchTicketDetail` called with `(ticketId, requesterId)`; Summary, Description, Category name, Related System name, and Priority all shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F23 | Positive | AC-08 | Set a non-default search/category/sort, open a ticket, click "Back to My Tickets" | Returns to the list with the same search text, category selection, and sort selection still applied — confirmed by the control values, and that no extra `fetchTickets` call fired while the detail screen was open | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F24 | Negative | AC-08, BR-11 | `fetchTicketDetail` rejects (e.g. a 403) | The API's error message is shown in place of the ticket fields | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F25 | Positive | AC-09 | Ticket has one attachment | `fetchTicketAttachments` called with `(ticketId, requesterId)`; filename shown as a link to `ticketAttachmentUrl(...)`, size shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F26 | Positive | AC-09 | Ticket has no attachments | "No attachments on this ticket." shown | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F27 | Negative | AC-09, BR-12 | `fetchTicketAttachments` rejects (e.g. a 403) | The API's error message is shown for the attachments section — the ticket's own fields above it stay visible | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F28 | Positive | AC-10 | Ticket has 1 of 5 attachments | "Add an attachment (1/5)…" label shown; Upload button disabled with no file chosen | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F29 | Positive | AC-10 | Pick a file and click Upload | `uploadAttachment` called with `(ticketId, requesterId, file)`; `fetchTicketAttachments` called again (refresh) and the new file appears as a link | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F30 | Negative | AC-10 | Ticket already has 1 attachment; `uploadAttachment` rejects (e.g. a 415) | The API's error message is shown; the existing attachment is still shown afterward, and `fetchTicketAttachments` was not called again (proving the list wasn't just re-fetched to the same state) | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F31 | Positive | AC-10 | Ticket already has 5 attachments | File input and Upload button both disabled; a message states the limit is reached | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F32 | Positive | AC-11 | Click "Remove" on an attachment, then "Remove attachment" in the in-app modal | `removeAttachment` called with `(ticketId, attachmentId, requesterId, undefined)`; `fetchTicketAttachments` called again (refresh); the row switches to a struck-through, non-linked "removed" row instead of disappearing | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F33 | Positive | AC-11, BR-15 | Type a reason into the modal's "Reason (optional)" field before confirming | `removeAttachment` called with that reason as its 4th argument | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F34 | Positive | AC-11 | Click "Remove", then "Cancel" in the modal | `removeAttachment` is **not** called; the modal closes; the attachment is still shown as active | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F35 | Negative | AC-11 | `removeAttachment` rejects (e.g. a 403) | The API's error message is shown; the attachment stays active in the list | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F36 | Positive | AC-11, BR-14 | `fetchTicketAttachments` resolves with one already-removed attachment | Rendered as plain (non-link) text with a "removed …" caption including its reason; no Remove button on that row | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+| F37 | Positive | AC-11, BR-14 | Ticket has 1 active + 1 removed attachment | "Add an attachment (1/5)…" — only the active one counts toward the limit; the file input is not disabled | `client/tests/lab-02/ticket-detail.test.tsx` | passed |
+
+### `api.test.ts` (Lab 1 — `checkSystem()` regression, Issue 2 & 4)
+
+Mocks `fetch` directly rather than the api module, so the real `checkSystem()`
+body runs — `App.test.tsx`'s own tests mock `checkSystem` itself and so never
+exercised this function, which is exactly how it shipped only checking
+`/api/health` and hardcoding `categories: []` (caught on review of the Lab 2
+compliance PR).
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| F38 | Positive | Lab 1, Issue 2 & 4 (not a Lab 2 AC/BR) | Health check succeeds | `fetch` called for both `/api/health` and `/api/categories`; resolves to `{ online: true, categories }` with the real categories from the response | `client/tests/lab-01/api.test.ts` | passed |
+| F39 | Negative | Lab 1, Issue 2 & 4 (not a Lab 2 AC/BR) | Health check fails (non-2xx) | Rejects with "Backend unavailable"; `/api/categories` is never fetched (`fetch` called exactly once) | `client/tests/lab-01/api.test.ts` | passed |
+
+Run with:
+
+```bash
+cd client && npm run test
+```
+
+```
+ ✓ tests/lab-01/App.test.tsx (3 tests)
+ ✓ tests/lab-01/api.test.ts (2 tests)
+ ✓ tests/lab-02/create-ticket-form.test.tsx (9 tests)
+ ✓ tests/lab-02/my-tickets.test.tsx (11 tests)
+ ✓ tests/lab-02/ticket-detail.test.tsx (17 tests)
+
+ Test Files  5 passed (5)
+      Tests  42 passed (42)
+```
+
+## E2E test plan (`e2e/lab-02/`, Playwright against the real dev servers + Postgres)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| E2E-01 | E2E | AC-01, AC-04, AC-05, AC-06, AC-08 | A Requester picks a Development Requester, creates a ticket, then finds and opens that same ticket from My Tickets | Ticket Number matches `TKT-\d{4}-\d{6}`; a Ticket Date is shown; searching My Tickets by that Ticket Number finds exactly one row; opening it shows the same Summary just submitted | `e2e/lab-02/requester-ticket-flow.spec.ts` | passed |
+
+Run with (requires both dev servers reachable, or let Playwright's
+`webServer` config in `playwright.config.ts` start them):
+
+```bash
+npx playwright test
+```
+
+```
+Running 1 test using 1 worker
+
+  ✓  1 [chromium] › e2e/lab-02/requester-ticket-flow.spec.ts:7:5 › a Requester creates a ticket and later finds it in My Tickets (2.0s)
+
+  1 passed (2.9s)
+```
+
+## AC / BR → Test traceability matrix
+
+| Acceptance Criterion / Business Rule | Covered by |
+|---|---|
+| AC-01 — unique Ticket Number on valid submission | B1 |
+| AC-02 — field-level errors on invalid/missing submission | B2, B3, F7 |
+| AC-03 — inactive/nonexistent Requester, Category, or Related System rejected | B6, B7, B8, B9 |
+| AC-04 — Requester fills in and submits the ticket form, sees the Ticket Number | F3 |
+| AC-05 — Development Requester picked first, stays active across ticket creations (and now across New Ticket / My Tickets) | F2, F4, F5, F11, F19 |
+| AC-06 — My Tickets returns only the caller's own tickets (incl. empty list, incl. validation) | B23, B24, B27, B28, B29, F12, F13 |
+| AC-07 — search, filter, sort, and pagination on My Tickets | B31, B33, B34, B36–B39, B42, B43, B44, B45, B46, B47, B48, B49, B50, B51, F14, F15, F16, F17, F18, F20 |
+| AC-08 — Ticket Detail screen, ownership-checked | B52, B53, B54, B55, B56, B57, B58, F22, F23, F24 |
+| AC-09 — inspect a ticket's attachments (list + view/download), ownership-checked | B59, B60, B62–B75, F25, F26, F27 |
+| AC-10 — add an attachment to an existing ticket from Ticket Detail | F28, F29, F30, F31 |
+| AC-11 — remove one of a Requester's own attachments (soft removal) | B76–B91, F32–F37 |
+| BR-01 — Ticket Number format | B1 |
+| BR-02 — duplicate-submission prevention (server) / disabled-while-submitting (client) | B12, F6 |
+| BR-03 — summary/description length limits | B4, B10, B11 |
+| BR-04 — requestedPriority enum | B5 |
+| BR-05 — initial `currentStatus: "New"` | B1 (asserted in the response body) |
+| BR-06 — ids must be positive, not just present | B3 |
+| BR-07 — attachment ownership | B19, B21, F8 |
+| BR-08 — My Tickets ordering incl. `id desc` tiebreak, extended to whichever `sortBy` is chosen | B25, B26, B44, B45, F16 |
+| BR-09 — My Tickets response envelope (`{ tickets, pagination }`) | B30, B48, F17 |
+| BR-10 — My Tickets search/filter fields combine with AND | B35, B40, B41, B42, B43 |
+| BR-11 — Ticket Detail ownership | B53, F24 |
+| BR-12 — Inspect-attachments ownership, incl. cross-ticket attachment id scoping, incl. public-metadata-only list response | B60, B63, B70, B72, F27 |
+| BR-13 — Inspect-attachments ordering incl. `id asc` tiebreak | B61 |
+| BR-14 — Attachment removal ownership and soft-delete rules, incl. removed attachments staying visible in the list as metadata while excluded from download/active-count, incl. double-removal and cross-ticket scoping | B76–B84, F32, F36, F37 |
+| BR-15 — Optional removal reason, captured and returned but never required | B89, B90, B91, F33 |
+
+## Manual verification
+
+Ran both dev servers and drove the real app in a browser:
+
+**Feature 1–4 (from earlier rounds):**
+- Filled every field with valid data → got `Ticket created successfully. Your
+  Ticket Number: TKT-2026-000036`.
+- Submitted with everything empty → all six fields showed their own error
+  message together in one round trip (surfaced BR-06).
+- Selected "Michael Brown" as the Development Requester, created a ticket,
+  saw "Creating as Michael Brown" persist through page reload (localStorage)
+  and through "Create another ticket" without re-prompting.
+- `curl`'d `POST /api/tickets/:id/attachments` with a non-owning
+  `requesterId` → `403`; with the actual owner's id → `201`.
+
+**Feature 5:** created a dozen tickets spread across all 4
+categories/related systems and 3 priorities via the API, then drove the real
+`MyTickets` view:
+- Entry: clicking **My Tickets** from the front screen shows the same
+  `DevRequesterPicker` as **New Ticket**; picking "Jennifer Anderson" and
+  opening the list shows all her tickets, newest first, with real
+  category/related-system names resolved (not raw ids).
+- Search: typing `ticket 7` narrowed the table to exactly the one matching
+  ticket after the debounce.
+- Filter: selecting priority "High" (after clearing the search box) narrowed
+  the table to exactly the 3 HIGH-priority tickets.
+- Sort: switching to "Summary (A–Z)" re-sorted the table alphabetically;
+  confirmed by reading the rendered rows.
+- Pagination: with 14 tickets and the default page size of 10, "Page 1 of 2
+  (14 tickets)" showed 10 rows; clicking **Next** loaded the remaining 4 and
+  disabled **Next** (page 2 of 2).
+- Switch requester → back to the picker; picking "No Tickets Fixture" showed
+  "No tickets match your search and filters." (the dedicated empty-state
+  fixture, not a flaky "currently has none" assumption).
+- Test data (the 12 manually-created tickets) was deleted from the DB after
+  verification.
+
+**Feature 6:** with the same active Requester's existing
+tickets already in the list:
+- Clicked a Ticket Number (`TKT-2026-000036`) → Ticket Detail screen opened
+  showing Summary, Description, Category ("Hardware"), Related System
+  ("VPN"), Requested Priority ("MEDIUM"), Status ("New"), Created, and Last
+  Updated — all correct against what the list row showed.
+- Clicked "← Back to My Tickets" → returned to the list with the same rows
+  and pagination state as before.
+- `curl`'d `GET /api/tickets/:id` directly: the ticket's actual owner
+  (`requesterId=1`) → `200` with the full ticket; a different active
+  Requester (`requesterId=2`) → `403
+  {"error":"You do not have permission to view this ticket."}`.
+
+**Feature 7:**
+- Opened an existing ticket (`TKT-2026-000023`) that already had an
+  attachment from earlier manual testing → the Attachments section showed
+  `fake.png (0.0 KB, uploaded 9/3/2026, ...)` as a link, `href` pointing at
+  `GET /api/tickets/23/attachments/7?requesterId=1`.
+- Clicking that link 500'd (`{"error":"Failed to retrieve attachment
+  file"}`) — traced it to the physical file for that specific old record
+  being gone from `server/uploads/` (leftover demo data from an earlier
+  session, not something either endpoint created or removed). Confirmed
+  this isn't a Feature 7 bug by doing a **clean** round trip instead:
+  created a fresh ticket, uploaded a real file to it via `curl`, then
+  fetched it back through the new download endpoint — `200`, correct
+  `Content-Type`, and the response body byte-for-byte equal to the
+  original file. Cleaned up that test ticket/attachment/file afterward.
+- `curl`'d the download endpoint with a non-owning `requesterId` → `403
+  {"error":"You do not have permission to view this ticket's attachments."}`.
+
+**Feature 7 review fixes (this round):**
+- `curl`'d `GET /api/tickets/23/attachments?requesterId=1` → confirmed the
+  response no longer includes `storedFilename`, only the public fields.
+- Uploaded a file named `my file.png` and downloaded it back → confirmed
+  the exact header: `Content-Disposition: inline; filename="my file.png";
+  filename*=UTF-8''my%20file.png`.
+- Ran `tests/lab-02/inspect-attachments.api.test.ts` alone and compared
+  `ls server/uploads | wc -l` before/after — identical count, confirming
+  the new `afterAll` cleanup actually deletes every file this test file
+  uploads (previously it only deleted the DB rows).
+- Cleaned up the manual test attachment/file afterward.
+
+**Feature 8:** opened `TKT-2026-000023` (which already had 1 attachment)
+in a browser — the "Add an attachment (1/5) — JPG, PNG, WEBP, or PDF, up to
+5MB" control rendered correctly below the existing attachment, with the
+Upload button disabled until a file is chosen. Driving the native file
+picker itself isn't something this session's browser-automation tool can
+do, so the actual upload flow (select file → click Upload → list refreshes)
+is verified by the 4 automated tests above (F28–F31, using a real `File`
+object with a mocked `uploadAttachment`) plus the fact that `uploadAttachment`
+itself is the exact same, already browser-verified function `CreateTicketForm`
+uses (see Feature 3's manual verification) and the endpoint it calls was
+already verified end-to-end via `curl` in Feature 2/7.
+
+**Feature 9 (first round):** opened `TKT-2026-000023` in a browser — it had
+one attachment (`fake.png`) left over from earlier manual testing:
+- Clicked "Remove" → confirmed via the native `window.confirm` dialog →
+  the attachment disappeared from the Attachments section and the "Add an
+  attachment" label updated from `(1/5)` to `(0/5)`.
+- `curl`'d `GET /api/tickets/23/attachments/7?requesterId=1` (the just-removed
+  attachment's download URL) directly afterward → `404
+  {"error":"Attachment not found."}`, confirming the removal is enforced
+  server-side, not just hidden client-side.
+- Confirmed via the Prisma DB (through the passing automated test suite,
+  which asserts this directly) that removal never deletes the `Attachment`
+  row — only sets `removedAt` — while the physical file is actually gone
+  from `server/uploads/`.
+
+Before writing the automated test file, a self-check (comparing
+`ls server/uploads | wc -l` before/after running the new file alone,
+same method as Feature 7's review fix) surfaced that its first draft's
+`afterAll` deleted only DB rows, leaking the physical files of every
+attachment left active at the end of the run (rejected-removal tests, and
+the 5-limit test's unremoved uploads) — 7 files on that run. Fixed by
+adding the same `deleteUploadedFiles`-style helper Feature 7's fixtures
+use, and reran the file alone to confirm the count no longer changes.
+
+**Feature 9 review fixes (this round):** peer review caught that the first
+round's "hide the removed attachment" behavior didn't match the handout's
+own example ("A removed Attachment remains visible as metadata but cannot
+be downloaded") and that there was no removal-reason handling at all.
+Fixed both, then re-verified manually with the real dev servers:
+- Uploaded a fresh file to `TKT-2026-000023` via `curl`, then in the
+  browser clicked its row's "Remove" button — confirmed an **in-app**
+  modal opens (no native browser popup), asking for confirmation with an
+  optional "Reason" textarea, styled with the app's own green
+  (`btn-success`/`btn-outline-success`) buttons rather than the browser's
+  default popup chrome.
+- Typed a reason ("Testing the removal reason field") and clicked "Remove
+  attachment" → the row switched in place to a struck-through,
+  non-clickable line reading "(0.0 KB, removed 9/6/2026, 9:56:24 PM —
+  Testing the removal reason field)" — confirmed via
+  `getComputedStyle(...).textDecorationLine === "line-through"` that the
+  strikethrough is real CSS, not just visual guesswork — instead of
+  disappearing from the list.
+- `curl`'d `GET /api/tickets/:id/attachments?requesterId=1` directly and
+  confirmed the response now includes **both** the active and the
+  just-removed attachment, the removed one carrying its `removedAt` and
+  `removalReason`, still with no `storedFilename`.
+- `curl`'d the removed attachment's download URL → still `404` — the
+  handout's "cannot be downloaded" half of the rule was already correct
+  and untouched by this round's fix.
+- Confirmed the physical file was actually deleted from disk
+  (`server/uploads/<storedFilename>` gone) despite the row staying
+  visible in the list — soft removal still means the file itself is gone,
+  only the metadata is retained.
+- Along the way, hit an unrelated environment snag: the long-running dev
+  server process (left over from an earlier session) had the previous
+  Prisma Client generated before this round's migration, so the list
+  endpoint 500'd until the server was restarted to pick up the
+  regenerated client — not a code bug, just a stale process, noted here
+  in case it recurs.
+
+## Known gaps (not yet covered)
+
+- No test exercises the `500` paths (DB failure) — would need a mocked Prisma
+  client, out of scope for the current integration-test setup.
+- No test covers uploading more than one attachment from the form (the
+  `<input type="file">` is single-file; multi-file selection during creation
+  is not part of this feature).
+- No test covers combining more than two query params at once (e.g.
+  search + category + priority + sort + page all together) — each is tested
+  individually and pairwise (B41); a full combination is exercised only in
+  manual verification above, not as an automated test.
+- `sortBy` only supports `createdAt`, `summary`, and `requestedPriority` —
+  sorting by `categoryId`/`relatedSystemId`/`currentStatus` isn't offered (no
+  test needed since the API rejects anything outside that list, covered by
+  B46).
+- `TicketDetail` has no independent route (no router in this app) — there's
+  no test (or behavior) for reloading the page while on the detail screen,
+  since it isn't expected to preserve state across a reload. Not a gap in
+  Feature 6's own contract, just a known limitation of the current
+  navigation approach.
+- No test covers the disk-file-missing case for the download endpoint (DB
+  row exists, physical file doesn't — surfaced during manual verification
+  above via stale pre-existing demo data). It behaves correctly (`500` with
+  a JSON error, not a crash), but there's no automated regression test for
+  it — would need to delete a file out from under a real upload mid-test,
+  which felt like testing Node's `fs`/Express's `sendFile` rather than this
+  app's own logic.
+- There is no "undo" for a removal — once `removedAt` is set there's no
+  endpoint or UI control to restore an attachment, matching BR-14/the
+  labsheet's soft-removal requirement as written. If a future feature adds
+  restoration, this file should gain tests for it.
+- The `server/uploads/` directory (gitignored) has a handful of orphaned
+  files with no corresponding DB row, left over from an early, since-fixed
+  draft of `remove-attachment.api.test.ts` whose `afterAll` didn't clean up
+  physical files (caught via the same before/after file-count self-check
+  Feature 7's review introduced, before this feature was opened for
+  review). Harmless — not referenced by any row, not part of the app's
+  behavior — but noted here rather than silently left unmentioned.
+- No automated test drives Feature 8's actual browser file picker (see
+  Manual verification above) — the upload flow is covered with a real
+  `File` object and a mocked `uploadAttachment`/`fetchTicketAttachments`
+  instead, and the underlying endpoint itself already has thorough
+  automated + manual coverage from Feature 2/7.

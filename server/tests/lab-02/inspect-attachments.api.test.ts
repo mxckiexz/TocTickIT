@@ -36,9 +36,9 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const owner = await prisma.requester.findFirstOrThrow({ where: { isActive: true } });
-    const other = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: owner.id } },
+    const owner = await prisma.user.findFirstOrThrow({ where: { role: "REQUESTER", isActive: true } });
+    const other = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true, NOT: { id: owner.id } },
     });
     const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });
     const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({ where: { isActive: true } });
@@ -244,9 +244,9 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const owner = await prisma.requester.findFirstOrThrow({ where: { isActive: true } });
-    const other = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: owner.id } },
+    const owner = await prisma.user.findFirstOrThrow({ where: { role: "REQUESTER", isActive: true } });
+    const other = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true, NOT: { id: owner.id } },
     });
     const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });
     const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({ where: { isActive: true } });
@@ -280,8 +280,8 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
 
     // A second ticket + attachment, to prove an attachment id that exists
     // but belongs to a *different* ticket is rejected as not-found here.
-    const anotherOwner = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: ownerRequesterId } },
+    const anotherOwner = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true, NOT: { id: ownerRequesterId } },
     });
     const otherTicket = await prisma.ticket.create({
       data: {

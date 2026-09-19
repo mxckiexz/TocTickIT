@@ -1,19 +1,159 @@
 import express, { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import multer, { MulterError } from "multer";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, unlink } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
+import {
+  AuthedRequest,
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_OPTIONS,
+  createSession,
+  deleteSession,
+  hashPassword,
+  requireAuth,
+  validateNewPassword,
+  verifyPassword,
+} from "./auth.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
 export const app = express();
 
-app.use(cors());
+// credentials: true + an explicit origin (not the previous open cors()) is
+// required for the browser to send/receive the session cookie cross-port in
+// local dev (api-spec.md "Authentication").
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
+app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
+
+// ---------------------------------------------------------------------------
+// Lab 3 — Authentication Foundation (Issue #35)
+// docs/lab-03/api-spec.md "POST /api/auth/login" etc. Not yet wired onto Lab
+// 2's ticket/attachment routes — see auth.ts's requireAuth doc comment for
+// why that's Feature 3's job, not this one's.
+// ---------------------------------------------------------------------------
+
+app.post("/api/auth/login", async (req: Request, res: Response) => {
+  const body = req.body ?? {};
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+
+  const errors: Record<string, string> = {};
+  if (!email) errors.email = "Email is required.";
+  if (!password) errors.password = "Password is required.";
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ errors });
+  }
+
+  try {
+    const prisma = getPrisma();
+
+    // BR-07: an unknown email, a wrong password, and an inactive account all
+    // fall through to the exact same 401 below — never distinguished.
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+    });
+
+    const passwordOk = user ? await verifyPassword(password, user.passwordHash) : false;
+
+    if (!user || !user.isActive || !passwordOk) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const session = await createSession(user.id);
+    res.cookie(SESSION_COOKIE_NAME, session.id, {
+      ...SESSION_COOKIE_OPTIONS,
+      expires: session.expiresAt,
+    });
+
+    res.status(200).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+    });
+  } catch (error) {
+    console.error("Login failed:", error);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+app.post("/api/auth/logout", async (req: Request, res: Response) => {
+  try {
+    const sessionId = req.cookies?.[SESSION_COOKIE_NAME];
+    if (sessionId) {
+      await deleteSession(sessionId);
+    }
+    res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("Logout failed:", error);
+    res.status(500).json({ error: "Logout failed" });
+  }
+});
+
+app.get("/api/auth/me", requireAuth, (req: AuthedRequest, res: Response) => {
+  res.status(200).json(req.user);
+});
+
+app.post("/api/auth/change-password", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const body = req.body ?? {};
+  const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+  const confirmPassword = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+
+  const errors: Record<string, string> = {};
+  if (!currentPassword) errors.currentPassword = "Current password is required.";
+  const newPasswordError = validateNewPassword(newPassword, currentPassword);
+  if (newPasswordError) errors.newPassword = newPasswordError;
+  if (!confirmPassword) {
+    errors.confirmPassword = "Please confirm your new password.";
+  } else if (confirmPassword !== newPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ errors });
+  }
+
+  try {
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+
+    const currentOk = await verifyPassword(currentPassword, user.passwordHash);
+    if (!currentOk) {
+      return res.status(401).json({ error: "Current password is incorrect." });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await hashPassword(newPassword),
+        mustChangePassword: false,
+      },
+    });
+
+    res.status(200).json({
+      id: updated.id,
+      name: updated.name,
+      email: updated.email,
+      role: updated.role,
+      mustChangePassword: updated.mustChangePassword,
+    });
+  } catch (error) {
+    console.error("Password change failed:", error);
+    res.status(500).json({ error: "Password change failed" });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Issue 2 — API health check
@@ -76,14 +216,16 @@ app.get("/api/related-systems", async (_req: Request, res: Response) => {
   }
 });
 
-// Lab 2 stand-in for authentication: the client fetches the active
-// Requesters and lets the user pick which one they are "logged in" as.
+// Lab 2 stand-in for authentication, kept working unmodified until Feature 3
+// removes the client's dev-requester picker (docs/lab-03/specification.md
+// §3.1): same request/response shape as before, now backed by User rows
+// with role REQUESTER instead of the now-migrated-away Requester table.
 app.get("/api/requesters", async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
 
-    const requesters = await prisma.requester.findMany({
-      where: { isActive: true },
+    const requesters = await prisma.user.findMany({
+      where: { role: "REQUESTER", isActive: true },
       select: { id: true, name: true, email: true },
       orderBy: { id: "asc" },
     });
@@ -155,7 +297,7 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
     const prisma = getPrisma();
 
     const [requester, category, relatedSystem] = await Promise.all([
-      prisma.requester.findFirst({ where: { id: requesterId, isActive: true } }),
+      prisma.user.findFirst({ where: { id: requesterId, role: "REQUESTER", isActive: true } }),
       prisma.category.findFirst({ where: { id: categoryId, isActive: true } }),
       prisma.relatedSystem.findFirst({ where: { id: relatedSystemId, isActive: true } }),
     ]);

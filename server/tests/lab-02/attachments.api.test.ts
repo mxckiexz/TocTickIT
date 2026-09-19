@@ -12,11 +12,11 @@ describe("POST /api/tickets/:id/attachments", () => {
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const requester = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true },
+    const requester = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true },
     });
-    const anotherRequester = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: requester.id } },
+    const anotherRequester = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true, NOT: { id: requester.id } },
     });
     const category = await prisma.category.findFirstOrThrow({
       where: { isActive: true },
@@ -160,8 +160,8 @@ describe("POST /api/tickets/:id/attachments", () => {
 
   it("rejects a 6th active attachment on the same ticket", async () => {
     const prisma = getPrisma();
-    const requester = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true },
+    const requester = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true },
     });
     const category = await prisma.category.findFirstOrThrow({
       where: { isActive: true },

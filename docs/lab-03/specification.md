@@ -25,7 +25,10 @@ queue instead of a folder of dev-requester tickets — they need to search it, c
 of it, set their own priority on top of whatever the Requester asked for, and leave two
 kinds of notes: ones the Requester can read (Public Comments) and ones they can't (Internal
 Notes). A Requester can say "this looks fixed to me," but only IT Staff can actually close
-the ticket. Administrators don't touch tickets — they run one simple screen for creating
+the ticket. Administrators don't work tickets — claiming, reassigning, setting priority,
+changing status, and posting comments/notes stay IT Staff actions only — but per the
+handout's own rule that Internal Notes are visible to Administrator too, an Administrator
+can look at any ticket read-only. Mostly, though, they run one simple screen for creating
 accounts, fixing a typo in someone's name or email, turning an account on or off, assigning
 its one role, and resetting a forgotten password. Every one of these rules has to hold at
 the API, not just in what the screen shows, because the API is what a curious or malicious
@@ -68,12 +71,50 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
   blocking them; brute-force mitigation via lockout is deferred past Lab 3.
 - **A delete-user button** — rejected. §4.4's admin rules require "suspension in place of
   deletion" (`isActive=false`); the User Management screen never offers hard delete.
-- **Administrator ticket access** — rejected (resolves handout §4.3's open point: "ผู้ดูแล
-  ระบบไม่จำเป็นต้องดำเนินการกับ Ticket ของเจ้าหน้าที่ IT โดยอัตโนมัติ"). Table 4.3's minimum
-  permitted behavior for Administrator lists only user-management actions; no ticket queue
-  or ticket detail route is added for the `ADMINISTRATOR` role in Lab 3. An Administrator
-  who needs to act on a ticket does so by editing their own account's role, the same way any
-  other role change works — there is no separate "admin override" ticket capability.
+- **Administrator *write* access to tickets** — rejected (resolves handout §4.3's open
+  point: "ผู้ดูแลระบบไม่จำเป็นต้องดำเนินการกับ Ticket ของเจ้าหน้าที่ IT โดยอัตโนมัติ...เว้นแต่
+  แมทริกซ์การตรวจสอบสิทธิ์ที่ได้รับอนุมัติจะอนุญาตไว้อย่างชัดเจน"). Table 4.3's minimum
+  permitted behavior for Administrator lists only user-management actions, and keeping the
+  two roles' write responsibilities separate (IT Staff runs tickets, Administrator runs
+  accounts) avoids scope creep into "admin override" behavior the handout never asks for —
+  so no claim/assign, priority, status, or comment/note *write* route exists for
+  `ADMINISTRATOR`. **Read** access is a different question: the handout's own given rule
+  BR-04 states Internal Notes are visible to Administrator, which is only possible if an
+  Administrator can view a ticket's detail at all. So Administrator gets **read-only** access
+  to the Ticket Queue, Ticket Detail, Public Comments, and Internal Notes (BR-39, §3.4) —
+  this is the one piece of "the approved authorization matrix explicitly permits it" the
+  handout's caveat allows for, and it is the only ticket capability Administrator has.
+
+### 3.4 Authorization Matrix
+
+The full role × action matrix, resolving every place §3.1–§3.3 could otherwise read as
+ambiguous (this is the artifact handout §4.3 asks for):
+
+| Action | Requester | IT Staff | Administrator |
+|---|---|---|---|
+| Login / logout / current-user / change own password | ✅ (self) | ✅ (self) | ✅ (self) |
+| Create a ticket | ✅ (becomes owner-Requester) | ❌ | ❌ |
+| View/search/filter own tickets (My Tickets) | ✅ (own only) | ❌ | ❌ |
+| View a Ticket Detail | ✅ (own only, else `404`) | ✅ (any) | ✅ (any, **read-only**) |
+| Add / soft-remove an attachment | ✅ (own ticket only) | ❌ | ❌ |
+| Post a Public Comment | ✅ (own ticket only) | ✅ (any ticket) | ❌ |
+| Read Public Comments | ✅ (own ticket only) | ✅ (any ticket) | ✅ (any ticket, read-only) |
+| Create an Internal Note | ❌ | ✅ (any ticket) | ❌ |
+| Read Internal Notes | ❌ | ✅ (any ticket) | ✅ (any ticket, read-only — BR-04) |
+| Mark "Problem Appears Resolved" | ✅ (own ticket only) | ❌ | ❌ |
+| View the Ticket Queue | ❌ | ✅ | ✅ (read-only) |
+| Claim / reassign a Ticket Owner | ❌ | ✅ (any ticket, not owner-restricted — BR-18) | ❌ |
+| Set IT Priority | ❌ | ✅ (any ticket) | ❌ |
+| Change ticket status | ❌ | ✅ (any ticket) | ❌ |
+| List assignable (IT Staff) users for the claim/assign control | ❌ | ✅ | ❌ (not needed — Administrator doesn't assign) |
+| List / search / filter users | ❌ | ❌ | ✅ |
+| Create a user | ❌ | ❌ | ✅ |
+| Edit a user (name/email/role/active) | ❌ | ❌ | ✅ |
+| Reset a user's password | ❌ | ❌ | ✅ |
+
+"Read-only" in this table means the corresponding `GET` route is reachable, but every
+`POST`/`PATCH`/`DELETE` under the same feature area returns `403` for an Administrator
+caller exactly as it would for a Requester (AC-20b, AC-28b).
 
 ## 4. Functional Requirements
 
@@ -115,12 +156,13 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
 
 **IT Staff**
 
-- **FR-15** — An IT Staff (or Administrator, for account-management purposes only — see
-  FR-22) user retrieves the shared Ticket Queue with search, filter, sort, and pagination
-  across all tickets.
-- **FR-16** — An IT Staff user opens the Ticket Detail screen for any ticket.
+- **FR-15** — An IT Staff user retrieves the shared Ticket Queue with search, filter, sort,
+  and pagination across all tickets. An Administrator may retrieve the same queue read-only
+  (§3.4's authorization matrix; BR-39).
+- **FR-16** — An IT Staff user opens the Ticket Detail screen for any ticket. An
+  Administrator may open the same screen read-only (BR-39).
 - **FR-17** — An IT Staff user claims an unassigned ticket, or reassigns an assigned
-  ticket's owner to another active IT Staff or Administrator user.
+  ticket's owner to another active IT Staff user.
 - **FR-18** — An IT Staff user sets or changes a ticket's IT Priority, independently of the
   Requester's original Requested Priority.
 - **FR-19** — An IT Staff user transitions a ticket's status according to the approved
@@ -128,6 +170,11 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
 - **FR-20** — An IT Staff user posts a Public Comment on any ticket.
 - **FR-21** — An IT Staff user creates an Internal Note on any ticket, visible only to IT
   Staff and Administrator accounts.
+- **FR-28** — An IT Staff user retrieves the list of active IT Staff users eligible to own a
+  ticket, to populate the claim/assign control (`GET /api/staff/assignable-users`) — this is
+  the answer to "how does IT Staff find who to assign a ticket to," since
+  `GET /api/admin/users` is Administrator-only and returns a broader list than a ticket
+  reassignment needs.
 
 **Administrator (User Management)**
 
@@ -157,7 +204,8 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
 - **BR-04** — Public Comments are visible to Requester, IT Staff, and Administrator.
   Internal Notes are visible only to IT Staff and Administrator.
 - **BR-05** — A Requester may mark a problem as appearing resolved, but cannot set a
-  ticket's status to Resolved or Closed directly; only IT Staff/Administrator can.
+  ticket's status to Resolved or Closed directly; only IT Staff can (Administrator's ticket
+  access is read-only — BR-39).
 
 **Authentication and password management**
 
@@ -184,7 +232,12 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
   resource doesn't exist (or, for a Requester, exists but isn't theirs — see BR-14),
   `400` for invalid input, `409` for a state conflict, `500` for unexpected failures. This
   order is fixed: authentication is checked before authorization, before validation, before
-  the resource lookup that could reveal a 404 vs. 403 distinction.
+  the resource lookup that could reveal a 404 vs. 403 distinction. This ladder governs
+  request handling *once a request reaches route logic*; the Origin allow-list check
+  (api-spec.md's CSRF note) is a separate, earlier gate at the middleware level, run before
+  cookies are even parsed into a session — a mismatched `Origin` is rejected `403` before
+  this ladder starts, so it is not the same `403` this rule is describing and doesn't change
+  the ladder's order for requests that pass it.
 - **BR-14** — For Requester-owned resources (tickets, attachments), a Requester requesting
   another Requester's resource gets `404`, not `403` — this matches Lab 2's existing
   `403` behavior being tightened to avoid confirming the resource exists at all for someone
@@ -201,21 +254,24 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
 **Ticket ownership, priority, and status**
 
 - **BR-17** — A ticket may have at most one primary Ticket Owner, who must be an active
-  `IT_STAFF` or `ADMINISTRATOR` user; a ticket may be unassigned (`ownerId: null`).
+  `IT_STAFF` user (not `ADMINISTRATOR` — see BR-39); a ticket may be unassigned
+  (`ownerId: null`).
 - **BR-18** — Claiming an unassigned ticket sets the caller as its owner. Reassigning an
-  already-assigned ticket to a different active IT Staff/Administrator is allowed by any IT
-  Staff/Administrator, not only the current owner (the queue is shared, per the handout's
-  "ใช้ Ticket Queue ร่วมกัน").
+  already-assigned ticket to a different active IT Staff user is allowed by any IT Staff
+  user, not only the current owner (the queue is shared, per the handout's "ใช้ Ticket Queue
+  ร่วมกัน").
 - **BR-19** — `requestedPriority` is set once, by the Requester, at ticket creation, and is
   never edited afterward (Lab 2 behavior, unchanged).
 - **BR-20** — `itPriority` is copied from `requestedPriority` at ticket creation, then is
-  editable only by IT Staff/Administrator, independently of `requestedPriority`.
+  editable only by IT Staff (not Administrator — read-only, BR-39), independently of
+  `requestedPriority`.
 - **BR-21** — `currentStatus` starts at `NEW` for every newly created ticket.
 - **BR-22** — Only the transitions listed in the status matrix (§7.3) are accepted; any
   other requested transition is rejected with `409 Conflict`, and the current status is
   never changed by a rejected request.
-- **BR-23** — Any active IT Staff or Administrator may transition a ticket's status —
-  transition rights are not restricted to the ticket's current owner.
+- **BR-23** — Any active IT Staff user may transition a ticket's status — transition rights
+  are not restricted to the ticket's current owner, and Administrator cannot transition
+  status at all (read-only — BR-39).
 - **BR-24** — A Requester marking "Problem Appears Resolved" is recorded as
   `requesterMarkedResolvedAt`/`requesterMarkedResolvedById` on the ticket and does not
   change `currentStatus`; it is visible to IT Staff/Administrator as a signal, not an
@@ -262,6 +318,23 @@ features (forced pagination, multi-column sort, multi-filter) on User Management
 - **BR-38** — There is no delete-user endpoint; suspension (`isActive=false`) is the only
   way to remove a user's access, per the handout's explicit requirement.
 
+**Added during review (§3.4's authorization matrix and its consequences)**
+
+- **BR-39** — An Administrator has read-only access to the Ticket Queue, Ticket Detail,
+  Public Comments, and Internal Notes (§3.4) — satisfying BR-04's requirement that
+  Administrator can see Internal Notes, without granting any ticket *write* action. An
+  Administrator calling a ticket write route (claim, assign, set priority, change status,
+  post a comment/note) gets `403`, the same as a Requester would.
+- **BR-40** — `POST /api/tickets/:id/mark-resolved` is rejected `409` if the ticket's
+  `currentStatus` is already `RESOLVED`, `CLOSED`, or `CANCELLED` — the UI hides the button
+  in that state (ui-spec.md §5.2), and the server enforces it independently rather than
+  relying on the UI to hide it (FR-07's principle applied to this action specifically).
+  Calling it again while the ticket is in any *other* status remains idempotent (BR-24) —
+  this rule only blocks the terminal-status case.
+- **BR-41** — `GET /api/staff/assignable-users` (FR-28) returns active `IT_STAFF` users only
+  — not `ADMINISTRATOR` users, since Administrator cannot own a ticket (BR-17) — and is
+  reachable by `IT_STAFF` only; a `REQUESTER` or `ADMINISTRATOR` caller gets `403`.
+
 ## 6. UI Specification Summary
 
 Full detail, states, and screenshots are in [ui-spec.md](ui-spec.md). Summary:
@@ -286,7 +359,10 @@ Full detail, states, and screenshots are in [ui-spec.md](ui-spec.md). Summary:
   Comments.
 - **Administrator User Management** — one screen: searchable/filterable user table, a
   create-user form, and an edit-user panel (role, active status, reset password) — no
-  pagination, no bulk actions, no delete, per §8.5's explicit exclusions.
+  pagination, no bulk actions, no delete, per §8.5's explicit exclusions. Administrator's
+  read-only ticket access (§3.4, BR-39) is an API-level capability only — Lab 3 has no
+  dedicated ticket-viewing UI screen for Administrator, matching §8.5's "keep it simple"
+  instruction and the handout's exclusion of admin dashboards beyond user management.
 
 All screens reuse Lab 2's Zen Green tokens (`--zg-primary-green`, `--zg-secondary-green`,
 `--zg-pale-green`, `--zg-page-bg`, `--zg-text`, `--zg-readonly-bg`, `--zg-error`) and the
@@ -316,7 +392,10 @@ All screens reuse Lab 2's Zen Green tokens (`--zg-primary-green`, `--zg-secondar
 | `requesterMarkedResolvedAt` | **new**, nullable `DateTime` | Set by FR-14/BR-24; never cleared once set (a later Reopened ticket keeps the historical timestamp). |
 | `requesterMarkedResolvedById` | **new**, nullable FK to `User` | Who marked it — always the ticket's own Requester when set. |
 
-`Requester`, `Category`, `RelatedSystem`, and `Attachment` are otherwise unchanged (BR-31).
+`Category`, `RelatedSystem`, and `Attachment` are otherwise unchanged (BR-31). `Requester`
+is **not** unchanged — it is dropped entirely once the migration's contract step runs
+(§7.4 step 4); every reference to it anywhere in the app moves to `User` with
+`role: REQUESTER`.
 
 ### 7.3 Ticket status transition matrix
 
@@ -331,9 +410,9 @@ All screens reuse Lab 2's Zen Green tokens (`--zg-primary-green`, `--zg-secondar
 | REOPENED | — | ✅ | ✅ | ✅ | — | — | ✅ |
 | CANCELLED | — | — | — | — | — | ✅ | — |
 
-All transitions require the caller to be an active IT Staff or Administrator (BR-23); any
-cell not marked ✅ (including a status "transitioning" to itself) is rejected `409` per
-BR-22.
+All transitions require the caller to be an active IT Staff user (BR-23) — Administrator's
+ticket access is read-only (BR-39) and cannot transition status at all. Any cell not marked
+✅ (including a status "transitioning" to itself) is rejected `409` per BR-22.
 
 ### 7.4 Migration from Lab 2 (expand → backfill → contract)
 
@@ -375,17 +454,25 @@ Full request/response detail is in [api-spec.md](api-spec.md). Summary of the su
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `POST /api/auth/change-password` |
-| Requester tickets/attachments | Lab 2's existing routes, all now session-authenticated: `POST /api/tickets`, `GET /api/tickets`, `GET /api/tickets/:id`, `POST /api/tickets/:id/attachments`, `GET /api/tickets/:id/attachments`, `GET /api/tickets/:id/attachments/:attachmentId`, `DELETE /api/tickets/:id/attachments/:attachmentId` |
-| Comments/Notes (shared route, role-gated) | `GET /api/tickets/:id/comments`, `POST /api/tickets/:id/comments`, `GET /api/tickets/:id/notes`, `POST /api/tickets/:id/notes`, `POST /api/tickets/:id/mark-resolved` |
-| IT Staff queue/detail | `GET /api/staff/tickets`, `GET /api/staff/tickets/:id`, `POST /api/staff/tickets/:id/claim`, `POST /api/staff/tickets/:id/assign`, `PATCH /api/staff/tickets/:id/priority`, `PATCH /api/staff/tickets/:id/status` |
+| Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `POST /api/auth/change-password` — the last three work regardless of `mustChangePassword` (see below); only the routes past this table are gated by it. |
+| Requester tickets/attachments | Lab 2's existing routes, all now session-authenticated: `POST /api/tickets`, `GET /api/tickets`, `GET /api/tickets/:id`, `POST /api/tickets/:id/attachments`, `GET /api/tickets/:id/attachments`, `GET /api/tickets/:id/attachments/:attachmentId`, `DELETE /api/tickets/:id/attachments/:attachmentId`. `GET /api/requesters` (Lab 2's dev-selector endpoint) is **removed** in Feature 3, once the client's `DevRequesterPicker` is removed — nothing needs it once identity comes from the session. |
+| Lookup lists | `GET /api/categories`, `GET /api/related-systems` — carried over from Lab 2 unchanged in shape, but now require an authenticated session (any role); Lab 3 has no route that stays open to a fully anonymous caller except `/api/health` and `/api/auth/login`. |
+| Comments/Notes (shared route, role-gated per §3.4) | `GET /api/tickets/:id/comments`, `POST /api/tickets/:id/comments`, `GET /api/tickets/:id/notes`, `POST /api/tickets/:id/notes`, `POST /api/tickets/:id/mark-resolved` |
+| IT Staff queue/detail | `GET /api/staff/tickets`, `GET /api/staff/tickets/:id` — IT Staff and Administrator (read-only for Administrator, BR-39); `POST /api/staff/tickets/:id/claim`, `POST /api/staff/tickets/:id/assign`, `PATCH /api/staff/tickets/:id/priority`, `PATCH /api/staff/tickets/:id/status`, `GET /api/staff/assignable-users` — IT Staff only, Administrator gets `403` on these five. |
 | Administrator users | `GET /api/admin/users`, `POST /api/admin/users`, `PATCH /api/admin/users/:id`, `POST /api/admin/users/:id/reset-password` |
 
 Auth: session cookie (`toktickit_session`), `HttpOnly`, `SameSite=Lax`, `Secure` in
 production, 8-hour fixed expiry (BR-11). CSRF: `SameSite=Lax` plus an `Origin` allow-list
-check on every state-changing request (POST/PATCH/DELETE), since the client and API are
-different ports on the same site in local dev and different origins in any real deployment.
-Every protected endpoint returns `401`/`403`/`400`/`404`/`409`/`500` per BR-13.
+check on every state-changing request (POST/PATCH/DELETE) — this check runs before the
+session cookie is even parsed, so it is not part of BR-13's 401→403→400→404→409 ladder (see
+BR-13's note); it applies since the client and API are different ports on the same site in
+local dev and different origins in any real deployment. Forced password change: every route
+except `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, and
+`POST /api/auth/change-password` itself returns `403`/`PASSWORD_CHANGE_REQUIRED` for a
+caller with `mustChangePassword: true` — `/me` and `/logout` must keep working regardless,
+since the client needs `/me` to *learn* that flag before it can route to Change Password,
+and needs `/logout` to work from that screen too. Every protected endpoint returns
+`401`/`403`/`400`/`404`/`409`/`500` per BR-13.
 
 ## 9. Acceptance Criteria
 
@@ -409,13 +496,22 @@ Every protected endpoint returns `401`/`403`/`400`/`404`/`409`/`500` per BR-13.
 - **AC-06** — Logging out invalidates the session; a request replaying the old session
   cookie afterward gets `401` (BR-10).
 - **AC-07** — `GET /api/auth/me` with no session cookie returns `401`, never a "guest" body.
-- **AC-08** — A password change with an incorrect current password is rejected `400` and
-  does not clear `mustChangePassword`.
+- **AC-08** — A password change with an incorrect current password is rejected `401`
+  (a credential check, not a shape check — matches api-spec.md's
+  `POST /api/auth/change-password`) and does not clear `mustChangePassword`.
 - **AC-09** — A successful password change clears `mustChangePassword` and the user can
   reach the normal application on their next request.
 - **AC-10** — Every Lab 2 Requester flow (create ticket, My Tickets search/filter/sort/
-  page, Ticket Detail, attachment upload/inspect/soft-remove) passes unmodified against the
-  authenticated identity, with zero regressions from Lab 2's own passing test suite.
+  page, Ticket Detail, attachment upload/inspect/soft-remove) keeps its Lab 2 *behavior*
+  once identity comes from the session instead of a client-supplied `requesterId` — this is
+  **not** the same as the test files staying byte-for-byte unmodified. Two categories of
+  test change are required and expected, listed in full in `tests.md`'s "Required Lab 2 test
+  updates" section: (1) server-side ownership-rejection assertions that currently expect
+  `403` for another Requester's ticket must be updated to expect `404` (BR-14 tightens this);
+  (2) client and e2e tests that currently drive the flow through `DevRequesterPicker` must
+  be updated to authenticate via a logged-in session fixture instead, once Feature 3 removes
+  that component. "Zero regressions" means every Lab 2 rule this covers still holds and is
+  still tested — not that no test file's source changes.
 - **AC-11** — A Requester viewing another Requester's ticket ID gets `404` (BR-14), not
   `403` and not the ticket's data.
 - **AC-12** — A Requester can post a Public Comment on their own ticket; it appears
@@ -426,16 +522,20 @@ Every protected endpoint returns `401`/`403`/`400`/`404`/`409`/`500` per BR-13.
   Requesters, correctly filtered/sorted/paginated per the query parameters given.
 - **AC-15** — Claiming an unassigned ticket sets `ownerId` to the caller and is reflected
   immediately in the queue's owner column.
-- **AC-16** — Reassigning an already-owned ticket to another active IT Staff/Administrator
-  succeeds for any IT Staff/Administrator caller, not only the current owner (BR-18).
+- **AC-16** — Reassigning an already-owned ticket to another active IT Staff user succeeds
+  for any IT Staff caller, not only the current owner (BR-18); an Administrator caller gets
+  `403` (BR-39).
 - **AC-17** — Assigning ownership to an inactive user, or to a Requester-role user, is
   rejected `400`.
 - **AC-18** — Setting IT Priority updates `itPriority` without changing
   `requestedPriority`.
 - **AC-19** — A status transition not present in the matrix (§7.3) is rejected `409` and
   leaves `currentStatus` unchanged.
-- **AC-20** — Every accepted status transition in the matrix succeeds for an active IT
-  Staff/Administrator caller and is rejected `403` for a Requester caller.
+- **AC-20a** — Every accepted status transition in the matrix succeeds for an active IT
+  Staff caller and is rejected `403` for a Requester caller.
+- **AC-20b** — Every status-transition attempt by an Administrator caller is rejected `403`
+  — read-only means read-only (BR-39), even though Administrator can reach the ticket's
+  `GET` detail.
 - **AC-21** — An Internal Note created by IT Staff never appears in the Requester's view of
   the ticket, at the API level (not just hidden in the UI).
 - **AC-22** — Creating a user with two roles, zero roles, or an invalid role value is
@@ -449,18 +549,31 @@ Every protected endpoint returns `401`/`403`/`400`/`404`/`409`/`500` per BR-13.
 - **AC-26** — Resetting a user's password sets `mustChangePassword=true`; that user's next
   login is forced through the Change Password screen before reaching the app.
 - **AC-27** — A non-Administrator calling any `/api/admin/*` route gets `403`.
-- **AC-28** — A non-IT-Staff/Administrator calling any `/api/staff/*` route gets `403`.
+- **AC-28a** — A Requester calling `GET /api/staff/tickets` or `GET /api/staff/tickets/:id`
+  gets `403`; an Administrator calling the same two routes gets `200` (read-only, BR-39).
+- **AC-28b** — A Requester *or* Administrator calling any `/api/staff/*` write route (claim,
+  assign, priority, status) or `GET /api/staff/assignable-users` gets `403` — only IT Staff
+  succeeds.
+- **AC-29** — `POST /api/tickets/:id/mark-resolved` on a ticket whose `currentStatus` is
+  `RESOLVED`, `CLOSED`, or `CANCELLED` is rejected `409` (BR-40); calling it on a ticket in
+  any other status remains idempotent `200` (BR-24).
+- **AC-30** — `GET /api/staff/assignable-users` returns only active `IT_STAFF` users (no
+  `ADMINISTRATOR`, no `REQUESTER`), and a `REQUESTER` or `ADMINISTRATOR` caller gets `403`
+  (BR-41).
 
 ## 10. Definition of Done
 
 - [ ] `docs/lab-03/specification.md`, `api-spec.md`, `ui-spec.md`, `tests.md` merged to
-      `lab3-staging` before any other Lab 3 branch's code merges (this branch, #34, is that
-      gate).
+      `lab3-staging` before any other Lab 3 branch's code merges (this branch — GitHub
+      issue #34, branch `feature/1-lab3-engineering-contract` after the 1–8 renumbering, see
+      the branch/issue mapping table below — is that gate).
 - [ ] Every FR/BR/AC above is implemented and covered by at least one automated test listed
       in `tests.md`'s traceability matrix.
 - [ ] `server/tests/lab-03/*` and `client/.../lab-03/*` all pass on `lab3-staging`.
 - [ ] Lab 2's full existing test suite (`server/tests/lab-01`, `lab-02`;
-      `client/tests/lab-01`, `lab-02`) still passes unmodified — zero regressions.
+      `client/tests/lab-01`, `lab-02`; `e2e/lab-01`, `lab-02`) still passes, **with the
+      specific test-file updates documented in `tests.md`'s "Required Lab 2 test updates"
+      section applied** — zero *behavior* regressions, not zero test-file diffs (see AC-10).
 - [ ] Migration verified: `Ticket`/`Attachment`/`Category`/`RelatedSystem` row counts and
       every `Ticket.requesterId` match before/after, on a copy of the Lab 2 database.
 - [ ] `e2e/lab-03/*` passes against a seeded local environment.
@@ -468,8 +581,31 @@ Every protected endpoint returns `401`/`403`/`400`/`404`/`409`/`500` per BR-13.
       `artifacts/lab-03/screenshots/`.
 - [ ] No plaintext password or real secret committed anywhere in the repository.
 - [ ] `docs/lab-03/reviewer.md` and `docs/lab-03/ai-use.md` reflect the actual PRs and
-      prompts used, finalized in the Release Integration issue (#41).
+      prompts used, finalized in the Release Integration issue (issue #41, branch
+      `feature/8-release-integration`).
 - [ ] `lab3-staging` merged to `main` only after every item above is checked.
+
+### 10.1 Branch / issue numbering
+
+GitHub issue numbers (assigned when the issues were filed, continuing the repo's existing
+sequence) and branch names (renumbered 1–8 for readability shortly after) refer to the same
+eight pieces of work:
+
+| Issue | Branch |
+|---|---|
+| #34 | `feature/1-lab3-engineering-contract` (this branch) |
+| #35 | `feature/2-authentication-foundation` |
+| #36 | `feature/3-authorization-requester-regression` |
+| #37 | `feature/4-staff-ticket-queue` |
+| #38 | `feature/5-staff-ticket-detail-workflow` |
+| #39 | `feature/6-admin-user-management` |
+| #40 | `feature/7-e2e-visual-responsive-evidence` |
+| #41 | `feature/8-release-integration` |
+
+Earlier drafts of this document and the per-branch work-log PDFs under
+`artifacts/lab-03/logs/` were written before the branch rename and still say `feature/34-*`
+or `#35`–`#41` as a branch name — this table is the authoritative mapping; those artifacts
+are left as-is (historical record) rather than rewritten.
 
 ## 11. Assumptions and Decisions
 
@@ -486,14 +622,39 @@ Every protected endpoint returns `401`/`403`/`400`/`404`/`409`/`500` per BR-13.
   Requester's ticket ID exists. IT Staff/Administrator, who are allowed to see any ticket,
   keep a plain `404` for truly missing tickets — they never see a `403` for a ticket that
   exists, since nothing is out of their scope.
-- **Administrator has no ticket access in Lab 3** (see §3.3): the handout's role table lists
-  no ticket capability for Administrator, and keeping the two roles' responsibilities
-  separate (IT Staff runs tickets, Administrator runs accounts) avoids scope creep into
-  "admin override" behavior the handout never asks for.
-- **Any IT Staff/Administrator may transition or reassign any ticket** (not just the
-  current owner): matches the handout's "shared queue" framing; restricting transitions to
-  the owner alone would block coverage when someone is out, which nothing in the handout
-  asks for.
+- **Administrator has read-only ticket access in Lab 3, not zero access** (see §3.3, §3.4):
+  an earlier draft of this document said Administrator has *no* ticket access at all, which
+  directly contradicted the handout's own given rule BR-04 ("Internal Notes visible to IT
+  Staff and Administrator") — fixed during review. The chosen resolution is the minimal one
+  that satisfies BR-04: `GET`-only on the queue, ticket detail, comments, and notes; every
+  write action stays IT Staff-only, and keeping the two roles' *write* responsibilities
+  separate (IT Staff runs tickets, Administrator runs accounts) still avoids the "admin
+  override" scope creep the handout never asks for.
+- **Any IT Staff may transition or reassign any ticket** (not just the current owner, and
+  not Administrator at all): matches the handout's "shared queue" framing for IT Staff;
+  restricting transitions to the owner alone would block coverage when someone is out, which
+  nothing in the handout asks for. Administrator was considered for write access too (the
+  handout's "unless the approved matrix explicitly permits" caveat) but rejected in favor of
+  read-only, since nothing in the handout asks for an admin override of IT Staff's queue.
+- **A dedicated `GET /api/staff/assignable-users` endpoint, not `GET /api/admin/users`**:
+  IT Staff needs a list of who it can assign a ticket to, but reusing the Administrator-only
+  user-management endpoint would mean either exposing it to a second role (scope creep on an
+  endpoint meant for account management) or IT Staff fetching Requester accounts it has no
+  use for. A narrow, purpose-built endpoint (active `IT_STAFF` users only) is simpler to
+  reason about and matches the "IT Staff runs tickets, Administrator runs accounts"
+  separation above.
+- **`GET /api/categories` and `GET /api/related-systems` require a session (any role),
+  Lab 2 left them open**: Lab 3's model is "authenticated by default," so these two lookup
+  lists move behind `requireAuth` alongside everything else rather than being a special
+  carve-out; they carry no ownership or role restriction beyond that, since their content
+  (category/system names) isn't sensitive or role-specific.
+- **The Origin allow-list check runs before BR-13's ladder, not as its first rung**: an
+  earlier draft's api-spec.md wording ("403 before any other check") read as contradicting
+  BR-13's stated 401-before-403 order. They don't actually conflict — CSRF/Origin validation
+  happens at the transport/middleware level, before a session cookie is even looked up, so a
+  request that fails it never reaches the point where "is there a session" (401) would be
+  evaluated. BR-13 and api-spec.md's Authentication section were both reworded to state this
+  relationship explicitly instead of leaving it implicit.
 - **Reopened ticket keeps its `requesterMarkedResolvedAt` timestamp**: it's a historical
   fact ("the Requester once said this looked fixed"), not a live flag to clear — IT Staff
   can see it and judge the reopen in context.

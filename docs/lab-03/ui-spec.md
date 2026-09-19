@@ -172,8 +172,9 @@ muted text. Filters collapse into a single "Filters" disclosure button above the
 Same base layout as §5 (ticket fields grouped, attachments), plus:
 
 - **Ownership control**: "Claim this ticket" button when unassigned; when assigned, shows
-  the current owner's name with a "Reassign" action opening a dropdown of active IT
-  Staff/Administrator users.
+  the current owner's name with a "Reassign" action opening a dropdown of active IT Staff
+  users (sourced from `GET /api/staff/assignable-users` — never Administrator, who cannot
+  own a ticket, BR-17).
 - **IT Priority selector**: a `<select>` next to (not replacing) the read-only Requested
   Priority badge — both visible at once so the two are never confused (handout's explicit
   "keep editable vs. read-only fields distinct" rule).
@@ -194,6 +195,14 @@ Same base layout as §5 (ticket fields grouped, attachments), plus:
 Same loading/empty/error/forbidden pattern as §6, applied to a single ticket instead of a
 list; `404` shows "Ticket not found." (matches the API's message directly, as Lab 2's
 `TicketDetail` already does for its own `404`).
+
+**Administrator note**: §6/§7's screens are reachable in the client only from the IT Staff
+navigation destination (App Shell, §3), which Administrator never sees (specification.md
+§3.4). The server-side read access `GET /api/staff/tickets`/`:id` grants an Administrator
+(BR-39) exists so that access is *possible* — satisfying BR-04's requirement that
+Administrator can see Internal Notes — not so Lab 3 ships a second, admin-flavored ticket
+UI; there is no dedicated Administrator ticket screen in this sprint (§3.2's exclusion of
+admin dashboards beyond User Management covers this).
 
 ## 8. Administrator User Management (new — Feature: User Management)
 
@@ -273,7 +282,7 @@ artifacts/lab-03/screenshots/
 ```
 
 matching the required repository structure (handout §12). Visual-inspection checklist
-(verified against the screenshots before Release Integration, #41):
+(verified against the screenshots before Release Integration, issue #41):
 
 - [ ] Every screen uses only the Zen Green tokens in §1 — no stray colors.
 - [ ] Role-scoped navigation never shows a destination the current role can't reach.

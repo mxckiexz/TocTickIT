@@ -16,8 +16,11 @@ replacing Lab 2's open `cors()`).
 
 Every state-changing request (`POST`/`PATCH`/`DELETE`) additionally requires its `Origin`
 header to match the configured client origin — a request with a missing or mismatched
-`Origin` is rejected `403` before any other check, as CSRF defense-in-depth alongside
-`SameSite=Lax`.
+`Origin` is rejected `403` as CSRF defense-in-depth alongside `SameSite=Lax`. This check runs
+as **middleware, before the session cookie is parsed** — i.e. before the point where
+`specification.md`'s BR-13 ladder (401 → 403 role/ownership → 400 → 404 → 409) begins. It is
+not the "403" BR-13 refers to and doesn't reorder that ladder for a request that passes it;
+it is a separate, earlier gate that a forged cross-origin request never gets past.
 
 **Standard auth failure shapes**, used by every protected endpoint unless a route overrides
 one:
@@ -78,10 +81,10 @@ and still returns `200`.
 
 ## `POST /api/auth/change-password`
 
-Requires an authenticated session. This is the **only** authenticated route a user with
-`mustChangePassword: true` may call before that flag is cleared (every other authenticated
-route returns `403` with a dedicated body until the password is changed — see the
-"Forced password change" note below).
+Requires an authenticated session. A user with `mustChangePassword: true` may always call
+this route, plus `GET /api/auth/me` and `POST /api/auth/logout` (see the "Forced password
+change" note below for why those two specifically stay open) — every *other* authenticated
+route returns `403` with a dedicated body until the password is changed.
 
 ### Request body
 
@@ -103,11 +106,16 @@ route returns `403` with a dedicated body until the password is changed — see 
 | `400 Bad Request` | Missing fields, `newPassword` too short, `newPassword === currentPassword`, or `confirmPassword !== newPassword` | `{ "errors": { "<field>": "<message>" } }` |
 | `401 Unauthorized` | `currentPassword` does not verify | `{ "error": "Current password is incorrect." }` — deliberately `401` rather than `400`, since this is a credential check, not a shape check |
 
-**Forced password change**: every other authenticated endpoint, when called by a user with
+**Forced password change**: every authenticated endpoint *other than* `POST /api/auth/login`
+(no session yet to gate), `GET /api/auth/me`, `POST /api/auth/logout`, and
+`POST /api/auth/change-password` itself, when called by a user with
 `mustChangePassword: true`, returns `403` with
 `{ "error": "Password change required.", "code": "PASSWORD_CHANGE_REQUIRED" }` — the
 `code` field lets the client route straight to the Change Password screen instead of a
-generic forbidden page.
+generic forbidden page. `/me` and `/logout` are exempt deliberately: the client calls `/me`
+on load specifically to *learn* whether `mustChangePassword` is set (it can't know to show
+the Change Password screen otherwise), and `/logout` has to work from that screen too, so
+gating either of them would leave the client with no way out.
 
 ---
 
@@ -120,6 +128,18 @@ value is silently ignored (not an error), so an old client wouldn't crash, but i
 effect. Role required: `REQUESTER` for the create/detail/attachment routes below, or
 `IT_STAFF`/`ADMINISTRATOR` reading through the staff-prefixed equivalents further down —
 see BR-14 for the `404`-not-`403` ownership rule.
+
+**`GET /api/requesters` is removed.** It was Lab 2's dev-selector lookup ("which Requester
+am I acting as") and has no purpose once identity comes from the session; it's removed in
+the same change that removes the client's `DevRequesterPicker` component.
+
+### Lookup endpoints (`GET /api/categories`, `GET /api/related-systems`)
+
+Carried over from Lab 2 with the same response shape (`{ id, name }[]`, active rows only).
+The only change: they now require an authenticated session (any role) instead of being
+open — Lab 3's default is "authenticated unless stated otherwise," and `/api/health` plus
+`POST /api/auth/login` are the only routes that stay reachable with no session at all.
+`401 Unauthorized` (standard shape) for no session; no role restriction beyond that.
 
 ## `POST /api/tickets`
 
@@ -216,9 +236,13 @@ Same soft-removal behavior and `reason` body as Lab 2. `401`/`403`/`404` as abov
 
 ## Comments, Notes, and "mark resolved" (new; shared route, role-gated per call)
 
-Reachable by a Requester only for a ticket they own, or by IT Staff/Administrator for any
-ticket — the same handler enforces both, since the visible content differs by role rather
-than the route.
+**Read** (`GET`) is reachable by a Requester only for a ticket they own, or by IT
+Staff/Administrator for any ticket (Administrator's access is read-only per §3.4's
+authorization matrix — BR-39). **Write** (`POST`) is reachable by a Requester (their own
+ticket, comments only) or IT Staff (any ticket, comments and notes) — **never**
+Administrator, on any of the four write/read-write routes below except the `GET`s. The same
+handler enforces both directions, since the visible content differs by role rather than the
+route.
 
 ## `GET /api/tickets/:id/comments`
 
@@ -228,11 +252,14 @@ Public Comments only (never Internal Notes — that's a separate endpoint below)
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | Ticket is visible to the caller (owned, if Requester; any, if IT Staff/Administrator) | `PublicComment[]`, each `{ id, ticketId, authorId, authorName, authorRole, body, createdAt }`, ordered `createdAt asc, id asc` |
+| `200 OK` | Ticket is visible to the caller (owned, if Requester; any, if IT Staff/Administrator — BR-39) | `PublicComment[]`, each `{ id, ticketId, authorId, authorName, authorRole, body, createdAt }`, ordered `createdAt asc, id asc` |
 | `401 Unauthorized` | No session | Standard shape |
 | `404 Not Found` | Ticket doesn't exist, or (Requester caller) isn't theirs | `{ "error": "Ticket not found." }` |
 
 ## `POST /api/tickets/:id/comments`
+
+Requester (own ticket) or IT Staff (any ticket) only — **not** Administrator (BR-39: read-
+only).
 
 ### Request body
 
@@ -251,11 +278,13 @@ Public Comments only (never Internal Notes — that's a separate endpoint below)
 | `201 Created` | Ticket visible to caller, body valid | The created `PublicComment` |
 | `400 Bad Request` | `body` empty/whitespace-only or over 2000 chars | `{ "errors": { "body": "<message>" } }` |
 | `401 Unauthorized` | No session | Standard shape |
+| `403 Forbidden` | Caller role is `ADMINISTRATOR` (BR-39) | Standard shape |
 | `404 Not Found` | Ticket doesn't exist, or (Requester caller) isn't theirs | `{ "error": "Ticket not found." }` |
 
 ## `GET /api/tickets/:id/notes`
 
-Internal Notes — IT Staff/Administrator only (BR-04, BR-29, AC-04/AC-21).
+Internal Notes — IT Staff and Administrator (BR-04, BR-29, AC-04/AC-21); Administrator's
+access here is read-only, same as `GET .../comments`.
 
 ### Responses
 
@@ -268,8 +297,19 @@ Internal Notes — IT Staff/Administrator only (BR-04, BR-29, AC-04/AC-21).
 
 ## `POST /api/tickets/:id/notes`
 
-Same request/validation shape as `POST .../comments` (`body`, same length rule). `403` for
-a Requester caller, same as the `GET` above. `201` returns the created `InternalNote`.
+IT Staff only — **not** Requester (can never see or write notes, BR-29) and **not**
+Administrator (read-only, BR-39). Same request/validation shape as `POST .../comments`
+(`body`, same length rule).
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `201 Created` | Caller is `IT_STAFF`, ticket exists, body valid | The created `InternalNote` |
+| `400 Bad Request` | `body` empty/whitespace-only or over 2000 chars | `{ "errors": { "body": "<message>" } }` |
+| `401 Unauthorized` | No session | Standard shape |
+| `403 Forbidden` | Caller role is `REQUESTER` or `ADMINISTRATOR` | Standard shape |
+| `404 Not Found` | Ticket doesn't exist | `{ "error": "Ticket not found." }` |
 
 ## `POST /api/tickets/:id/mark-resolved`
 
@@ -279,20 +319,30 @@ Requester only, on their own ticket (FR-14, BR-05, BR-24). No request body.
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | Ticket is the caller's | The updated `Ticket`, with `requesterMarkedResolvedAt`/`requesterMarkedResolvedById` set; `currentStatus` is **unchanged** |
+| `200 OK` | Ticket is the caller's, and `currentStatus` is not `RESOLVED`/`CLOSED`/`CANCELLED` | The updated `Ticket`, with `requesterMarkedResolvedAt`/`requesterMarkedResolvedById` set; `currentStatus` is **unchanged** |
 | `401 Unauthorized` | No session | Standard shape |
 | `403 Forbidden` | Caller role is not `REQUESTER` | Standard shape |
 | `404 Not Found` | Ticket doesn't exist or isn't the caller's | `{ "error": "Ticket not found." }` |
+| `409 Conflict` | `currentStatus` is already `RESOLVED`, `CLOSED`, or `CANCELLED` (BR-40) | `{ "error": "This ticket is already <status> and can't be marked resolved." }` |
 
-Calling this again on an already-marked ticket is not an error — it simply overwrites the
-timestamp/author (`200`, idempotent).
+Calling this again on an already-marked ticket that is **not yet** in a terminal status is
+not an error — it simply overwrites the timestamp/author (`200`, idempotent, BR-24). Once
+the ticket reaches a terminal status, further calls are `409` (BR-40) — this is the one case
+that isn't idempotent, since the UI also hides the button at that point (ui-spec.md §5.2)
+and the server enforces the same rule independently.
 
 ---
 
 ## IT Staff endpoints (new)
 
-All require an active session with role `IT_STAFF` or `ADMINISTRATOR`; a `REQUESTER`
-caller gets `403` (AC-28) on every route in this section.
+A `REQUESTER` caller gets `403` on every route in this section (AC-28a/b). Beyond that, this
+section splits in two per §3.4's authorization matrix / BR-39:
+
+- **Read** — `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` — reachable by
+  `IT_STAFF` **or** `ADMINISTRATOR` (Administrator's access is read-only).
+- **Write** — `POST .../claim`, `POST .../assign`, `PATCH .../priority`,
+  `PATCH .../status`, and `GET .../assignable-users` — `IT_STAFF` **only**; an
+  `ADMINISTRATOR` caller gets `403` on all five, the same as a `REQUESTER` would (AC-28b).
 
 ## `GET /api/staff/tickets`
 
@@ -365,14 +415,14 @@ ticket is currently unassigned or already owned by someone else.
 
 | Field | Type | Required | Rule |
 |---|---|---|---|
-| ownerId | integer | yes | must reference an active `IT_STAFF` or `ADMINISTRATOR` user (AC-17) |
+| ownerId | integer | yes | must reference an active `IT_STAFF` user (not `ADMINISTRATOR` — BR-17, AC-17) |
 
 ### Responses
 
 | Status | When | Body |
 |---|---|---|
 | `200 OK` | Ticket and target user both valid | The updated `Ticket` |
-| `400 Bad Request` | `ownerId` missing/not an integer, **or** references a Requester, inactive user, or nonexistent user (AC-17) | `{ "errors": { "ownerId": "<message>" } }` |
+| `400 Bad Request` | `ownerId` missing/not an integer, **or** references a Requester, an Administrator, an inactive user, or a nonexistent user (AC-17) | `{ "errors": { "ownerId": "<message>" } }` |
 | `401 / 403` | As above | Standard shapes |
 | `404 Not Found` | Ticket doesn't exist | `{ "error": "Ticket not found." }` |
 
@@ -418,6 +468,20 @@ ticket is currently unassigned or already owned by someone else.
 | `401 / 403` | As above | Standard shapes |
 | `404 Not Found` | Ticket doesn't exist | `{ "error": "Ticket not found." }` |
 | `409 Conflict` | Value is a valid status but not a legal transition from the ticket's current status (BR-22) | `{ "error": "Cannot transition from <current> to <requested>." }` — `currentStatus` is left unchanged |
+
+## `GET /api/staff/assignable-users`
+
+`IT_STAFF` only (BR-41, FR-28) — populates the claim/assign control's dropdown (ui-spec.md
+§7). Deliberately not `GET /api/admin/users`: that route is Administrator-only and returns
+every role, which is both the wrong permission and more data than a reassignment needs.
+
+### Responses
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | Caller is `IT_STAFF` | `{ id, name }[]` — active `IT_STAFF` users only (not `ADMINISTRATOR`, since Administrator cannot own a ticket — BR-17), ordered by `name asc` |
+| `401 Unauthorized` | No session | Standard shape |
+| `403 Forbidden` | Caller role is `REQUESTER` or `ADMINISTRATOR` | Standard shape |
 
 ---
 

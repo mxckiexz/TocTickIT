@@ -452,22 +452,29 @@ ticket is currently unassigned or already owned by someone else.
 ### Request body
 
 ```json
-{ "currentStatus": "IN_PROGRESS" }
+{ "currentStatus": "RESOLVED", "confirm": true }
 ```
 
 | Field | Type | Required | Rule |
 |---|---|---|---|
 | currentStatus | string | yes | one of the 8 `TicketStatus` values, **and** a legal next state from the ticket's current status per the matrix in `specification.md` §7.3 (BR-22) |
+| confirm | boolean | conditional | required and must be `true` when `currentStatus` is `RESOLVED`, `CLOSED`, `REOPENED`, or `CANCELLED` (specification.md §7.3's confirmation table, BR-42); ignored for every other target value — omitting it there is fine |
 
 ### Responses
 
 | Status | When | Body |
 |---|---|---|
-| `200 OK` | Ticket exists, transition is legal | The updated `Ticket` |
-| `400 Bad Request` | `currentStatus` missing or not a recognized enum value | `{ "errors": { "currentStatus": "<message>" } }` |
+| `200 OK` | Ticket exists, transition is legal, and `confirm` satisfies BR-42 if required | The updated `Ticket` |
+| `400 Bad Request` | `currentStatus` missing or not a recognized enum value, **or** the target requires confirmation and `confirm` is missing/`false` (BR-42) | `{ "errors": { "currentStatus": "<message>" } }` or `{ "errors": { "confirm": "Confirmation is required to set this status." } }` |
 | `401 / 403` | As above | Standard shapes |
 | `404 Not Found` | Ticket doesn't exist | `{ "error": "Ticket not found." }` |
-| `409 Conflict` | Value is a valid status but not a legal transition from the ticket's current status (BR-22) | `{ "error": "Cannot transition from <current> to <requested>." }` — `currentStatus` is left unchanged |
+| `409 Conflict` | `currentStatus` is a valid status and confirmation (if required) was given, but it's not a legal transition from the ticket's current status (BR-22) | `{ "error": "Cannot transition from <current> to <requested>." }` — `currentStatus` is left unchanged |
+
+Check order: shape (`currentStatus` is a recognized enum value) → confirmation, if the
+target requires it (BR-42, `400`) → legality per the §7.3 matrix (BR-22, `409`). A request
+targeting a confirmation-required status with `confirm` missing is `400` even if that
+transition would also have been illegal — the confirmation check runs first, per BR-13's
+400-before-409 order.
 
 ## `GET /api/staff/assignable-users`
 

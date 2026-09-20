@@ -181,7 +181,11 @@ Same base layout as §5 (ticket fields grouped, attachments), plus:
 - **Status control**: a `<select>` populated only with the current status's legal next
   states (per the matrix) plus the current value itself (shown, disabled/no-op) — an
   illegal transition is never even offered, though the API still enforces it independently
-  (BR-22).
+  (BR-22). Selecting `Resolved`, `Closed`, `Reopened`, or `Cancelled` opens an inline
+  confirm/cancel step (same pattern as §5.2's "Problem Appears Resolved" confirmation)
+  before the request is sent with `confirm: true` (BR-42, specification.md §7.3); every
+  other target applies immediately with no confirm step. Cancelling the confirm step leaves
+  the ticket's status untouched and the `<select>` reverts to the current value.
 - **Public Comments**: same component as §5.1, staff can also post.
 - **Internal Notes**: a visually distinct panel — a different background tint
   (`--zg-pale-green` reused but bordered in secondary-green, with a small "Internal — IT

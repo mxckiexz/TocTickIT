@@ -414,6 +414,26 @@ All transitions require the caller to be an active IT Staff user (BR-23) — Adm
 ticket access is read-only (BR-39) and cannot transition status at all. Any cell not marked
 ✅ (including a status "transitioning" to itself) is rejected `409` per BR-22.
 
+**Required confirmation** (the handout's §4.5 "การยืนยันที่จำเป็น" — required for each
+transition, missing from an earlier draft of this table): confirmation is a property of the
+**target** status, not of the specific from→to pair — reaching one of the four statuses
+below always needs it, regardless of which legal source status the transition started from.
+
+| Target status | Confirmation required? | Why |
+|---|---|---|
+| OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER | No | Routine workflow progression; reversible by simply transitioning again |
+| RESOLVED | **Yes** | Tells the Requester their problem is fixed — a significant, Requester-visible claim that shouldn't be a misclick |
+| CLOSED | **Yes** | Formally ends the ticket |
+| REOPENED | **Yes** | Reactivates a ticket previously considered Resolved/Closed/Cancelled — undoing a "done" state deserves the same deliberateness as reaching one |
+| CANCELLED | **Yes** | Ends the ticket without resolving it; there's no undo path back to the original workflow, only Reopened |
+
+- **BR-42** — A status transition whose **target** is `RESOLVED`, `CLOSED`, `REOPENED`, or
+  `CANCELLED` requires the request to include `confirm: true`; omitting it, or sending
+  `confirm: false`, is rejected `400` (a shape/validation failure, checked before the
+  matrix's `409` legality check — BR-13's 400-before-409 order applies here too) and leaves
+  `currentStatus` unchanged. A transition to any other target status ignores `confirm`
+  entirely — sending it or not makes no difference.
+
 ### 7.4 Migration from Lab 2 (expand → backfill → contract)
 
 1. **Expand**: add `User`, `Session`, `PublicComment`, `InternalNote` tables; add nullable
@@ -560,6 +580,10 @@ and needs `/logout` to work from that screen too. Every protected endpoint retur
 - **AC-30** — `GET /api/staff/assignable-users` returns only active `IT_STAFF` users (no
   `ADMINISTRATOR`, no `REQUESTER`), and a `REQUESTER` or `ADMINISTRATOR` caller gets `403`
   (BR-41).
+- **AC-31** — A status transition targeting `RESOLVED`, `CLOSED`, `REOPENED`, or `CANCELLED`
+  without `confirm: true` in the request body is rejected `400` and `currentStatus` is
+  unchanged; the identical transition with `confirm: true` succeeds `200` (BR-42). A
+  transition targeting any other status succeeds regardless of whether `confirm` is present.
 
 ## 10. Definition of Done
 

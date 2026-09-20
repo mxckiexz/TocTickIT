@@ -122,10 +122,14 @@ handout's structure block is treated as illustrative naming, not a literal path.
 | API-31 | AC-17 | `assign` to a Requester-role id, an inactive user id, and a nonexistent id | All `400` | Planned |
 | API-32 | AC-18, BR-20 | `PATCH .../priority` | `200`; `itPriority` changes; `requestedPriority` unchanged | Planned |
 | API-33 | — | `PATCH .../priority` with an invalid value | `400` | Planned |
-| API-34 | AC-20 | Every ✅ transition in the §7.3 matrix, called as IT Staff | All `200`, `currentStatus` updated | Planned |
-| API-35 | AC-19, BR-22 | Every non-✅ cell in the matrix (sampled: same-state, and at least one illegal jump per row) | All `409`, `currentStatus` unchanged | Planned |
-| API-36 | AC-20 | A legal-per-matrix transition, called as Requester | `403` | Planned |
+| API-34 | AC-20a | Every ✅ transition in the §7.3 matrix, called as IT Staff, with `confirm: true` sent on every call (so this row isolates matrix legality from BR-42) | All `200`, `currentStatus` updated | Planned |
+| API-35 | AC-19, BR-22 | Every non-✅ cell in the matrix (sampled: same-state, and at least one illegal jump per row), each with `confirm: true` already sent | All `409`, `currentStatus` unchanged | Planned |
+| API-36 | AC-20a | A legal-per-matrix transition, called as Requester | `403` | Planned |
 | API-37 | — | `GET /api/staff/tickets/:id` response shape | Includes `ticket`, `attachments`, `comments`, `notes` in one payload | Planned |
+| API-57 | AC-31, BR-42 | A legal transition to each of `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`, called with `confirm` omitted, and again with `confirm: false` | Both `400`, `{ "errors": { "confirm": "..." } }`, `currentStatus` unchanged in every case | Planned |
+| API-58 | AC-31, BR-42 | The same four legal transitions as API-57, called with `confirm: true` | All `200`, `currentStatus` updated | Planned |
+| API-59 | BR-42 | A legal transition to a target **not** in the confirmation list (e.g. `NEW` → `IN_PROGRESS`), called with `confirm` omitted | `200` — confirmation is only required for the four listed targets | Planned |
+| API-60 | BR-13, BR-42 | A transition that is both illegal per the matrix **and** missing required confirmation (e.g. `NEW` → `CLOSED`, no `confirm`) | `400`, not `409` — the confirmation check runs before the legality check | Planned |
 | API-38 | — | `GET /api/staff/tickets/:id` for a nonexistent id | `404` | Planned |
 
 ### 2.7 Administrator User Management (`server/tests/lab-03/users-admin.api.test.ts`)
@@ -213,6 +217,7 @@ still passes.
 | UI-11 | User Management | Create form validation, including duplicate-email `409` surfaced under Email field | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
 | UI-12 | User Management | Edit form: self-suspend guard message, last-admin guard message, both rendered at the correct control | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
 | UI-13 | User Management | Reset-password action success message | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
+| UI-14 | Staff Ticket Detail | Selecting `Resolved`/`Closed`/`Reopened`/`Cancelled` opens the confirm/cancel step and sends `confirm: true` only on confirm; selecting any other target sends the request immediately, no confirm step shown; cancelling reverts the `<select>` and sends nothing | Matches `ui-spec.md` §7's status-control bullet (BR-42) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
 
 ## 4. UI style conformance
 
@@ -299,6 +304,7 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 | AC-28b | SEC-02, API-55 |
 | AC-29 | API-52 |
 | AC-30 | API-53 |
+| AC-31 | API-57, API-58, API-59, API-60, UI-14 |
 
 ## 11. Business Rule → Test traceability
 
@@ -344,6 +350,7 @@ Every BR-01–BR-41 from `specification.md` §5 maps to at least one row below.
 | BR-39 | API-54, API-55, API-56 |
 | BR-40 | API-52 |
 | BR-41 | API-53 |
+| BR-42 | API-57, API-58, API-59, API-60, UI-14 |
 
 ## 12. What has actually been run
 

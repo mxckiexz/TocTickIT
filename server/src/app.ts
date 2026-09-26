@@ -10,12 +10,14 @@ import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
 import {
   AuthedRequest,
+  CLIENT_ORIGIN,
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
   createSession,
   deleteSession,
   hashPassword,
   requireAuth,
+  requireSameOrigin,
   validateNewPassword,
   verifyPassword,
 } from "./auth.js";
@@ -27,8 +29,13 @@ export const app = express();
 // credentials: true + an explicit origin (not the previous open cors()) is
 // required for the browser to send/receive the session cookie cross-port in
 // local dev (api-spec.md "Authentication").
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
+// CSRF defense-in-depth (api-spec.md "Authentication"): every POST/PATCH/PUT/
+// DELETE under /api/auth must carry the configured client Origin. Mounted
+// before express.json() and cookieParser() on purpose — the gate runs before
+// the session cookie is even parsed, so it sits ahead of BR-13's 401/403/400
+// ladder rather than inside it.
+app.use("/api/auth", requireSameOrigin);
 app.use(express.json());
 app.use(cookieParser());
 

@@ -132,12 +132,16 @@ export function requirePasswordUpToDate(req: AuthedRequest, res: Response, next:
 }
 
 // api-spec.md's CSRF note: SameSite=Lax plus an Origin allow-list on every
-// state-changing request. Exported here for Feature 3 to apply across every
-// protected route; not yet mounted globally in this branch, since doing so
-// before Feature 3 updates the *client* to send a matching Origin would
-// break Lab 2's still-unmodified fetch calls in tests that construct the
-// Express app directly (no browser Origin header at all).
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
+// state-changing request. Mounted in app.ts on /api/auth/* (login, logout,
+// change-password), *before* the cookie parser, so a forged cross-origin
+// request is rejected before any session is looked up — a missing/mismatched
+// Origin is 403 even with no session at all, not 401 (specification.md BR-13's
+// note). Lab 2's ticket/attachment routes are deliberately not covered yet:
+// Feature 3 extends this to every protected route once it switches them to
+// session identity and the client is guaranteed to send a matching Origin
+// (a browser always does; Lab 2's tests, which build the Express app
+// directly with no browser, don't).
+export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
 
 export function requireSameOrigin(req: Request, res: Response, next: NextFunction) {
   const stateChanging = ["POST", "PATCH", "PUT", "DELETE"].includes(req.method);

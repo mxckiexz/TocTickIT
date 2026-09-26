@@ -1,12 +1,28 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
-import { hashPassword, verifyPassword, validateNewPassword } from "../../src/auth.js";
+import { CLIENT_ORIGIN, hashPassword, verifyPassword, validateNewPassword } from "../../src/auth.js";
 
 const FIXTURE_PASSWORD = "Fixture-Pass1";
 const FIXTURE_EMAIL = "auth-fixture@toktickit.test";
 const INACTIVE_FIXTURE_EMAIL = "auth-fixture-inactive@toktickit.test";
+
+// api-spec.md "Authentication": every POST/PATCH/PUT/DELETE under /api/auth
+// must carry the configured client Origin. A browser attaches it
+// automatically; supertest doesn't, so these helpers add it. The dedicated
+// "Origin gate" describe block at the bottom exercises the missing and
+// mismatched cases directly.
+const post = (url: string) => request(app).post(url).set("Origin", CLIENT_ORIGIN);
+const agentWithOrigin = () => request.agent(app).set("Origin", CLIENT_ORIGIN);
+
+// bcrypt at the mandated cost 12 (BR-06) is deliberately slow — bcryptjs is
+// pure JS — and vitest runs test files in parallel workers that share the
+// CPU. Observed: UNIT-01 below (one hash + two verifies) takes ~1.4s alone
+// but hit 5148ms under CPU pressure and tripped vitest's 5s default. The
+// cost stays at 12 (tests must not weaken BR-06); the time allowance is what
+// gives.
+vi.setConfig({ testTimeout: 30_000 });
 
 // UNIT-01, UNIT-02 — pure-function coverage for the password helpers, no
 // HTTP round trip.
@@ -14,6 +30,8 @@ describe("password helpers (UNIT-01, UNIT-02)", () => {
   it("hashes a password so it verifies against the original but never stores it in the clear", async () => {
     const hash = await hashPassword("correct horse battery staple");
     expect(hash).not.toBe("correct horse battery staple");
+    // BR-06: bcrypt (any $2a/$2b/$2y variant) at cost factor 12.
+    expect(hash).toMatch(/^\$2[aby]\$12\$/);
     expect(await verifyPassword("correct horse battery staple", hash)).toBe(true);
     expect(await verifyPassword("wrong password", hash)).toBe(false);
   });
@@ -69,8 +87,7 @@ describe("POST /api/auth/login", () => {
 
   // API-01 / AC-01
   it("logs in with valid credentials, sets the session cookie, and returns the user's identity", async () => {
-    const response = await request(app)
-      .post("/api/auth/login")
+    const response = await post("/api/auth/login")
       .send({ email: FIXTURE_EMAIL, password: FIXTURE_PASSWORD })
       .expect(200);
 
@@ -93,16 +110,13 @@ describe("POST /api/auth/login", () => {
 
   // API-02 / AC-05 / BR-01 / BR-07 — identical 401 for all three cases.
   it("rejects an unknown email, a wrong password, and an inactive account with the identical response", async () => {
-    const unknown = await request(app)
-      .post("/api/auth/login")
+    const unknown = await post("/api/auth/login")
       .send({ email: "nobody@toktickit.test", password: FIXTURE_PASSWORD })
       .expect(401);
-    const wrongPassword = await request(app)
-      .post("/api/auth/login")
+    const wrongPassword = await post("/api/auth/login")
       .send({ email: FIXTURE_EMAIL, password: "not the password" })
       .expect(401);
-    const inactive = await request(app)
-      .post("/api/auth/login")
+    const inactive = await post("/api/auth/login")
       .send({ email: INACTIVE_FIXTURE_EMAIL, password: FIXTURE_PASSWORD })
       .expect(401);
 
@@ -113,7 +127,7 @@ describe("POST /api/auth/login", () => {
 
   // API-03
   it("rejects a login with missing email/password as a 400 with field errors", async () => {
-    const response = await request(app).post("/api/auth/login").send({}).expect(400);
+    const response = await post("/api/auth/login").send({}).expect(400);
     expect(response.body.errors).toMatchObject({
       email: expect.any(String),
       password: expect.any(String),
@@ -122,7 +136,7 @@ describe("POST /api/auth/login", () => {
 });
 
 describe("GET /api/auth/me", () => {
-  const agent = request.agent(app);
+  const agent = agentWithOrigin();
   let userId: number;
 
   beforeAll(async () => {
@@ -185,7 +199,7 @@ describe("POST /api/auth/logout", () => {
       },
     });
 
-    const agent = request.agent(app);
+    const agent = agentWithOrigin();
     await agent.post("/api/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD }).expect(200);
     await agent.get("/api/auth/me").expect(200);
 
@@ -213,7 +227,7 @@ describe("POST /api/auth/logout", () => {
       },
     });
 
-    const agent = request.agent(app);
+    const agent = agentWithOrigin();
     await agent.post("/api/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD }).expect(200);
     await agent.get("/api/auth/me").expect(200);
 
@@ -250,7 +264,7 @@ describe("POST /api/auth/change-password", () => {
   it("rejects a wrong current password and leaves mustChangePassword untouched", async () => {
     const prisma = getPrisma();
     const user = await makeUser();
-    const agent = request.agent(app);
+    const agent = agentWithOrigin();
     await agent.post("/api/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD }).expect(200);
 
     const response = await agent
@@ -270,7 +284,7 @@ describe("POST /api/auth/change-password", () => {
   it("changes the password, clears mustChangePassword, and the new password logs in next time", async () => {
     const prisma = getPrisma();
     const user = await makeUser();
-    const agent = request.agent(app);
+    const agent = agentWithOrigin();
     await agent.post("/api/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD }).expect(200);
 
     const response = await agent
@@ -280,7 +294,7 @@ describe("POST /api/auth/change-password", () => {
     expect(response.body.mustChangePassword).toBe(false);
 
     await agent.post("/api/auth/logout");
-    await request(app).post("/api/auth/login").send({ email: user.email, password: "BrandNewPass1" }).expect(200);
+    await post("/api/auth/login").send({ email: user.email, password: "BrandNewPass1" }).expect(200);
 
     await prisma.session.deleteMany({ where: { userId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });
@@ -290,7 +304,7 @@ describe("POST /api/auth/change-password", () => {
   it("rejects a new password equal to the current one, and one under 8 characters", async () => {
     const prisma = getPrisma();
     const user = await makeUser();
-    const agent = request.agent(app);
+    const agent = agentWithOrigin();
     await agent.post("/api/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD }).expect(200);
 
     const same = await agent
@@ -312,7 +326,7 @@ describe("POST /api/auth/change-password", () => {
   it("rejects a mismatched confirmation", async () => {
     const prisma = getPrisma();
     const user = await makeUser();
-    const agent = request.agent(app);
+    const agent = agentWithOrigin();
     await agent.post("/api/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD }).expect(200);
 
     const response = await agent
@@ -326,9 +340,98 @@ describe("POST /api/auth/change-password", () => {
   });
 
   it("requires an authenticated session", async () => {
-    await request(app)
-      .post("/api/auth/change-password")
+    await post("/api/auth/change-password")
       .send({ currentPassword: "x", newPassword: "BrandNewPass1", confirmPassword: "BrandNewPass1" })
       .expect(401);
+  });
+});
+
+// SEC-07, scoped to /api/auth/* (api-spec.md "Authentication" CSRF note). The
+// full every-route sweep belongs to Feature 3, once Lab 2's routes sit behind
+// sessions; this covers the state-changing routes this branch introduces.
+describe("Origin gate on state-changing /api/auth routes (SEC-07)", () => {
+  const EMAIL = "origin-gate-fixture@toktickit.test";
+  const FORGED_ORIGINS = ["https://evil.example", `${CLIENT_ORIGIN}.evil.example`, "null"];
+  const STATE_CHANGING = ["/api/auth/login", "/api/auth/logout", "/api/auth/change-password"];
+  let userId: number;
+
+  beforeAll(async () => {
+    const prisma = getPrisma();
+    const passwordHash = await hashPassword(FIXTURE_PASSWORD);
+    const user = await prisma.user.upsert({
+      where: { email: EMAIL },
+      update: { passwordHash, isActive: true, mustChangePassword: false },
+      create: {
+        name: "Origin Gate Fixture",
+        email: EMAIL,
+        role: "REQUESTER",
+        passwordHash,
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+    userId = user.id;
+  });
+
+  afterAll(async () => {
+    const prisma = getPrisma();
+    await prisma.session.deleteMany({ where: { userId } });
+    await prisma.user.deleteMany({ where: { email: EMAIL } });
+  });
+
+  it.each(STATE_CHANGING)("POST %s with no Origin header is rejected 403", async (url) => {
+    const response = await request(app)
+      .post(url)
+      .send({ email: EMAIL, password: FIXTURE_PASSWORD })
+      .expect(403);
+    expect(response.body.error).toBeDefined();
+  });
+
+  it.each(STATE_CHANGING.flatMap((url) => FORGED_ORIGINS.map((origin) => [url, origin] as const)))(
+    "POST %s with mismatched Origin %s is rejected 403",
+    async (url, origin) => {
+      await request(app)
+        .post(url)
+        .set("Origin", origin)
+        .send({ email: EMAIL, password: FIXTURE_PASSWORD })
+        .expect(403);
+    }
+  );
+
+  it("is 403, not 401, even with no session at all — the gate runs before authentication", async () => {
+    const body = { currentPassword: FIXTURE_PASSWORD, newPassword: "BrandNewPass1", confirmPassword: "BrandNewPass1" };
+
+    await request(app).post("/api/auth/change-password").set("Origin", "https://evil.example").send(body).expect(403);
+    // Contrast: the same request with the right Origin gets past the gate and
+    // is then rejected for having no session.
+    await post("/api/auth/change-password").send(body).expect(401);
+  });
+
+  it("a forged logout leaves the victim's session intact", async () => {
+    const agent = agentWithOrigin();
+    await agent.post("/api/auth/login").send({ email: EMAIL, password: FIXTURE_PASSWORD }).expect(200);
+
+    // The victim's browser would attach their cookie to a cross-site POST;
+    // the attacker's page can't control the Origin the browser sends.
+    await agent.post("/api/auth/logout").set("Origin", "https://evil.example").expect(403);
+
+    await agent.get("/api/auth/me").expect(200);
+  });
+
+  it("a matching Origin passes the gate and reaches the route's own validation", async () => {
+    // Empty body -> the login route's own 400, proving 403 was the gate's doing.
+    await post("/api/auth/login").send({}).expect(400);
+  });
+
+  it("does not block the browser's CORS preflight (OPTIONS is not state-changing)", async () => {
+    const response = await request(app)
+      .options("/api/auth/login")
+      .set("Origin", CLIENT_ORIGIN)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "content-type")
+      .expect(204);
+
+    expect(response.headers["access-control-allow-origin"]).toBe(CLIENT_ORIGIN);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
   });
 });

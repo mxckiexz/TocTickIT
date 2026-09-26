@@ -11,8 +11,8 @@ describe("GET /api/tickets", () => {
 
   beforeAll(async () => {
     const prisma = getPrisma();
-    const [requesterA, requesterB] = await prisma.requester.findMany({
-      where: { isActive: true },
+    const [requesterA, requesterB] = await prisma.user.findMany({
+      where: { role: "REQUESTER", isActive: true },
       take: 2,
       orderBy: { id: "asc" },
     });
@@ -31,12 +31,14 @@ describe("GET /api/tickets", () => {
     // run against the same DB could leave it with tickets). This one is
     // created here and nothing ever creates a ticket against it, so the
     // empty-list assertion holds regardless of what else is in the DB.
-    const requesterWithNoTickets = await prisma.requester.upsert({
+    const requesterWithNoTickets = await prisma.user.upsert({
       where: { email: "no-tickets-fixture@toktickit.test" },
       update: { isActive: true },
       create: {
         name: "No Tickets Fixture",
         email: "no-tickets-fixture@toktickit.test",
+        role: "REQUESTER",
+        passwordHash: "test-fixture-hash",
         isActive: true,
       },
     });
@@ -69,9 +71,9 @@ describe("GET /api/tickets", () => {
     await prisma.ticket.deleteMany({
       where: { id: { in: createdTicketIds } },
     });
-    // Tickets first (FK), then the fixture Requester itself — leave nothing
+    // Tickets first (FK), then the fixture User itself — leave nothing
     // behind for this test file to have created.
-    await prisma.requester.delete({ where: { id: requesterWithNoTicketsId } });
+    await prisma.user.delete({ where: { id: requesterWithNoTicketsId } });
   });
 
   it("returns only the selected Requester's own tickets (ownership)", async () => {
@@ -218,12 +220,14 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const requester = await prisma.requester.upsert({
+    const requester = await prisma.user.upsert({
       where: { email: "feature5-fixture@toktickit.test" },
       update: { isActive: true },
       create: {
         name: "Feature 5 Fixture",
         email: "feature5-fixture@toktickit.test",
+        role: "REQUESTER",
+        passwordHash: "test-fixture-hash",
         isActive: true,
       },
     });
@@ -301,7 +305,7 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
     await prisma.ticket.deleteMany({
       where: { id: { in: createdTicketIds } },
     });
-    await prisma.requester.delete({ where: { id: requesterId } });
+    await prisma.user.delete({ where: { id: requesterId } });
   });
 
   function summariesOf(tickets: Array<{ summary: string }>) {

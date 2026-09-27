@@ -12,11 +12,11 @@ describe("GET /api/tickets/:id", () => {
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const owner = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true },
+    const owner = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true },
     });
-    const other = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: owner.id } },
+    const other = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true, NOT: { id: owner.id } },
     });
     const category = await prisma.category.findFirstOrThrow({
       where: { isActive: true },

@@ -18,6 +18,75 @@ export interface Requester {
 
 export type Priority = "LOW" | "MEDIUM" | "HIGH";
 
+// ---------------------------------------------------------------------------
+// Lab 3 — Authentication (api-spec.md "POST /api/auth/login" etc.)
+// ---------------------------------------------------------------------------
+export type Role = "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  mustChangePassword: boolean;
+}
+
+async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const response = await authFetch("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Login failed", response.status, body.errors);
+  }
+  return body;
+}
+
+export async function logout(): Promise<void> {
+  await authFetch("/api/auth/logout", { method: "POST" });
+}
+
+// Returns null for a 401 (no/expired session) instead of throwing — the app
+// shell treats "not logged in" as a normal state to check on mount, not an
+// error (ui-spec.md §3).
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const response = await authFetch("/api/auth/me");
+  if (response.status === 401) return null;
+
+  const body = await response.json();
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Failed to load current user", response.status);
+  }
+  return body;
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<AuthUser> {
+  const response = await authFetch("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+  });
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(body.error ?? "Password change failed", response.status, body.errors);
+  }
+  return body;
+}
+
 export interface Ticket {
   id: number;
   ticketNumber: string;

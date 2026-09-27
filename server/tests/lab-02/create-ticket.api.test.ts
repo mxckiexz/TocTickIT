@@ -15,11 +15,11 @@ describe("POST /api/tickets", () => {
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const activeRequester = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true },
+    const activeRequester = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: true },
     });
-    const inactiveRequester = await prisma.requester.findFirstOrThrow({
-      where: { isActive: false },
+    const inactiveRequester = await prisma.user.findFirstOrThrow({
+      where: { role: "REQUESTER", isActive: false },
     });
     const category = await prisma.category.findFirstOrThrow({
       where: { isActive: true },

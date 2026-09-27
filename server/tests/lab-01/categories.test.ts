@@ -1,12 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
+import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/auth-fixtures.js";
 
+// Lab 3: GET /api/categories now requires an authenticated session (any
+// role) instead of being open (docs/lab-03/api-spec.md "Lookup endpoints").
 describe("GET /api/categories", () => {
-  it("returns the four seeded categories in id order", async () => {
-    const response = await request(app)
-      .get("/api/categories")
-      .expect(200);
+  const email = "categories-fixture@toktickit.test";
+
+  afterAll(async () => {
+    await deleteFixtureUser(email);
+  });
+
+  it("rejects an unauthenticated request", async () => {
+    const response = await request(app).get("/api/categories").expect(401);
+    expect(response.body.error).toBeDefined();
+  });
+
+  it("returns the four seeded categories in id order, for an authenticated session", async () => {
+    await createFixtureUser(email);
+    const agent = await loginAgent(email);
+
+    const response = await agent.get("/api/categories").expect(200);
 
     expect(response.body).toHaveLength(4);
 

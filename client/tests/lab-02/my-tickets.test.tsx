@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
+import { mockLoggedInUser } from "../helpers/auth.js";
 
 const categories = [
   { id: 1, name: "Hardware" },
@@ -11,19 +12,22 @@ const relatedSystems = [
   { id: 1, name: "Email" },
   { id: 2, name: "VPN" },
 ];
-const requesters = [{ id: 1, name: "Jennifer Anderson", email: "jennifer.anderson@toktickit.test" }];
 
 function ticket(overrides: Partial<api.Ticket> = {}): api.Ticket {
   return {
     id: 1,
     ticketNumber: "TKT-2026-000001",
     requesterId: 1,
+    ownerId: null,
     categoryId: 1,
     relatedSystemId: 1,
     summary: "Laptop battery drains quickly",
     description: "Battery drains much faster than usual.",
     requestedPriority: "MEDIUM",
-    currentStatus: "New",
+    itPriority: "MEDIUM",
+    currentStatus: "NEW",
+    requesterMarkedResolvedAt: null,
+    requesterMarkedResolvedById: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
@@ -33,47 +37,30 @@ function ticket(overrides: Partial<api.Ticket> = {}): api.Ticket {
 function mockLookups() {
   vi.spyOn(api, "fetchCategories").mockResolvedValue(categories);
   vi.spyOn(api, "fetchRelatedSystems").mockResolvedValue(relatedSystems);
-  vi.spyOn(api, "fetchRequesters").mockResolvedValue(requesters);
 }
 
+// Lab 3: identity comes from the session (mocked getCurrentUser), not a
+// Development Requester picker — opening My Tickets is just a nav click now.
 async function openMyTickets() {
+  mockLoggedInUser();
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: /My Tickets/i }));
-
-  await screen.findByRole("button", { name: /Continue as this Requester/i });
-  fireEvent.change(screen.getByLabelText(/^Requester/i), { target: { value: "1" } });
-  fireEvent.click(screen.getByRole("button", { name: /Continue as this Requester/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /My Tickets/i }));
 
   await screen.findByRole("heading", { name: /My Tickets/i });
 }
 
 describe("MyTickets", () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
-    localStorage.clear();
   });
 
-  it("does not fetch tickets until My Tickets is opened", () => {
+  it("does not fetch tickets until My Tickets is opened", async () => {
+    mockLoggedInUser();
     const fetchTicketsSpy = vi.spyOn(api, "fetchTickets");
     render(<App />);
 
+    await screen.findByRole("button", { name: /My Tickets/i });
     expect(fetchTicketsSpy).not.toHaveBeenCalled();
-  });
-
-  it("goes through the same Development Requester picker as New Ticket", async () => {
-    mockLookups();
-    vi.spyOn(api, "fetchTickets").mockResolvedValue({
-      tickets: [],
-      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1 },
-    });
-
-    await openMyTickets();
-
-    expect(screen.getByText(/Viewing as/i)).toHaveTextContent("Jennifer Anderson");
   });
 
   it("lists the requester's tickets with a default sort of newest first", async () => {
@@ -88,7 +75,7 @@ describe("MyTickets", () => {
     expect(await screen.findByText("Ticket one")).toBeInTheDocument();
     expect(screen.getByText("Ticket two")).toBeInTheDocument();
     expect(fetchTicketsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ requesterId: 1, sortBy: "createdAt", sortDir: "desc", page: 1 })
+      expect.objectContaining({ sortBy: "createdAt", sortDir: "desc", page: 1 })
     );
   });
 
@@ -153,11 +140,11 @@ describe("MyTickets", () => {
 
     const statusSelect = screen.getByLabelText(/Filter by status/i);
     expect(screen.getByRole("option", { name: "All statuses" })).toBeInTheDocument();
-    fireEvent.change(statusSelect, { target: { value: "New" } });
+    fireEvent.change(statusSelect, { target: { value: "NEW" } });
 
     await waitFor(() =>
       expect(fetchTicketsSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ currentStatus: "New", page: 1 })
+        expect.objectContaining({ currentStatus: "NEW", page: 1 })
       )
     );
   });
@@ -232,23 +219,20 @@ describe("MyTickets", () => {
     );
   });
 
-  it("switches to My Tickets from New Ticket without re-picking the requester", async () => {
+  it("switches to My Tickets from New Ticket without logging in again", async () => {
     mockLookups();
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       tickets: [],
       pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1 },
     });
 
+    mockLoggedInUser();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /New Ticket/i }));
-    await screen.findByRole("button", { name: /Continue as this Requester/i });
-    fireEvent.change(screen.getByLabelText(/^Requester/i), { target: { value: "1" } });
-    fireEvent.click(screen.getByRole("button", { name: /Continue as this Requester/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /New Ticket/i }));
     await screen.findByRole("button", { name: /Submit Ticket/i });
 
     fireEvent.click(screen.getByRole("button", { name: /^My Tickets$/i }));
 
-    expect(await screen.findByText(/Viewing as/i)).toHaveTextContent("Jennifer Anderson");
-    expect(screen.queryByRole("button", { name: /Continue as this Requester/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /My Tickets/i })).toBeInTheDocument();
   });
 });

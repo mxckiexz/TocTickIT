@@ -49,8 +49,12 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  tickets  Ticket[]  @relation("TicketRequester")
-  sessions Session[]
+  tickets                 Ticket[]        @relation("TicketRequester")
+  ownedTickets            Ticket[]        @relation("TicketOwner")
+  requesterResolvedMarks  Ticket[]        @relation("TicketRequesterMarkedResolvedBy")
+  sessions                Session[]
+  publicComments          PublicComment[]
+  internalNotes           InternalNote[]
 }
 
 // Server-side session store backing the toktickit_session cookie (BR-10,
@@ -75,28 +79,87 @@ enum Priority {
   HIGH
 }
 
+// Lab 3 §7.3 / handout §4.5 — the 8 required statuses and their transition
+// matrix (enforced in app.ts, not by the enum itself).
+enum TicketStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
 model Ticket {
-  id                Int      @id @default(autoincrement())
-  ticketNumber      String   @unique
+  id                Int          @id @default(autoincrement())
+  ticketNumber      String       @unique
   requesterId       Int
   categoryId        Int
   relatedSystemId   Int
   summary           String
   description       String
   requestedPriority Priority
-  currentStatus     String   @default("New")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  currentStatus     TicketStatus @default(NEW)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  requester     User          @relation("TicketRequester", fields: [requesterId], references: [id])
-  category      Category      @relation(fields: [categoryId], references: [id])
-  relatedSystem RelatedSystem @relation(fields: [relatedSystemId], references: [id])
-  attachments   Attachment[]
+  // Lab 3 §7.2 additions —
+  // ownerId: the Ticket Owner (BR-17), null = unassigned, must be an active
+  // IT_STAFF user (checked in app.ts; the FK alone can't express "which role").
+  ownerId Int?
+  // itPriority: copied from requestedPriority at creation (BR-20), then
+  // independently editable by IT Staff only.
+  itPriority Priority
+  // requesterMarkedResolvedAt/ById: set by FR-14/BR-24, never cleared once
+  // set (a later Reopened ticket keeps the historical timestamp) and never
+  // itself changes currentStatus.
+  requesterMarkedResolvedAt   DateTime?
+  requesterMarkedResolvedById Int?
+
+  requester              User            @relation("TicketRequester", fields: [requesterId], references: [id])
+  owner                  User?           @relation("TicketOwner", fields: [ownerId], references: [id])
+  requesterMarkedResolvedBy User?        @relation("TicketRequesterMarkedResolvedBy", fields: [requesterMarkedResolvedById], references: [id])
+  category               Category        @relation(fields: [categoryId], references: [id])
+  relatedSystem          RelatedSystem   @relation(fields: [relatedSystemId], references: [id])
+  attachments            Attachment[]
+  publicComments         PublicComment[]
+  internalNotes          InternalNote[]
 
   @@index([requesterId])
   @@index([categoryId])
   @@index([relatedSystemId])
   @@index([createdAt])
+  @@index([ownerId])
+  @@index([currentStatus])
+}
+
+// Append-only (BR-28: no edit/delete route exists for either model).
+model PublicComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+}
+
+model InternalNote {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
 }
 
 model Attachment {

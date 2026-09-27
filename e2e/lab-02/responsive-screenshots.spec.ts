@@ -8,6 +8,12 @@ import path from "node:path";
 // correctness test (no assertions) — it's an artifact-generation script
 // that happens to run through Playwright's test runner so it shares the
 // same webServer/browser setup as the rest of the e2e suite.
+//
+// STALE as of Lab 3 (issue #36): this script drives the removed Development
+// Requester picker, so it no longer runs against the current app. Left as-is
+// (Lab 2's evidence was already captured and submitted) rather than reworked
+// for real login — see e2e/lab-02/requester-ticket-flow.spec.ts for the
+// graded suite's up-to-date login flow.
 
 // Playwright's config sets testDir relative to the repo root and runs with
 // that as cwd, so this resolves to <repo root>/artifacts/lab-02/screenshots.

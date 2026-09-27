@@ -11,6 +11,7 @@ import { getPrisma } from "./prisma.js";
 import {
   AuthedRequest,
   CLIENT_ORIGIN,
+  DUMMY_PASSWORD_HASH,
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
   createSession,
@@ -62,12 +63,15 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     const prisma = getPrisma();
 
     // BR-07: an unknown email, a wrong password, and an inactive account all
-    // fall through to the exact same 401 below — never distinguished.
+    // fall through to the exact same 401 below — never distinguished, in the
+    // response body/status *and* in timing: verifyPassword always runs,
+    // against DUMMY_PASSWORD_HASH when there's no real user/hash, so an
+    // unknown email doesn't skip the one bcrypt compare a known email costs.
     const user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" } },
     });
 
-    const passwordOk = user ? await verifyPassword(password, user.passwordHash) : false;
+    const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
 
     if (!user || !user.isActive || !passwordOk) {
       return res.status(401).json({ error: "Invalid email or password." });

@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
-import { CLIENT_ORIGIN, hashPassword, verifyPassword, validateNewPassword } from "../../src/auth.js";
+import { CLIENT_ORIGIN, DUMMY_PASSWORD_HASH, hashPassword, verifyPassword, validateNewPassword } from "../../src/auth.js";
+import * as auth from "../../src/auth.js";
 
 const FIXTURE_PASSWORD = "Fixture-Pass1";
 const FIXTURE_EMAIL = "auth-fixture@toktickit.test";
@@ -123,6 +124,28 @@ describe("POST /api/auth/login", () => {
     expect(unknown.body).toEqual({ error: "Invalid email or password." });
     expect(wrongPassword.body).toEqual(unknown.body);
     expect(inactive.body).toEqual(unknown.body);
+  });
+
+  // BR-07's "identical" isn't just the response body: an unknown email must
+  // not skip the bcrypt compare a known email pays for, or the two are
+  // distinguishable by timing even with the same status/body. Asserted at
+  // the call-site level (verifyPassword always runs, against the documented
+  // dummy hash for a nonexistent user) rather than by measuring wall-clock
+  // time, which is too noisy to assert on reliably (see the file-level
+  // testTimeout comment above).
+  it("runs the same bcrypt comparison for an unknown email as for a known one (no early return before it)", async () => {
+    const spy = vi.spyOn(auth, "verifyPassword");
+
+    await post("/api/auth/login").send({ email: "nobody@toktickit.test", password: FIXTURE_PASSWORD }).expect(401);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(FIXTURE_PASSWORD, DUMMY_PASSWORD_HASH);
+
+    spy.mockClear();
+    await post("/api/auth/login").send({ email: FIXTURE_EMAIL, password: "not the password" }).expect(401);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith("not the password", expect.stringMatching(/^\$2[aby]\$12\$/));
+
+    spy.mockRestore();
   });
 
   // API-03

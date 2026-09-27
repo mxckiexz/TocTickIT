@@ -35,6 +35,17 @@ export function verifyPassword(password: string, hash: string): Promise<boolean>
   return bcrypt.compare(password, hash);
 }
 
+// BR-07's "identical 401" is about the response *body*, but an unknown email
+// used to skip bcrypt.compare entirely (just `user ? verify(...) : false`),
+// so a known email took one bcrypt compare's worth of time longer than an
+// unknown one — observable in response timing even though the body and
+// status matched. Login now runs verifyPassword() against this fixed,
+// unrelated hash whenever there's no real user/hash to compare against, so
+// every login attempt does exactly one bcrypt compare at the same cost,
+// regardless of whether the email exists. Not a real account's hash — see
+// verifyPassword's call site in app.ts.
+export const DUMMY_PASSWORD_HASH = "$2b$12$jQ7GdgpV1/pmC2b3.imBnu.ROg2P26bKYmLRMFevHxvIhp4jW5n3S";
+
 export async function createSession(userId: number) {
   const prisma = getPrisma();
   return prisma.session.create({

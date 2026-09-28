@@ -185,9 +185,12 @@ app.get("/api/health", (_req: Request, res: Response) => {
 // Issue 4 — Category list
 // api-spec.md "Lookup endpoints": now require an authenticated session (any
 // role) instead of being open — Lab 3's default is "authenticated unless
-// stated otherwise."
+// stated otherwise." requirePasswordUpToDate applies here too: every
+// authenticated route except /api/auth/me, /api/auth/logout, and
+// /api/auth/change-password itself is blocked for a session that still has
+// mustChangePassword set (api-spec.md's "Forced password change" note).
 // ---------------------------------------------------------------------------
-app.get("/api/categories", requireAuth, async (_req: Request, res: Response) => {
+app.get("/api/categories", requireAuth, requirePasswordUpToDate, async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
 
@@ -215,7 +218,7 @@ app.get("/api/categories", requireAuth, async (_req: Request, res: Response) => 
 // ---------------------------------------------------------------------------
 // Feature 3 — lookup lists the ticket-creation form needs
 // ---------------------------------------------------------------------------
-app.get("/api/related-systems", requireAuth, async (_req: Request, res: Response) => {
+app.get("/api/related-systems", requireAuth, requirePasswordUpToDate, async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
 

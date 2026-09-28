@@ -13,18 +13,25 @@ const DEFAULT_PASSWORD = "Fixture-Pass1";
 
 export async function createFixtureUser(
   email: string,
-  overrides: { role?: Role; isActive?: boolean; name?: string; password?: string } = {}
+  overrides: {
+    role?: Role;
+    isActive?: boolean;
+    name?: string;
+    password?: string;
+    mustChangePassword?: boolean;
+  } = {}
 ) {
   const prisma = getPrisma();
   const password = overrides.password ?? DEFAULT_PASSWORD;
   const passwordHash = await hashPassword(password);
+  const mustChangePassword = overrides.mustChangePassword ?? false;
   const user = await prisma.user.upsert({
     where: { email },
     update: {
       passwordHash,
       role: overrides.role ?? "REQUESTER",
       isActive: overrides.isActive ?? true,
-      mustChangePassword: false,
+      mustChangePassword,
     },
     create: {
       name: overrides.name ?? email,
@@ -32,7 +39,7 @@ export async function createFixtureUser(
       role: overrides.role ?? "REQUESTER",
       passwordHash,
       isActive: overrides.isActive ?? true,
-      mustChangePassword: false,
+      mustChangePassword,
     },
   });
   return { user, password };

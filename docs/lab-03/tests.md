@@ -256,7 +256,7 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 | MIG-01 | Row counts before/after migration | `Ticket`, `Attachment`, `Category`, `RelatedSystem` counts identical (§7.4 step 5) | Planned |
 | MIG-02 | Every `Requester` row has a matching `User` row | Same `id`, `name`, `email`, `isActive`; `role: REQUESTER`; `mustChangePassword: true` | Planned |
 | MIG-03 | Every pre-migration `Ticket.requesterId` still resolves to the same person post-migration | FK now points at `User`, value unchanged, no ticket re-owned | Planned |
-| MIG-04 | Every pre-migration `Ticket.currentStatus` (`"New"`) becomes `TicketStatus.NEW`; `itPriority` equals `requestedPriority` for every migrated row | Backfill correct for 100% of existing rows | Planned |
+| MIG-04 | Every pre-migration `Ticket.currentStatus` (`"New"`) becomes `TicketStatus.NEW`; `itPriority` equals `requestedPriority` for every migrated row | Backfill correct for 100% of existing rows | Pass (Feature 3, issue #36) — `server/tests/lab-03/migration.api.test.ts`'s "Feature 2 -> Feature 3 migration" block replays every migration through `20260927120000_lab3_authorization_requester_regression`, exactly like MIG-01–03 do for the auth migration; also confirms existing Ticket/Attachment rows are preserved without drift and the new `ownerId`/`requesterMarkedResolvedAt(ById)` columns stay `null` for pre-existing tickets |
 
 ## 8. Regression tests
 
@@ -394,7 +394,10 @@ Requester Regression:
   `requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate` and reads identity from
   `req.user!.id`, never a client-supplied `requesterId` (SEC-03/API-13); the cross-Requester
   rejection is `404` everywhere (SEC-04, BR-14). The Origin/CSRF gate is now mounted
-  globally, not just on `/api/auth` (SEC-07).
+  globally, not just on `/api/auth` (SEC-07). `GET /api/categories` and
+  `GET /api/related-systems` also gained `requirePasswordUpToDate` (review fix — they had
+  `requireAuth` only, so a session with `mustChangePassword: true` could reach both lookup
+  endpoints directly), with a `403`/`PASSWORD_CHANGE_REQUIRED` regression test on each.
 - New routes: `GET/POST /api/tickets/:id/comments`, `GET/POST /api/tickets/:id/notes`,
   `POST /api/tickets/:id/mark-resolved`, with the role/ownership rules in `api-spec.md`
   ("Comments, Notes, and 'mark resolved'").
@@ -403,14 +406,22 @@ Requester Regression:
   nav; `CreateTicketForm`/`MyTickets`/`TicketDetail` no longer take a `requester` prop or
   send `requesterId` anywhere; `TicketDetail` gained the Public Comments thread and "Problem
   Appears Resolved" button (ui-spec.md §5).
-- Test run on this branch: **server 172/172** (`npx vitest run`, 12 files, includes
-  `comments-notes.api.test.ts`), **client 59/59** (`npx vitest run`, 7 files), both
-  `npx tsc --noEmit` and `npm run build` clean on both packages, and the e2e regression
-  scenario (`e2e/lab-02/requester-ticket-flow.spec.ts`, updated for real login via a
-  dedicated `e2e-requester@toktickit.test` fixture account that `e2e/global-setup.ts`
-  restores before every run) passing against the real dev servers. The full flow (login →
-  create ticket → My Tickets → ticket detail → post a comment → Problem Appears Resolved)
-  was also manually verified in a live browser session against the running app.
+- MIG-04 (review fix): `server/tests/lab-03/migration.api.test.ts` gained a "Feature 2 ->
+  Feature 3 migration" block, replaying every migration through
+  `20260927120000_lab3_authorization_requester_regression` the same way the existing block
+  replays through the auth migration — confirms `currentStatus: "New"` backfills to
+  `TicketStatus.NEW`, `itPriority` is copied exactly from `requestedPriority`, existing
+  Ticket/Attachment rows are otherwise unchanged, and the new nullable ownership/resolution
+  columns stay `null` for pre-existing tickets.
+- Test run on this branch: **server 179/179** (`npx vitest run`, 12 files, includes
+  `comments-notes.api.test.ts` and the new migration block), **client 59/59**
+  (`npx vitest run`, 7 files), both `npx tsc --noEmit` and `npm run build` clean on both
+  packages, and the e2e regression scenario (`e2e/lab-02/requester-ticket-flow.spec.ts`,
+  updated for real login via a dedicated `e2e-requester@toktickit.test` fixture account that
+  `e2e/global-setup.ts` restores before every run) passing against the real dev servers. The
+  full flow (login → create ticket → My Tickets → ticket detail → post a comment → Problem
+  Appears Resolved) was also manually verified in a live browser session against the running
+  app.
 - Not built on this branch (tracked as later features, per `api-spec.md`'s own section
   breaks): `GET/POST /api/staff/*` (IT Staff Ticket Queue/Detail), `GET/POST/PATCH
   /api/admin/*` (Administrator User Management) — the App Shell renders a placeholder panel

@@ -17,6 +17,17 @@ describe("GET /api/categories", () => {
     expect(response.body.error).toBeDefined();
   });
 
+  it("rejects a session that still has the default password (requirePasswordUpToDate)", async () => {
+    const forcedEmail = "categories-must-change-fixture@toktickit.test";
+    await createFixtureUser(forcedEmail, { mustChangePassword: true });
+    const agent = await loginAgent(forcedEmail);
+
+    const response = await agent.get("/api/categories").expect(403);
+    expect(response.body).toMatchObject({ code: "PASSWORD_CHANGE_REQUIRED" });
+
+    await deleteFixtureUser(forcedEmail);
+  });
+
   it("returns the four seeded categories in id order, for an authenticated session", async () => {
     await createFixtureUser(email);
     const agent = await loginAgent(email);

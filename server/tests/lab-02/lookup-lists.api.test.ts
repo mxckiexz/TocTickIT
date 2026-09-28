@@ -19,6 +19,17 @@ describe("GET /api/related-systems", () => {
     expect(response.body.error).toBeDefined();
   });
 
+  it("rejects a session that still has the default password (requirePasswordUpToDate)", async () => {
+    const forcedEmail = "lookup-must-change-fixture@toktickit.test";
+    await createFixtureUser(forcedEmail, { mustChangePassword: true });
+    const agent = await loginAgent(forcedEmail);
+
+    const response = await agent.get("/api/related-systems").expect(403);
+    expect(response.body).toMatchObject({ code: "PASSWORD_CHANGE_REQUIRED" });
+
+    await deleteFixtureUser(forcedEmail);
+  });
+
   it("returns only active related systems in id order, for an authenticated session", async () => {
     await createFixtureUser(email);
     const agent = await loginAgent(email);

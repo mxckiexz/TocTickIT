@@ -2,20 +2,29 @@ import { test, expect } from "@playwright/test";
 
 // Required E2E scenario (labsheet section 9.2): "A Requester creates a
 // Ticket and later finds it in My Tickets." Exercises the real app end to
-// end. Lab 3: the Development Requester picker is gone (removed along with
-// DevRequesterPicker.tsx/RequesterBanner.tsx) — identity now comes from a
-// real login, against the dedicated e2e fixture account that
-// e2e/global-setup.ts restores to a known password before every run.
+// end — Development Requester selection, ticket creation, the generated
+// Ticket Number, then finding and opening that same ticket from My Tickets.
 test("a Requester creates a ticket and later finds it in My Tickets", async ({ page }) => {
   const uniqueSummary = `E2E flow check ${Date.now()}`;
 
   await page.goto("/");
 
-  await page.getByLabel(/^Email/i).fill("e2e-requester@toktickit.test");
-  await page.getByLabel(/^Password/i).fill("E2E-Fixture-Pass1");
-  await page.getByRole("button", { name: /^Log in$/i }).click();
+  // Start from a clean slate so the Development Requester picker always
+  // shows, regardless of what a previous run left in localStorage.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
 
   await page.getByRole("button", { name: "New Ticket" }).click();
+
+  // Development Requester selection (section 8.1) — a testing mechanism,
+  // not real authentication.
+  await expect(page.getByRole("button", { name: /Continue as this Requester/i })).toBeVisible();
+  // Options are rendered as "<name> (<email>)" — match by name substring
+  // rather than the full label, since the email isn't worth hardcoding here.
+  const requesterOption = page.locator("#devRequesterId option", { hasText: "Jennifer Anderson" });
+  const requesterValue = await requesterOption.getAttribute("value");
+  await page.getByLabel(/^Requester/i).selectOption(requesterValue!);
+  await page.getByRole("button", { name: /Continue as this Requester/i }).click();
 
   // Create Ticket (Feature 3) — fill every required field.
   await page.getByLabel(/^Category/i).selectOption({ label: "Hardware" });

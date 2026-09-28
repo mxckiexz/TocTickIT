@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
-import { mockLoggedInUser } from "../helpers/auth.js";
 
 const categories = [
   { id: 1, name: "Hardware" },
@@ -13,21 +12,18 @@ const relatedSystems = [
   { id: 1, name: "Email" },
   { id: 2, name: "VPN" },
 ];
+const requesters = [{ id: 1, name: "Jennifer Anderson", email: "jennifer.anderson@toktickit.test" }];
 
 const listedTicket: api.Ticket = {
   id: 1,
   ticketNumber: "TKT-2026-000001",
   requesterId: 1,
-  ownerId: null,
   categoryId: 2,
   relatedSystemId: 1,
   summary: "Laptop battery drains quickly",
   description: "Battery drains much faster than usual.",
   requestedPriority: "MEDIUM",
-  itPriority: "MEDIUM",
-  currentStatus: "NEW",
-  requesterMarkedResolvedAt: null,
-  requesterMarkedResolvedById: null,
+  currentStatus: "New",
   createdAt: "2026-09-01T10:00:00.000Z",
   updatedAt: "2026-09-01T10:00:00.000Z",
 };
@@ -35,10 +31,9 @@ const listedTicket: api.Ticket = {
 function mockLookups() {
   vi.spyOn(api, "fetchCategories").mockResolvedValue(categories);
   vi.spyOn(api, "fetchRelatedSystems").mockResolvedValue(relatedSystems);
+  vi.spyOn(api, "fetchRequesters").mockResolvedValue(requesters);
 }
 
-// Lab 3: identity comes from the session (mocked getCurrentUser), not a
-// Development Requester picker — opening My Tickets is just a nav click now.
 async function openMyTicketsWithOneTicket() {
   mockLookups();
   vi.spyOn(api, "fetchTickets").mockResolvedValue({
@@ -46,23 +41,24 @@ async function openMyTicketsWithOneTicket() {
     pagination: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
   });
 
-  mockLoggedInUser();
   render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: /My Tickets/i }));
+  fireEvent.click(screen.getByRole("button", { name: /My Tickets/i }));
+
+  await screen.findByRole("button", { name: /Continue as this Requester/i });
+  fireEvent.change(screen.getByLabelText(/^Requester/i), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: /Continue as this Requester/i }));
 
   await screen.findByRole("heading", { name: /My Tickets/i });
 }
 
-// Every test that opens the detail screen needs the comments fetch mocked
-// too (it loads independently of the ticket/attachments, same pattern) —
-// defaults to an empty thread unless a test overrides it.
-function mockComments(comments: api.Comment[] = []) {
-  return vi.spyOn(api, "fetchComments").mockResolvedValue(comments);
-}
-
 describe("TicketDetail", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it("does not fetch a ticket's detail until its row is clicked", async () => {
@@ -76,12 +72,11 @@ describe("TicketDetail", () => {
     await openMyTicketsWithOneTicket();
     const fetchDetailSpy = vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
-    mockComments();
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
 
     expect(await screen.findByRole("heading", { name: "TKT-2026-000001" })).toBeInTheDocument();
-    expect(fetchDetailSpy).toHaveBeenCalledWith(1);
+    expect(fetchDetailSpy).toHaveBeenCalledWith(1, 1);
     expect(screen.getByText("Laptop battery drains quickly")).toBeInTheDocument();
     expect(screen.getByText("Battery drains much faster than usual.")).toBeInTheDocument();
     expect(screen.getByText("Software")).toBeInTheDocument();
@@ -92,7 +87,6 @@ describe("TicketDetail", () => {
   it("shows the ticket's attachments with a link to view/download each one", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     const fetchAttachmentsSpy = vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -109,9 +103,12 @@ describe("TicketDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
     await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
-    expect(fetchAttachmentsSpy).toHaveBeenCalledWith(1);
+    expect(fetchAttachmentsSpy).toHaveBeenCalledWith(1, 1);
     const link = await screen.findByRole("link", { name: "screenshot.png" });
-    expect(link).toHaveAttribute("href", api.ticketAttachmentUrl(1, 10));
+    expect(link).toHaveAttribute(
+      "href",
+      api.ticketAttachmentUrl(1, 10, 1)
+    );
     expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument();
   });
 
@@ -119,7 +116,6 @@ describe("TicketDetail", () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
-    mockComments();
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
     await screen.findByRole("heading", { name: "TKT-2026-000001" });
@@ -130,7 +126,6 @@ describe("TicketDetail", () => {
   it("shows an attachments error without hiding the rest of the ticket's fields", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockRejectedValue(
       new ApiError("You do not have permission to view this ticket's attachments.", 403)
     );
@@ -167,7 +162,6 @@ describe("TicketDetail", () => {
 
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
-    mockComments();
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
     await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
@@ -190,20 +184,20 @@ describe("TicketDetail", () => {
   it("shows an error message when the detail request is rejected (e.g. ownership)", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockRejectedValue(
-      new ApiError("Ticket not found.", 404)
+      new ApiError("You do not have permission to view this ticket.", 403)
     );
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
-    mockComments();
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
 
-    expect(await screen.findByText("Ticket not found.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("You do not have permission to view this ticket.")
+    ).toBeInTheDocument();
   });
 
   it("shows the current attachment count next to the upload control", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -227,7 +221,6 @@ describe("TicketDetail", () => {
   it("uploads a new attachment and refreshes the attachments list", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     const fetchAttachmentsSpy = vi
       .spyOn(api, "fetchTicketAttachments")
       .mockResolvedValueOnce([])
@@ -263,7 +256,7 @@ describe("TicketDetail", () => {
     fireEvent.change(screen.getByLabelText(/Add an attachment/), { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
 
-    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, file));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, 1, file));
     expect(await screen.findByRole("link", { name: "new-file.png" })).toBeInTheDocument();
     expect(fetchAttachmentsSpy).toHaveBeenCalledTimes(2);
   });
@@ -271,7 +264,6 @@ describe("TicketDetail", () => {
   it("shows an error message when the upload is rejected, leaving the existing attachment list unchanged", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     const fetchAttachmentsSpy = vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -311,7 +303,6 @@ describe("TicketDetail", () => {
   it("disables the upload control once the ticket has the maximum of 5 attachments", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue(
       Array.from({ length: 5 }, (_, index) => ({
         id: index + 1,
@@ -337,7 +328,6 @@ describe("TicketDetail", () => {
   it("removes an attachment after confirming in the modal, and refreshes the list", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     const fetchAttachmentsSpy = vi
       .spyOn(api, "fetchTicketAttachments")
       .mockResolvedValueOnce([
@@ -383,7 +373,7 @@ describe("TicketDetail", () => {
     await screen.findByRole("heading", { name: /Remove attachment\?/i });
     fireEvent.click(screen.getByRole("button", { name: "Remove attachment" }));
 
-    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(1, 10, undefined));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(1, 10, 1, undefined));
     // BR-14: a removed attachment stays visible (struck-through, no link),
     // it isn't hidden as if it never existed.
     await waitFor(() =>
@@ -397,7 +387,6 @@ describe("TicketDetail", () => {
   it("sends the optional removal reason typed into the modal", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -432,14 +421,13 @@ describe("TicketDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove attachment" }));
 
     await waitFor(() =>
-      expect(removeSpy).toHaveBeenCalledWith(1, 10, "Uploaded the wrong file")
+      expect(removeSpy).toHaveBeenCalledWith(1, 10, 1, "Uploaded the wrong file")
     );
   });
 
   it("does not remove the attachment when the modal is cancelled", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -470,7 +458,6 @@ describe("TicketDetail", () => {
   it("shows an error message when removal is rejected, leaving the attachment in place", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -484,7 +471,7 @@ describe("TicketDetail", () => {
       },
     ]);
     vi.spyOn(api, "removeAttachment").mockRejectedValue(
-      new ApiError("Ticket not found.", 404)
+      new ApiError("You do not have permission to remove attachments from this ticket.", 403)
     );
 
     fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
@@ -494,14 +481,15 @@ describe("TicketDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove attachment" }));
 
-    expect(await screen.findByText("Ticket not found.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("You do not have permission to remove attachments from this ticket.")
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "screenshot.png" })).toBeInTheDocument();
   });
 
   it("renders a removed attachment as a struck-through row with no download link or Remove button", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -527,7 +515,6 @@ describe("TicketDetail", () => {
   it("does not count a removed attachment toward the 5-attachment limit", async () => {
     await openMyTicketsWithOneTicket();
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-    mockComments();
     vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([
       {
         id: 10,
@@ -556,196 +543,5 @@ describe("TicketDetail", () => {
 
     expect(await screen.findByText(/Add an attachment \(1\/5\)/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Add an attachment/)).not.toBeDisabled();
-  });
-
-  // Lab 3 (ui-spec.md §5.1) — Public Comments thread.
-  describe("Comments", () => {
-    async function openDetail() {
-      await openMyTicketsWithOneTicket();
-      vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(listedTicket);
-      vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
-    }
-
-    it("shows 'No comments yet.' for an empty thread", async () => {
-      await openDetail();
-      mockComments([]);
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      expect(await screen.findByText("No comments yet.")).toBeInTheDocument();
-    });
-
-    it("shows existing comments with author name, role, and body", async () => {
-      await openDetail();
-      // A different name/role than the logged-in Requester shown in the app
-      // header, so these assertions can't accidentally match that instead.
-      mockComments([
-        {
-          id: 1,
-          ticketId: 1,
-          authorId: 2,
-          authorName: "Marcus Chen",
-          authorRole: "IT_STAFF",
-          body: "I tried restarting it already.",
-          createdAt: "2026-09-01T12:00:00.000Z",
-        },
-      ]);
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      expect(await screen.findByText("I tried restarting it already.")).toBeInTheDocument();
-      expect(screen.getByText("Marcus Chen")).toBeInTheDocument();
-      expect(screen.getByText("IT_STAFF")).toBeInTheDocument();
-    });
-
-    it("posts a new comment and appends it to the thread", async () => {
-      await openDetail();
-      mockComments([]);
-      const postSpy = vi.spyOn(api, "postComment").mockResolvedValue({
-        id: 5,
-        ticketId: 1,
-        authorId: 1,
-        authorName: "Jennifer Anderson",
-        authorRole: "REQUESTER",
-        body: "Still happening after a reboot.",
-        createdAt: "2026-09-01T13:00:00.000Z",
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-      await screen.findByText("No comments yet.");
-
-      fireEvent.change(screen.getByLabelText(/Add a comment/i), {
-        target: { value: "Still happening after a reboot." },
-      });
-      fireEvent.click(screen.getByRole("button", { name: /Post comment/i }));
-
-      expect(await screen.findByText("Still happening after a reboot.")).toBeInTheDocument();
-      expect(postSpy).toHaveBeenCalledWith(1, "Still happening after a reboot.");
-      expect(screen.getByLabelText(/Add a comment/i)).toHaveValue("");
-    });
-
-    it("rejects an empty comment client-side without calling the API", async () => {
-      await openDetail();
-      mockComments([]);
-      const postSpy = vi.spyOn(api, "postComment");
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-      await screen.findByText("No comments yet.");
-
-      fireEvent.click(screen.getByRole("button", { name: /Post comment/i }));
-
-      expect(await screen.findByText("Comment cannot be empty.")).toBeInTheDocument();
-      expect(postSpy).not.toHaveBeenCalled();
-    });
-
-    it("shows a post error above the textarea and preserves its content", async () => {
-      await openDetail();
-      mockComments([]);
-      vi.spyOn(api, "postComment").mockRejectedValue(
-        new ApiError("Ticket not found.", 404)
-      );
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-      await screen.findByText("No comments yet.");
-
-      fireEvent.change(screen.getByLabelText(/Add a comment/i), {
-        target: { value: "Trying again." },
-      });
-      fireEvent.click(screen.getByRole("button", { name: /Post comment/i }));
-
-      expect(await screen.findByText("Ticket not found.")).toBeInTheDocument();
-      expect(screen.getByLabelText(/Add a comment/i)).toHaveValue("Trying again.");
-    });
-  });
-
-  // Lab 3 (ui-spec.md §5.2) — "Problem Appears Resolved".
-  describe("Problem Appears Resolved", () => {
-    async function openDetail(ticket: api.Ticket = listedTicket) {
-      await openMyTicketsWithOneTicket();
-      vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(ticket);
-      vi.spyOn(api, "fetchTicketAttachments").mockResolvedValue([]);
-      mockComments([]);
-    }
-
-    it("shows the button, then a confirm step, then the success note", async () => {
-      await openDetail();
-      const resolveSpy = vi.spyOn(api, "markTicketResolved").mockResolvedValue({
-        ...listedTicket,
-        requesterMarkedResolvedAt: "2026-09-02T08:00:00.000Z",
-        requesterMarkedResolvedById: 1,
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      fireEvent.click(screen.getByRole("button", { name: /Problem Appears Resolved/i }));
-      expect(screen.getByRole("button", { name: /Yes, mark resolved/i })).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
-
-      expect(await screen.findByText(/You marked this as resolved on/i)).toBeInTheDocument();
-      expect(resolveSpy).toHaveBeenCalledWith(1);
-      expect(screen.queryByRole("button", { name: /Problem Appears Resolved/i })).not.toBeInTheDocument();
-    });
-
-    it("cancels back to the button without calling the API", async () => {
-      await openDetail();
-      const resolveSpy = vi.spyOn(api, "markTicketResolved");
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      fireEvent.click(screen.getByRole("button", { name: /Problem Appears Resolved/i }));
-      fireEvent.click(screen.getByRole("button", { name: /Cancel/i }));
-
-      expect(screen.getByRole("button", { name: /Problem Appears Resolved/i })).toBeInTheDocument();
-      expect(resolveSpy).not.toHaveBeenCalled();
-    });
-
-    it("shows the already-marked note directly when the ticket was marked earlier", async () => {
-      await openDetail({
-        ...listedTicket,
-        requesterMarkedResolvedAt: "2026-09-01T15:00:00.000Z",
-        requesterMarkedResolvedById: 1,
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      expect(await screen.findByText(/You marked this as resolved on/i)).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /Problem Appears Resolved/i })).not.toBeInTheDocument();
-    });
-
-    it("hides the button entirely once the ticket is in a terminal status", async () => {
-      await openDetail({ ...listedTicket, currentStatus: "CLOSED" });
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      expect(screen.queryByText("Problem Appears Resolved")).not.toBeInTheDocument();
-    });
-
-    it("shows an error and returns to Available when the request fails", async () => {
-      await openDetail();
-      vi.spyOn(api, "markTicketResolved").mockRejectedValue(
-        new ApiError("This ticket is already CLOSED and can't be marked resolved.", 409)
-      );
-
-      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
-      await screen.findByRole("heading", { name: "TKT-2026-000001" });
-
-      fireEvent.click(screen.getByRole("button", { name: /Problem Appears Resolved/i }));
-      fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
-
-      expect(
-        await screen.findByText("This ticket is already CLOSED and can't be marked resolved.")
-      ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Problem Appears Resolved/i })).toBeInTheDocument();
-    });
   });
 });

@@ -6,13 +6,6 @@ import fs from "node:fs";
 // of the graded automated suite). Walks through every interaction state the
 // handout's Part 6/7/8 evidence table asks for and saves a named screenshot
 // for each, under artifacts/lab-02/pdf-evidence/.
-//
-// STALE as of Lab 3 (issue #36): this script drives the removed Development
-// Requester picker and unauthenticated query-param API calls, so it no
-// longer runs against the current app. Left as-is (Lab 2's evidence was
-// already captured and submitted) rather than reworked for real login —
-// see e2e/lab-02/requester-ticket-flow.spec.ts for the graded suite's
-// up-to-date login flow.
 
 const DIR = path.join(process.cwd(), "artifacts", "lab-02", "pdf-evidence");
 fs.mkdirSync(DIR, { recursive: true });

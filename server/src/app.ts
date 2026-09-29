@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { Prisma } from "@prisma/client";
+import { Prisma, Role, TicketStatus } from "@prisma/client";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import multer, { MulterError } from "multer";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
 import {
   AuthedRequest,
+  AuthenticatedUser,
   CLIENT_ORIGIN,
   DUMMY_PASSWORD_HASH,
   SESSION_COOKIE_NAME,
@@ -18,6 +19,8 @@ import {
   deleteSession,
   hashPassword,
   requireAuth,
+  requirePasswordUpToDate,
+  requireRole,
   requireSameOrigin,
   validateNewPassword,
   verifyPassword,
@@ -32,19 +35,21 @@ export const app = express();
 // local dev (api-spec.md "Authentication").
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 // CSRF defense-in-depth (api-spec.md "Authentication"): every POST/PATCH/PUT/
-// DELETE under /api/auth must carry the configured client Origin. Mounted
+// DELETE request, app-wide, must carry the configured client Origin. Mounted
 // before express.json() and cookieParser() on purpose — the gate runs before
 // the session cookie is even parsed, so it sits ahead of BR-13's 401/403/400
-// ladder rather than inside it.
-app.use("/api/auth", requireSameOrigin);
+// ladder rather than inside it. (Feature 2 mounted this on /api/auth only;
+// Feature 3 extends it to every route now that Lab 2's own routes sit behind
+// sessions too.)
+app.use(requireSameOrigin);
 app.use(express.json());
 app.use(cookieParser());
 
 // ---------------------------------------------------------------------------
 // Lab 3 — Authentication Foundation (Issue #35)
-// docs/lab-03/api-spec.md "POST /api/auth/login" etc. Not yet wired onto Lab
-// 2's ticket/attachment routes — see auth.ts's requireAuth doc comment for
-// why that's Feature 3's job, not this one's.
+// docs/lab-03/api-spec.md "POST /api/auth/login" etc. Wired onto every Lab 2
+// ticket/attachment route, plus the new Feature 3 routes below, via
+// requireAuth/requireRole/requirePasswordUpToDate.
 // ---------------------------------------------------------------------------
 
 app.post("/api/auth/login", async (req: Request, res: Response) => {
@@ -178,8 +183,14 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // Issue 4 — Category list
+// api-spec.md "Lookup endpoints": now require an authenticated session (any
+// role) instead of being open — Lab 3's default is "authenticated unless
+// stated otherwise." requirePasswordUpToDate applies here too: every
+// authenticated route except /api/auth/me, /api/auth/logout, and
+// /api/auth/change-password itself is blocked for a session that still has
+// mustChangePassword set (api-spec.md's "Forced password change" note).
 // ---------------------------------------------------------------------------
-app.get("/api/categories", async (_req: Request, res: Response) => {
+app.get("/api/categories", requireAuth, requirePasswordUpToDate, async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
 
@@ -207,7 +218,7 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // Feature 3 — lookup lists the ticket-creation form needs
 // ---------------------------------------------------------------------------
-app.get("/api/related-systems", async (_req: Request, res: Response) => {
+app.get("/api/related-systems", requireAuth, requirePasswordUpToDate, async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
 
@@ -227,29 +238,10 @@ app.get("/api/related-systems", async (_req: Request, res: Response) => {
   }
 });
 
-// Lab 2 stand-in for authentication, kept working unmodified until Feature 3
-// removes the client's dev-requester picker (docs/lab-03/specification.md
-// §3.1): same request/response shape as before, now backed by User rows
-// with role REQUESTER instead of the now-migrated-away Requester table.
-app.get("/api/requesters", async (_req: Request, res: Response) => {
-  try {
-    const prisma = getPrisma();
-
-    const requesters = await prisma.user.findMany({
-      where: { role: "REQUESTER", isActive: true },
-      select: { id: true, name: true, email: true },
-      orderBy: { id: "asc" },
-    });
-
-    res.status(200).json(requesters);
-  } catch (error) {
-    console.error("Failed to retrieve requesters:", error);
-
-    res.status(500).json({
-      error: "Failed to retrieve requesters",
-    });
-  }
-});
+// GET /api/requesters is removed (api-spec.md): it was Lab 2's dev-selector
+// lookup ("which Requester am I acting as"), which no longer has a purpose
+// now that identity comes from the session — removed in the same change
+// that removes the client's DevRequesterPicker component.
 
 // ---------------------------------------------------------------------------
 // Feature 1 — Create an IT support ticket (POST /api/tickets)
@@ -263,18 +255,19 @@ const DESCRIPTION_MAX_LENGTH = 2000;
 // inserting a second row.
 const DUPLICATE_SUBMISSION_WINDOW_MS = 10_000;
 
-app.post("/api/tickets", async (req: Request, res: Response) => {
+app.post("/api/tickets", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
   const body = req.body ?? {};
-  const { requesterId, categoryId, relatedSystemId, requestedPriority } = body;
+  // FR-08/BR-03: identity comes from the session, never the client. A
+  // requesterId in the body (an old client, or a spoof attempt) is silently
+  // ignored — not an error — per api-spec.md.
+  const requesterId = req.user!.id;
+  const { categoryId, relatedSystemId, requestedPriority } = body;
 
   const errors: Record<string, string> = {};
 
   // Ids are positive (autoincrement starts at 1) — 0 is what an empty <select>
   // coerces to via Number(""), and it's still a valid integer, so it must be
   // rejected explicitly rather than just checked with Number.isInteger.
-  if (!Number.isInteger(requesterId) || requesterId <= 0) {
-    errors.requesterId = "Requester is required.";
-  }
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
     errors.categoryId = "Category is required.";
   }
@@ -307,13 +300,13 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
 
-    const [requester, category, relatedSystem] = await Promise.all([
-      prisma.user.findFirst({ where: { id: requesterId, role: "REQUESTER", isActive: true } }),
+    // No need to re-check the Requester here: requireAuth already loaded an
+    // active User for this session, and requireRole confirmed its role.
+    const [category, relatedSystem] = await Promise.all([
       prisma.category.findFirst({ where: { id: categoryId, isActive: true } }),
       prisma.relatedSystem.findFirst({ where: { id: relatedSystemId, isActive: true } }),
     ]);
 
-    if (!requester) errors.requesterId = "Selected Requester is not valid or is no longer active.";
     if (!category) errors.categoryId = "Selected Category is not valid or is no longer active.";
     if (!relatedSystem) errors.relatedSystemId = "Selected Related System is not valid or is no longer active.";
 
@@ -354,6 +347,9 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
           summary,
           description,
           requestedPriority,
+          // BR-20: itPriority is copied from requestedPriority at creation,
+          // then independently editable by IT Staff only.
+          itPriority: requestedPriority,
         },
       });
 
@@ -383,12 +379,11 @@ const DEFAULT_SORT_BY: TicketSortField = "createdAt";
 const DEFAULT_SORT_DIR = "desc";
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
+const TICKET_STATUSES = Object.values(TicketStatus);
 
-app.get("/api/tickets", async (req: Request, res: Response) => {
-  const requesterId = Number(req.query.requesterId);
-  if (!Number.isInteger(requesterId) || requesterId <= 0) {
-    return res.status(400).json({ error: "requesterId is required." });
-  }
+app.get("/api/tickets", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
+  // FR-08/BR-03: scoped to the session's own identity, not a query param.
+  const requesterId = req.user!.id;
 
   const where: Record<string, unknown> = { requesterId };
 
@@ -427,11 +422,12 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
   }
 
   if (req.query.currentStatus !== undefined) {
-    const currentStatus = typeof req.query.currentStatus === "string" ? req.query.currentStatus.trim() : "";
-    if (!currentStatus) {
-      return res.status(400).json({ error: "currentStatus, if provided, cannot be empty." });
+    if (!TICKET_STATUSES.includes(req.query.currentStatus as TicketStatus)) {
+      return res.status(400).json({
+        error: `currentStatus must be one of: ${TICKET_STATUSES.join(", ")}.`,
+      });
     }
-    where.currentStatus = currentStatus;
+    where.currentStatus = req.query.currentStatus;
   }
 
   const sortByParam = req.query.sortBy;
@@ -516,30 +512,23 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
 // Attachments on the detail screen are Feature 7 — this returns the ticket's
 // own fields only.
 // ---------------------------------------------------------------------------
-app.get("/api/tickets/:id", async (req: Request, res: Response) => {
+app.get("/api/tickets/:id", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
   const ticketId = Number(req.params.id);
-  const requesterId = Number(req.query.requesterId);
+  const requesterId = req.user!.id;
 
   if (!Number.isInteger(ticketId) || ticketId <= 0) {
     return res.status(400).json({ error: "Invalid ticket id." });
-  }
-  if (!Number.isInteger(requesterId) || requesterId <= 0) {
-    return res.status(400).json({ error: "requesterId is required." });
   }
 
   try {
     const prisma = getPrisma();
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    // BR-14: a ticket that doesn't exist, and one that exists but belongs to
+    // a different Requester, both 404 — a Requester can't tell the two apart
+    // (tightened from Lab 2's 403, which confirmed the ticket existed).
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId } });
     if (!ticket) {
       return res.status(404).json({ error: "Ticket not found." });
-    }
-    // Same ownership rule as attachment upload (BR-07): only the owning
-    // Requester may view the ticket's detail.
-    if (ticket.requesterId !== requesterId) {
-      return res.status(403).json({
-        error: "You do not have permission to view this ticket.",
-      });
     }
 
     res.status(200).json(ticket);
@@ -586,6 +575,9 @@ const upload = multer({
 
 app.post(
   "/api/tickets/:id/attachments",
+  requireAuth,
+  requireRole("REQUESTER"),
+  requirePasswordUpToDate,
   (req: Request, res: Response, next) => {
     upload.single("file")(req, res, (error: unknown) => {
       if (error instanceof MulterError && error.code === "LIMIT_FILE_SIZE") {
@@ -599,19 +591,16 @@ app.post(
       next();
     });
   },
-  async (req: Request, res: Response) => {
+  async (req: AuthedRequest, res: Response) => {
     const ticketId = Number(req.params.id);
-    // multer places non-file multipart fields on req.body alongside req.file.
-    const requesterId = Number(req.body.requesterId);
+    // requesterId is no longer a form field (FR-08/BR-03) — identity comes
+    // from the session, which requireAuth already attached.
+    const requesterId = req.user!.id;
     const file = req.file;
 
     if (!Number.isInteger(ticketId)) {
       if (file) unlink(file.path, () => {});
       return res.status(400).json({ error: "Invalid ticket id." });
-    }
-    if (!Number.isInteger(requesterId) || requesterId <= 0) {
-      if (file) unlink(file.path, () => {});
-      return res.status(400).json({ error: "Requester is required." });
     }
     if (!file) {
       return res.status(400).json({ error: "A file is required." });
@@ -626,20 +615,14 @@ app.post(
     try {
       const prisma = getPrisma();
 
-      const ticket = await prisma.ticket.findUnique({
-        where: { id: ticketId },
+      // BR-14: a nonexistent ticket and one that isn't the caller's both 404
+      // — same reasoning as GET /api/tickets/:id.
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: ticketId, requesterId },
       });
       if (!ticket) {
         unlink(file.path, () => {});
         return res.status(404).json({ error: "Ticket not found." });
-      }
-      // Ownership check: only the Requester who owns the ticket may add
-      // attachments to it.
-      if (ticket.requesterId !== requesterId) {
-        unlink(file.path, () => {});
-        return res.status(403).json({
-          error: "You do not have permission to add attachments to this ticket.",
-        });
       }
 
       const activeAttachmentCount = await prisma.attachment.count({
@@ -676,28 +659,21 @@ app.post(
 // Same ownership rule as the rest of Feature 6/BR-07: only the Requester who
 // owns the ticket may see or fetch its attachments (BR-12).
 // ---------------------------------------------------------------------------
-app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
+app.get("/api/tickets/:id/attachments", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
   const ticketId = Number(req.params.id);
-  const requesterId = Number(req.query.requesterId);
+  const requesterId = req.user!.id;
 
   if (!Number.isInteger(ticketId) || ticketId <= 0) {
     return res.status(400).json({ error: "Invalid ticket id." });
-  }
-  if (!Number.isInteger(requesterId) || requesterId <= 0) {
-    return res.status(400).json({ error: "requesterId is required." });
   }
 
   try {
     const prisma = getPrisma();
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    // BR-14: 404, not 403, for a ticket that isn't the caller's.
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId } });
     if (!ticket) {
       return res.status(404).json({ error: "Ticket not found." });
-    }
-    if (ticket.requesterId !== requesterId) {
-      return res.status(403).json({
-        error: "You do not have permission to view this ticket's attachments.",
-      });
     }
 
     const attachments = await prisma.attachment.findMany({
@@ -732,10 +708,10 @@ app.get("/api/tickets/:id/attachments", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: Response) => {
+app.get("/api/tickets/:id/attachments/:attachmentId", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
   const ticketId = Number(req.params.id);
   const attachmentId = Number(req.params.attachmentId);
-  const requesterId = Number(req.query.requesterId);
+  const requesterId = req.user!.id;
 
   if (!Number.isInteger(ticketId) || ticketId <= 0) {
     return res.status(400).json({ error: "Invalid ticket id." });
@@ -743,21 +719,14 @@ app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: 
   if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
     return res.status(400).json({ error: "Invalid attachment id." });
   }
-  if (!Number.isInteger(requesterId) || requesterId <= 0) {
-    return res.status(400).json({ error: "requesterId is required." });
-  }
 
   try {
     const prisma = getPrisma();
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    // BR-14: 404, not 403, for a ticket that isn't the caller's.
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId } });
     if (!ticket) {
       return res.status(404).json({ error: "Ticket not found." });
-    }
-    if (ticket.requesterId !== requesterId) {
-      return res.status(403).json({
-        error: "You do not have permission to view this ticket's attachments.",
-      });
     }
 
     // Scoped to this ticketId too, not just id — an attachment id that
@@ -809,19 +778,16 @@ app.get("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: 
 // deleted from disk, the download endpoint 404s for it, and the upload
 // endpoint's active-count check treats it as gone.
 // ---------------------------------------------------------------------------
-app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, res: Response) => {
+app.delete("/api/tickets/:id/attachments/:attachmentId", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
   const ticketId = Number(req.params.id);
   const attachmentId = Number(req.params.attachmentId);
-  const requesterId = Number(req.query.requesterId);
+  const requesterId = req.user!.id;
 
   if (!Number.isInteger(ticketId) || ticketId <= 0) {
     return res.status(400).json({ error: "Invalid ticket id." });
   }
   if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
     return res.status(400).json({ error: "Invalid attachment id." });
-  }
-  if (!Number.isInteger(requesterId) || requesterId <= 0) {
-    return res.status(400).json({ error: "requesterId is required." });
   }
 
   // Removal reason (handout section 4.5): optional free text, sent as a
@@ -840,14 +806,10 @@ app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, re
   try {
     const prisma = getPrisma();
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    // BR-14: 404, not 403, for a ticket that isn't the caller's.
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId } });
     if (!ticket) {
       return res.status(404).json({ error: "Ticket not found." });
-    }
-    if (ticket.requesterId !== requesterId) {
-      return res.status(403).json({
-        error: "You do not have permission to remove attachments from this ticket.",
-      });
     }
 
     // Scoped to ticketId and removedAt: null — an attachment id that's
@@ -888,5 +850,253 @@ app.delete("/api/tickets/:id/attachments/:attachmentId", async (req: Request, re
     res.status(500).json({ error: "Failed to remove attachment" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Feature 3 — Public Comments, Internal Notes, and "Problem Appears Resolved"
+// (docs/lab-03/api-spec.md "Comments, Notes, and 'mark resolved'")
+//
+// Read (GET) is reachable by a Requester only for a ticket they own, or by
+// IT Staff/Administrator for any ticket (BR-39). Write (POST) is reachable
+// by a Requester (their own ticket, comments only) or IT Staff (any ticket,
+// comments and notes) — never Administrator, on any write route here.
+// ---------------------------------------------------------------------------
+const COMMENT_BODY_MAX_LENGTH = 2000;
+
+function validateCommentBody(rawBody: unknown): { body: string; error?: undefined } | { error: string } {
+  const body = typeof rawBody === "string" ? rawBody.trim() : "";
+  if (!body) return { error: "Body is required." };
+  if (body.length > COMMENT_BODY_MAX_LENGTH) {
+    return { error: `Body must be ${COMMENT_BODY_MAX_LENGTH} characters or fewer.` };
+  }
+  return { body };
+}
+
+function serializeAuthoredEntry(entry: {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  body: string;
+  createdAt: Date;
+  author: { name: string; role: Role };
+}) {
+  return {
+    id: entry.id,
+    ticketId: entry.ticketId,
+    authorId: entry.authorId,
+    authorName: entry.author.name,
+    authorRole: entry.author.role,
+    body: entry.body,
+    createdAt: entry.createdAt,
+  };
+}
+
+// A Requester sees only their own ticket; IT Staff/Administrator see any
+// ticket (BR-39) — same visibility rule the staff detail screen will use.
+async function findVisibleTicket(ticketId: number, user: AuthenticatedUser) {
+  const prisma = getPrisma();
+  if (user.role === "REQUESTER") {
+    return prisma.ticket.findFirst({ where: { id: ticketId, requesterId: user.id } });
+  }
+  return prisma.ticket.findUnique({ where: { id: ticketId } });
+}
+
+app.get("/api/tickets/:id/comments", requireAuth, requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
+  const ticketId = Number(req.params.id);
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return res.status(400).json({ error: "Invalid ticket id." });
+  }
+
+  try {
+    // BR-14: not the caller's ticket looks the same as one that doesn't
+    // exist — applies to a Requester caller only; IT Staff/Administrator
+    // may read any ticket's comments (BR-39).
+    const ticket = await findVisibleTicket(ticketId, req.user!);
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+
+    const prisma = getPrisma();
+    const comments = await prisma.publicComment.findMany({
+      where: { ticketId },
+      include: { author: { select: { name: true, role: true } } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+
+    res.status(200).json(comments.map(serializeAuthoredEntry));
+  } catch (error) {
+    console.error("Failed to retrieve comments:", error);
+
+    res.status(500).json({ error: "Failed to retrieve comments" });
+  }
+});
+
+app.post(
+  "/api/tickets/:id/comments",
+  requireAuth,
+  // BR-39: Administrator is read-only here — a Requester (own ticket) or IT
+  // Staff (any ticket) may post; Administrator gets 403 before the ticket is
+  // even looked up.
+  requireRole("REQUESTER", "IT_STAFF"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    // BR-25/BR-26, checked before the ticket lookup per BR-13's
+    // 400-before-404 order.
+    const validated = validateCommentBody(req.body?.body);
+    if (validated.error !== undefined) {
+      return res.status(400).json({ errors: { body: validated.error } });
+    }
+
+    try {
+      const ticket = await findVisibleTicket(ticketId, req.user!);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const prisma = getPrisma();
+      const comment = await prisma.publicComment.create({
+        data: { ticketId, authorId: req.user!.id, body: validated.body },
+        include: { author: { select: { name: true, role: true } } },
+      });
+
+      res.status(201).json(serializeAuthoredEntry(comment));
+    } catch (error) {
+      console.error("Failed to create comment:", error);
+
+      res.status(500).json({ error: "Failed to create comment" });
+    }
+  }
+);
+
+app.get(
+  "/api/tickets/:id/notes",
+  requireAuth,
+  // AC-04/BR-29: a Requester is rejected with 403 without the ticket ever
+  // being looked up — so it can't be told apart from "ticket has no notes"
+  // or "not your ticket" by response shape.
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    try {
+      const prisma = getPrisma();
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const notes = await prisma.internalNote.findMany({
+        where: { ticketId },
+        include: { author: { select: { name: true, role: true } } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      });
+
+      res.status(200).json(notes.map(serializeAuthoredEntry));
+    } catch (error) {
+      console.error("Failed to retrieve notes:", error);
+
+      res.status(500).json({ error: "Failed to retrieve notes" });
+    }
+  }
+);
+
+app.post(
+  "/api/tickets/:id/notes",
+  requireAuth,
+  // BR-29/BR-39: IT Staff only — Requester never sees/writes notes,
+  // Administrator is read-only.
+  requireRole("IT_STAFF"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    const validated = validateCommentBody(req.body?.body);
+    if (validated.error !== undefined) {
+      return res.status(400).json({ errors: { body: validated.error } });
+    }
+
+    try {
+      const prisma = getPrisma();
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const note = await prisma.internalNote.create({
+        data: { ticketId, authorId: req.user!.id, body: validated.body },
+        include: { author: { select: { name: true, role: true } } },
+      });
+
+      res.status(201).json(serializeAuthoredEntry(note));
+    } catch (error) {
+      console.error("Failed to create note:", error);
+
+      res.status(500).json({ error: "Failed to create note" });
+    }
+  }
+);
+
+// BR-40: once a ticket has reached one of these terminal-for-this-purpose
+// statuses, the Requester can no longer flag it as resolved themselves.
+const RESOLVE_BLOCKED_STATUSES: TicketStatus[] = ["RESOLVED", "CLOSED", "CANCELLED"];
+
+app.post(
+  "/api/tickets/:id/mark-resolved",
+  requireAuth,
+  requireRole("REQUESTER"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    const requesterId = req.user!.id;
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // BR-14: not the caller's ticket looks the same as one that doesn't
+      // exist.
+      const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      if (RESOLVE_BLOCKED_STATUSES.includes(ticket.currentStatus)) {
+        return res.status(409).json({
+          error: `This ticket is already ${ticket.currentStatus} and can't be marked resolved.`,
+        });
+      }
+
+      // BR-24: idempotent while not yet terminal — a repeat call just
+      // overwrites the timestamp/author; currentStatus is untouched (this
+      // is a Requester-visible signal only, never a status transition).
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          requesterMarkedResolvedAt: new Date(),
+          requesterMarkedResolvedById: requesterId,
+        },
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Failed to mark ticket resolved:", error);
+
+      res.status(500).json({ error: "Failed to mark ticket resolved" });
+    }
+  }
+);
 
 export default app;

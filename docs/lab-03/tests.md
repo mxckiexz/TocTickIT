@@ -49,7 +49,7 @@ handout's structure block is treated as illustrative naming, not a literal path.
 | UNIT-02 | BR-08 | New-password validator | Rejects < 8 chars; rejects value equal to current password; accepts a valid distinct password | `server/tests/lab-03/auth.api.test.ts` | Planned |
 | UNIT-03 | BR-22, §7.3 matrix | Status transition lookup, given (from, to) | Returns allowed for every ✅ cell, rejected for every other cell, including self-transitions | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
 | UNIT-04 | BR-34 | Email-uniqueness comparison | Two emails differing only by case are treated as equal | `server/tests/lab-03/users-admin.api.test.ts` | Planned |
-| UNIT-05 | BR-25, BR-26 | Comment/note body validator | Rejects empty/whitespace-only; rejects > 2000 chars; accepts a valid body | `server/tests/lab-03/comments-notes.api.test.ts` | Planned |
+| UNIT-05 | BR-25, BR-26 | Comment/note body validator | Rejects empty/whitespace-only; rejects > 2000 chars; accepts a valid body | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (as inline `POST .../comments` and `.../notes` body-validation assertions, not a standalone exported helper — see §12) |
 
 ## 2. API / integration tests
 
@@ -75,31 +75,31 @@ handout's structure block is treated as illustrative naming, not a literal path.
 |---|---|---|---|---|
 | SEC-01 | AC-27 | Every `/api/admin/*` route called by Requester and IT Staff sessions | All `403` | Planned |
 | SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Planned |
-| SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Planned |
-| SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Planned |
-| SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Planned |
-| SEC-06 | BR-16 | A session for a user deactivated mid-session makes a request | `401` on the very next request after deactivation | Planned |
-| SEC-07 | — | Missing/mismatched `Origin` header on a `POST`/`PATCH`/`DELETE`, including one that would otherwise be unauthenticated too | `403` from the Origin gate, before the request ever reaches BR-13's ladder (so this is `403`, not `401`, even with no session at all) | Planned |
+| SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Pass — `server/tests/lab-02/create-ticket.api.test.ts` ("ignores a requesterId in the body") and `my-tickets.api.test.ts` ("ignores a requesterId query param"), not a separate `authorization.api.test.ts` file (see §12) |
+| SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Pass — one "returns 404 (not 403)" test per route in `server/tests/lab-02/ticket-detail.api.test.ts`, `attachments.api.test.ts`, `inspect-attachments.api.test.ts`, `remove-attachment.api.test.ts`, plus `server/tests/lab-03/comments-notes.api.test.ts` for `.../comments` and `.../mark-resolved` |
+| SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Pass — `server/tests/lab-03/comments-notes.api.test.ts` (API-21) |
+| SEC-06 | BR-16 | A session for a user deactivated mid-session makes a request | `401` on the very next request after deactivation | Planned (covered by Feature 2's `auth.api.test.ts` for login; a mid-session-deactivation-specific re-check on a Lab 2 route is not yet a dedicated test) |
+| SEC-07 | — | Missing/mismatched `Origin` header on a `POST`/`PATCH`/`DELETE`, including one that would otherwise be unauthenticated too | `403` from the Origin gate, before the request ever reaches BR-13's ladder (so this is `403`, not `401`, even with no session at all) | Pass (Feature 2, `server/tests/lab-03/auth.api.test.ts` — the gate is now mounted globally per Feature 3, still covered by the same test since every state-changing Lab 2 route re-run in this branch also carries the required `Origin` header) |
 
 ### 2.3 Requester ticket/attachment regression (`server/tests/lab-02/*` re-run) + carryover shape
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| API-12 | AC-10 | Full Lab 2 suite (`create-ticket`, `my-tickets`, `ticket-detail`, `attachments`, `inspect-attachments`, `remove-attachment` API tests), with §2.9's documented updates applied, re-run against session auth | All existing Lab 2 assertions still pass (as updated) | Planned (see §12 for the current, pre-Lab-3-code baseline) |
-| API-13 | FR-08 | `POST /api/tickets` with a `requesterId` field present in the body | Value ignored; ticket created under the session's own identity | Planned |
-| API-14 | §7.2 | `POST /api/tickets` response shape | Includes `ownerId: null`, `itPriority` equal to `requestedPriority`, `currentStatus: "NEW"` | Planned |
+| API-12 | AC-10 | Full Lab 2 suite (`create-ticket`, `my-tickets`, `ticket-detail`, `attachments`, `inspect-attachments`, `remove-attachment` API tests), with §2.9's documented updates applied, re-run against session auth | All existing Lab 2 assertions still pass (as updated) | Pass (see §12) |
+| API-13 | FR-08 | `POST /api/tickets` with a `requesterId` field present in the body | Value ignored; ticket created under the session's own identity | Pass |
+| API-14 | §7.2 | `POST /api/tickets` response shape | Includes `ownerId: null`, `itPriority` equal to `requestedPriority`, `currentStatus: "NEW"` | Pass |
 
 ### 2.4 Comments, notes, mark-resolved (`server/tests/lab-03/comments-notes.api.test.ts`)
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| API-15 | AC-12, BR-27 | Requester posts a Public Comment on their own ticket | `201`, `authorId`/`createdAt` server-set, comment visible via staff detail too | Planned |
-| API-16 | BR-25 | Post comment/note with empty/whitespace body | `400` | Planned |
-| API-17 | BR-26 | Post comment/note with a 2001-character body | `400` | Planned |
-| API-18 | BR-28 | No edit/delete route exists for comments or notes | Route returns `404`/method not allowed (there is no handler) | Planned |
-| API-19 | AC-13, BR-05, BR-24 | Requester calls `POST /api/tickets/:id/mark-resolved` | `200`; `requesterMarkedResolvedAt/ById` set; `currentStatus` unchanged | Planned |
-| API-20 | BR-24 | Call `mark-resolved` twice | Second call `200`, overwrites timestamp (idempotent, not an error) | Planned |
-| API-21 | AC-04, BR-29 | Requester posts/reads `/notes` on their own ticket | `403` both directions | Planned |
+| API-15 | AC-12, BR-27 | Requester posts a Public Comment on their own ticket | `201`, `authorId`/`createdAt` server-set, comment visible via staff detail too | Pass (staff-detail visibility confirmed via `GET .../comments` as an IT Staff session, since the combined staff ticket-detail screen itself is a later feature) |
+| API-16 | BR-25 | Post comment/note with empty/whitespace body | `400` | Pass |
+| API-17 | BR-26 | Post comment/note with a 2001-character body | `400` | Pass |
+| API-18 | BR-28 | No edit/delete route exists for comments or notes | Route returns `404`/method not allowed (there is no handler) | Pass |
+| API-19 | AC-13, BR-05, BR-24 | Requester calls `POST /api/tickets/:id/mark-resolved` | `200`; `requesterMarkedResolvedAt/ById` set; `currentStatus` unchanged | Pass |
+| API-20 | BR-24 | Call `mark-resolved` twice | Second call `200`, overwrites timestamp (idempotent, not an error) | Pass |
+| API-21 | AC-04, BR-29 | Requester posts/reads `/notes` on their own ticket | `403` both directions | Pass |
 
 ### 2.5 IT Staff Ticket Queue (`server/tests/lab-03/staff-queue.api.test.ts`)
 
@@ -158,11 +158,11 @@ idempotency.
 |---|---|---|---|---|---|
 | API-49 | BR-19 | Attempt to submit a `requestedPriority` field on any route other than `POST /api/tickets` (e.g. as part of `PATCH .../priority`, or a second `POST /api/tickets/:id`-style call — no such update route exists) | No route accepts a `requestedPriority` change after creation; the field is immutable by construction, not by a runtime check | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
 | API-50 | BR-23 | An IT Staff caller who is **not** the ticket's current owner performs a status transition | `200` — succeeds, transition rights aren't owner-restricted (distinct from API-34, which doesn't specifically vary the caller's owner-vs-not relationship) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
-| API-52 | AC-29, BR-40 | `POST /api/tickets/:id/mark-resolved` on a ticket whose `currentStatus` is each of `RESOLVED`, `CLOSED`, `CANCELLED` | All `409`; `requesterMarkedResolvedAt` unchanged from before the call | `server/tests/lab-03/comments-notes.api.test.ts` | Planned |
+| API-52 | AC-29, BR-40 | `POST /api/tickets/:id/mark-resolved` on a ticket whose `currentStatus` is each of `RESOLVED`, `CLOSED`, `CANCELLED` | All `409`; `requesterMarkedResolvedAt` unchanged from before the call | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (sampled with `CLOSED`; `RESOLVED`/`CANCELLED` share the same `RESOLVE_BLOCKED_STATUSES` check in `app.ts`, not a separate code path per status) |
 | API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-queue.api.test.ts` | Planned |
 | API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/authorization.api.test.ts` | Planned |
 | API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/authorization.api.test.ts` | Planned |
-| API-56 | BR-39 | `POST /api/tickets/:id/comments` and `POST /api/tickets/:id/notes` as Administrator | Both `403` (Administrator never posts, even though it can read both) | `server/tests/lab-03/authorization.api.test.ts` | Planned |
+| API-56 | BR-39 | `POST /api/tickets/:id/comments` and `POST /api/tickets/:id/notes` as Administrator | Both `403` (Administrator never posts, even though it can read both) | `server/tests/lab-03/comments-notes.api.test.ts` (not a separate `authorization.api.test.ts` — see §12) | Pass |
 | SEC-08 | BR-13 | A request that is simultaneously unauthenticated (no session) **and** has an invalid body (e.g. a malformed `POST /api/auth/login`) | `401`, not `400` — proves the ladder's stated order (auth before validation) rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Planned |
 | SEED-01 | §7.5 | Run `npm run prisma:seed` twice in a row | Second run makes no changes (same row counts, no unique-constraint errors) — confirms the seed script's `upsert` pattern is actually idempotent, not just documented as such | `server/tests/lab-03/migration.api.test.ts` | Planned |
 
@@ -200,6 +200,13 @@ None of this is optional cleanup — until (1) and (2) land, Lab 2's suite is te
 `403`/dev-picker behavior, not Lab 3's actual `404`/session-based behavior, even though it
 still passes.
 
+**Status: (1) and (2) landed on `feature/3-authorization-requester-regression` (issue #36)
+— see §12.** Every Lab 2 server test file now authenticates through the shared
+`server/tests/helpers/auth-fixtures.ts` (`createFixtureUser`/`loginAgent`) instead of a bare
+`requesterId`, every cross-Requester rejection asserts `404`, and every client test/e2e spec
+authenticates through a mocked/real login instead of `DevRequesterPicker` (removed, along
+with `RequesterBanner.tsx`).
+
 ## 3. UI component tests
 
 | Test ID | Screen | What it tests | Expected result | File | Final |
@@ -207,9 +214,9 @@ still passes.
 | UI-01 | Login | Empty-field validation, loading state, `401` message rendering | Matches `ui-spec.md` §2's states table | `client/tests/lab-03/Login.test.tsx` | Planned |
 | UI-02 | Login | Successful login redirects onward | Navigates to app shell or Change Password per `mustChangePassword` | `client/tests/lab-03/Login.test.tsx` | Planned |
 | UI-03 | Change Password | Validation (short, mismatch, same-as-current), wrong-current-password message | Matches `ui-spec.md` §4 | `client/tests/lab-03/ChangePassword.test.tsx` | Planned |
-| UI-04 | App Shell | Nav renders only the current role's destinations (3 cases: each role) | Matches `ui-spec.md` §3 table | `client/tests/lab-03/AppShell.test.tsx` (new — kept out of `client/tests/lab-01/App.test.tsx` so Lab 1's own test file doesn't grow Lab 3 concerns) | Planned |
-| UI-05 | Requester Ticket Detail | Public Comments: empty/loaded/posting/validation/error states | Matches `ui-spec.md` §5.1 | `client/tests/lab-03/TicketDetail.test.tsx` | Planned |
-| UI-06 | Requester Ticket Detail | "Problem Appears Resolved": available/confirming/saving/success | Matches `ui-spec.md` §5.2; status badge unaffected | `client/tests/lab-03/TicketDetail.test.tsx` | Planned |
+| UI-04 | App Shell | Nav renders only the current role's destinations (3 cases: each role) | Matches `ui-spec.md` §3 table | `client/tests/lab-03/AppShell.test.tsx` (new — kept out of `client/tests/lab-01/App.test.tsx` so Lab 1's own test file doesn't grow Lab 3 concerns) | Partial — the Requester nav path (New Ticket/My Tickets, no other destination rendered) is exercised throughout `client/tests/lab-02/*.test.tsx`; IT Staff/Administrator only get a placeholder panel each (their real screens are Feature 4/5), so there's no dedicated `AppShell.test.tsx` asserting all three role cases yet |
+| UI-05 | Requester Ticket Detail | Public Comments: empty/loaded/posting/validation/error states | Matches `ui-spec.md` §5.1 | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Comments", ...)` block inside `client/tests/lab-02/ticket-detail.test.tsx` (extended rather than a separate Lab 3 file, since it's the same component/screen) |
+| UI-06 | Requester Ticket Detail | "Problem Appears Resolved": available/confirming/saving/success | Matches `ui-spec.md` §5.2; status badge unaffected | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Problem Appears Resolved", ...)` block in the same file as UI-05 |
 | UI-07 | Staff Ticket Queue | Loading/empty/no-results/forbidden/error states; search+filter+sort inputs fire the right query params | Matches `ui-spec.md` §6 | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Planned |
 | UI-08 | Staff Ticket Detail | Claim/reassign control, IT Priority selector next to read-only Requested Priority, status `<select>` limited to legal next states | Matches `ui-spec.md` §7 | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
 | UI-09 | Staff Ticket Detail | Internal Notes panel visually distinct from Public Comments (asserts distinct class/label, not just presence) | Matches `ui-spec.md` §7's "Internal — IT Staff only" label | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
@@ -249,13 +256,13 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 | MIG-01 | Row counts before/after migration | `Ticket`, `Attachment`, `Category`, `RelatedSystem` counts identical (§7.4 step 5) | Planned |
 | MIG-02 | Every `Requester` row has a matching `User` row | Same `id`, `name`, `email`, `isActive`; `role: REQUESTER`; `mustChangePassword: true` | Planned |
 | MIG-03 | Every pre-migration `Ticket.requesterId` still resolves to the same person post-migration | FK now points at `User`, value unchanged, no ticket re-owned | Planned |
-| MIG-04 | Every pre-migration `Ticket.currentStatus` (`"New"`) becomes `TicketStatus.NEW`; `itPriority` equals `requestedPriority` for every migrated row | Backfill correct for 100% of existing rows | Planned |
+| MIG-04 | Every pre-migration `Ticket.currentStatus` (`"New"`) becomes `TicketStatus.NEW`; `itPriority` equals `requestedPriority` for every migrated row | Backfill correct for 100% of existing rows | Pass (Feature 3, issue #36) — `server/tests/lab-03/migration.api.test.ts`'s "Feature 2 -> Feature 3 migration" block replays every migration through `20260927120000_lab3_authorization_requester_regression`, exactly like MIG-01–03 do for the auth migration; also confirms existing Ticket/Attachment rows are preserved without drift and the new `ownerId`/`requesterMarkedResolvedAt(ById)` columns stay `null` for pre-existing tickets |
 
 ## 8. Regression tests
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-01`, `lab-02` (the e2e specs were missing from this row in an earlier draft) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | See §12 — server/client baseline confirmed on this branch; e2e baseline and the §2.9 updates land with Feature 3 (issue #36) |
+| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-01`, `lab-02` (the e2e specs were missing from this row in an earlier draft) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — see §12 (Feature 3, issue #36). `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario) updated and passing; the two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are marked stale in-file rather than reworked, since they're explicitly not part of the graded suite and their evidence was already captured for Lab 2's own submission |
 
 ## 9. E2E tests
 
@@ -374,6 +381,51 @@ anything this document describes: `UNIT-01`, `UNIT-02`, `API-01`–`API-09`, `AP
 the full Lab 1/2 regression suite). This document's own **Final** column is not updated
 row-by-row from other branches — each branch's PR is the source of truth for what it
 actually made pass; this file is updated in bulk at Release Integration (issue #41).
+
+**On `feature/3-authorization-requester-regression`** (issue #36) — Authorization &
+Requester Regression:
+
+- Schema/migration: `Ticket.ownerId`/`itPriority`/`requesterMarkedResolvedAt(ById)`, the
+  `TicketStatus` enum (replacing free-text `currentStatus`), and the `PublicComment`/
+  `InternalNote` models — applied via `server/prisma/migrations/20260927120000_lab3_authorization_requester_regression/`,
+  `npx prisma migrate status` confirms no drift.
+- `requireRole` middleware added to `server/src/auth.ts`; every existing Lab 2 route
+  (ticket create/list/detail, attachment upload/list/download/remove) now sits behind
+  `requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate` and reads identity from
+  `req.user!.id`, never a client-supplied `requesterId` (SEC-03/API-13); the cross-Requester
+  rejection is `404` everywhere (SEC-04, BR-14). The Origin/CSRF gate is now mounted
+  globally, not just on `/api/auth` (SEC-07). `GET /api/categories` and
+  `GET /api/related-systems` also gained `requirePasswordUpToDate` (review fix — they had
+  `requireAuth` only, so a session with `mustChangePassword: true` could reach both lookup
+  endpoints directly), with a `403`/`PASSWORD_CHANGE_REQUIRED` regression test on each.
+- New routes: `GET/POST /api/tickets/:id/comments`, `GET/POST /api/tickets/:id/notes`,
+  `POST /api/tickets/:id/mark-resolved`, with the role/ownership rules in `api-spec.md`
+  ("Comments, Notes, and 'mark resolved'").
+- Client: `DevRequesterPicker.tsx`/`RequesterBanner.tsx` removed; the App Shell now gates on
+  a real session (`GET /api/auth/me`) with a forced Change Password screen and role-scoped
+  nav; `CreateTicketForm`/`MyTickets`/`TicketDetail` no longer take a `requester` prop or
+  send `requesterId` anywhere; `TicketDetail` gained the Public Comments thread and "Problem
+  Appears Resolved" button (ui-spec.md §5).
+- MIG-04 (review fix): `server/tests/lab-03/migration.api.test.ts` gained a "Feature 2 ->
+  Feature 3 migration" block, replaying every migration through
+  `20260927120000_lab3_authorization_requester_regression` the same way the existing block
+  replays through the auth migration — confirms `currentStatus: "New"` backfills to
+  `TicketStatus.NEW`, `itPriority` is copied exactly from `requestedPriority`, existing
+  Ticket/Attachment rows are otherwise unchanged, and the new nullable ownership/resolution
+  columns stay `null` for pre-existing tickets.
+- Test run on this branch: **server 179/179** (`npx vitest run`, 12 files, includes
+  `comments-notes.api.test.ts` and the new migration block), **client 59/59**
+  (`npx vitest run`, 7 files), both `npx tsc --noEmit` and `npm run build` clean on both
+  packages, and the e2e regression scenario (`e2e/lab-02/requester-ticket-flow.spec.ts`,
+  updated for real login via a dedicated `e2e-requester@toktickit.test` fixture account that
+  `e2e/global-setup.ts` restores before every run) passing against the real dev servers. The
+  full flow (login → create ticket → My Tickets → ticket detail → post a comment → Problem
+  Appears Resolved) was also manually verified in a live browser session against the running
+  app.
+- Not built on this branch (tracked as later features, per `api-spec.md`'s own section
+  breaks): `GET/POST /api/staff/*` (IT Staff Ticket Queue/Detail), `GET/POST/PATCH
+  /api/admin/*` (Administrator User Management) — the App Shell renders a placeholder panel
+  for `IT_STAFF`/`ADMINISTRATOR` sessions rather than a real screen for either.
 
 ## 13. Known gaps to close before Release Integration (issue #41)
 

@@ -10,13 +10,17 @@ export interface RelatedSystem {
   name: string;
 }
 
-export interface Requester {
-  id: number;
-  name: string;
-  email: string;
-}
-
 export type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+export type TicketStatus =
+  | "NEW"
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "WAITING_FOR_REQUESTER"
+  | "RESOLVED"
+  | "CLOSED"
+  | "REOPENED"
+  | "CANCELLED";
 
 // ---------------------------------------------------------------------------
 // Lab 3 — Authentication (api-spec.md "POST /api/auth/login" etc.)
@@ -31,7 +35,27 @@ export interface AuthUser {
   mustChangePassword: boolean;
 }
 
-async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+// Thrown by every call below. `fieldErrors` is only set for a 400 that
+// returned an `errors` object (keyed the same way each form's fields are
+// named — see server/src/app.ts), so the UI can show each message next to
+// its field.
+export class ApiError extends Error {
+  status: number;
+  fieldErrors?: Record<string, string>;
+
+  constructor(message: string, status: number, fieldErrors?: Record<string, string>) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+// Every request carries the session cookie (FR-08/BR-03: identity comes
+// from the session, never a client-supplied id) — credentials: "include" is
+// required for the browser to send it cross-port in local dev, same as
+// api-spec.md's CORS note.
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
@@ -39,35 +63,33 @@ async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-export async function login(email: string, password: string): Promise<AuthUser> {
-  const response = await authFetch("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+async function parseJsonOrThrow<T>(response: Response, fallbackMessage: string): Promise<T> {
   const body = await response.json();
-
   if (!response.ok) {
-    throw new ApiError(body.error ?? "Login failed", response.status, body.errors);
+    throw new ApiError(body.error ?? fallbackMessage, response.status, body.errors);
   }
   return body;
 }
 
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const response = await apiFetch("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  return parseJsonOrThrow<AuthUser>(response, "Login failed");
+}
+
 export async function logout(): Promise<void> {
-  await authFetch("/api/auth/logout", { method: "POST" });
+  await apiFetch("/api/auth/logout", { method: "POST" });
 }
 
 // Returns null for a 401 (no/expired session) instead of throwing — the app
 // shell treats "not logged in" as a normal state to check on mount, not an
 // error (ui-spec.md §3).
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const response = await authFetch("/api/auth/me");
+  const response = await apiFetch("/api/auth/me");
   if (response.status === 401) return null;
-
-  const body = await response.json();
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Failed to load current user", response.status);
-  }
-  return body;
+  return parseJsonOrThrow<AuthUser>(response, "Failed to load current user");
 }
 
 export async function changePassword(
@@ -75,28 +97,27 @@ export async function changePassword(
   newPassword: string,
   confirmPassword: string
 ): Promise<AuthUser> {
-  const response = await authFetch("/api/auth/change-password", {
+  const response = await apiFetch("/api/auth/change-password", {
     method: "POST",
     body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
   });
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Password change failed", response.status, body.errors);
-  }
-  return body;
+  return parseJsonOrThrow<AuthUser>(response, "Password change failed");
 }
 
 export interface Ticket {
   id: number;
   ticketNumber: string;
   requesterId: number;
+  ownerId: number | null;
   categoryId: number;
   relatedSystemId: number;
   summary: string;
   description: string;
   requestedPriority: Priority;
-  currentStatus: string;
+  itPriority: Priority;
+  currentStatus: TicketStatus;
+  requesterMarkedResolvedAt: string | null;
+  requesterMarkedResolvedById: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +138,19 @@ export interface Attachment {
 // only, no storedFilename (that's an internal, server-side detail).
 export type AttachmentSummary = Omit<Attachment, "storedFilename">;
 
+// Public Comments (api-spec.md "GET /api/tickets/:id/comments" etc.) —
+// Internal Notes share this exact shape server-side but have no client UI
+// yet (that's IT Staff Ticket Management, a later feature).
+export interface Comment {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  authorName: string;
+  authorRole: Role;
+  body: string;
+  createdAt: string;
+}
+
 export type TicketSortField = "createdAt" | "summary" | "requestedPriority";
 export type SortDir = "asc" | "desc";
 
@@ -133,12 +167,11 @@ export interface TicketListResponse {
 }
 
 export interface FetchTicketsParams {
-  requesterId: number;
   search?: string;
   categoryId?: number;
   relatedSystemId?: number;
   requestedPriority?: Priority;
-  currentStatus?: string;
+  currentStatus?: TicketStatus;
   sortBy?: TicketSortField;
   sortDir?: SortDir;
   page?: number;
@@ -146,27 +179,11 @@ export interface FetchTicketsParams {
 }
 
 export interface CreateTicketInput {
-  requesterId: number;
   categoryId: number;
   relatedSystemId: number;
   summary: string;
   description: string;
   requestedPriority: Priority;
-}
-
-// Thrown by the ticket-creation calls below. `fieldErrors` is only set for a
-// 400 from POST /api/tickets, keyed the same way the form's fields are named
-// (see server/src/app.ts), so the UI can show each message next to its field.
-export class ApiError extends Error {
-  status: number;
-  fieldErrors?: Record<string, string>;
-
-  constructor(message: string, status: number, fieldErrors?: Record<string, string>) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.fieldErrors = fieldErrors;
-  }
 }
 
 export interface SystemStatus {
@@ -198,49 +215,21 @@ export async function checkSystem(): Promise<SystemStatus> {
 // Feature 3 — Create ticket form data + submission
 // ---------------------------------------------------------------------------
 export async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch(`${API_URL}/api/categories`);
-
-  if (!response.ok) {
-    throw new ApiError("Failed to load categories", response.status);
-  }
-
-  return response.json();
+  const response = await apiFetch("/api/categories");
+  return parseJsonOrThrow<Category[]>(response, "Failed to load categories");
 }
 
 export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
-  const response = await fetch(`${API_URL}/api/related-systems`);
-
-  if (!response.ok) {
-    throw new ApiError("Failed to load related systems", response.status);
-  }
-
-  return response.json();
-}
-
-export async function fetchRequesters(): Promise<Requester[]> {
-  const response = await fetch(`${API_URL}/api/requesters`);
-
-  if (!response.ok) {
-    throw new ApiError("Failed to load requesters", response.status);
-  }
-
-  return response.json();
+  const response = await apiFetch("/api/related-systems");
+  return parseJsonOrThrow<RelatedSystem[]>(response, "Failed to load related systems");
 }
 
 export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
-  const response = await fetch(`${API_URL}/api/tickets`, {
+  const response = await apiFetch("/api/tickets", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new ApiError("Ticket submission failed", response.status, body.errors);
-  }
-
-  return body;
+  return parseJsonOrThrow<Ticket>(response, "Ticket submission failed");
 }
 
 // ---------------------------------------------------------------------------
@@ -248,7 +237,6 @@ export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
 // ---------------------------------------------------------------------------
 export async function fetchTickets(params: FetchTicketsParams): Promise<TicketListResponse> {
   const query = new URLSearchParams();
-  query.set("requesterId", String(params.requesterId));
   if (params.search) query.set("search", params.search);
   if (params.categoryId) query.set("categoryId", String(params.categoryId));
   if (params.relatedSystemId) query.set("relatedSystemId", String(params.relatedSystemId));
@@ -259,85 +247,44 @@ export async function fetchTickets(params: FetchTicketsParams): Promise<TicketLi
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
 
-  const response = await fetch(`${API_URL}/api/tickets?${query.toString()}`);
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Failed to load tickets", response.status);
-  }
-
-  return body;
+  const response = await apiFetch(`/api/tickets?${query.toString()}`);
+  return parseJsonOrThrow<TicketListResponse>(response, "Failed to load tickets");
 }
 
 // ---------------------------------------------------------------------------
 // Feature 6 — Ticket Detail screen
 // ---------------------------------------------------------------------------
-export async function fetchTicketDetail(ticketId: number, requesterId: number): Promise<Ticket> {
-  const query = new URLSearchParams({ requesterId: String(requesterId) });
-
-  const response = await fetch(`${API_URL}/api/tickets/${ticketId}?${query.toString()}`);
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Failed to load ticket", response.status);
-  }
-
-  return body;
+export async function fetchTicketDetail(ticketId: number): Promise<Ticket> {
+  const response = await apiFetch(`/api/tickets/${ticketId}`);
+  return parseJsonOrThrow<Ticket>(response, "Failed to load ticket");
 }
 
-export async function uploadAttachment(
-  ticketId: number,
-  requesterId: number,
-  file: File
-): Promise<Attachment> {
+export async function uploadAttachment(ticketId: number, file: File): Promise<Attachment> {
   const formData = new FormData();
-  formData.append("requesterId", String(requesterId));
   formData.append("file", file);
 
   const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
     method: "POST",
+    credentials: "include",
     body: formData,
   });
 
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Attachment upload failed", response.status);
-  }
-
-  return body;
+  return parseJsonOrThrow<Attachment>(response, "Attachment upload failed");
 }
 
 // ---------------------------------------------------------------------------
 // Feature 7 — Inspect a ticket's attachments
 // ---------------------------------------------------------------------------
-export async function fetchTicketAttachments(
-  ticketId: number,
-  requesterId: number
-): Promise<AttachmentSummary[]> {
-  const query = new URLSearchParams({ requesterId: String(requesterId) });
-
-  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?${query.toString()}`);
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Failed to load attachments", response.status);
-  }
-
-  return body;
+export async function fetchTicketAttachments(ticketId: number): Promise<AttachmentSummary[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/attachments`);
+  return parseJsonOrThrow<AttachmentSummary[]>(response, "Failed to load attachments");
 }
 
-// Not a fetch — just the URL to view/download one attachment. requesterId is
-// in the query string so the ownership check (BR-12) can run the same way
-// as every other endpoint here, even for a plain <a href> the browser
-// navigates to directly.
-export function ticketAttachmentUrl(
-  ticketId: number,
-  attachmentId: number,
-  requesterId: number
-): string {
-  const query = new URLSearchParams({ requesterId: String(requesterId) });
-  return `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}?${query.toString()}`;
+// Not a fetch — just the URL to view/download one attachment, opened via a
+// plain <a target="_blank">. The session cookie (SameSite=Lax) rides along
+// on that top-level navigation the same way it would for any other link.
+export function ticketAttachmentUrl(ticketId: number, attachmentId: number): string {
+  return `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -346,25 +293,35 @@ export function ticketAttachmentUrl(
 export async function removeAttachment(
   ticketId: number,
   attachmentId: number,
-  requesterId: number,
   reason?: string
 ): Promise<AttachmentSummary> {
-  const query = new URLSearchParams({ requesterId: String(requesterId) });
+  const response = await apiFetch(`/api/tickets/${ticketId}/attachments/${attachmentId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+  return parseJsonOrThrow<AttachmentSummary>(response, "Failed to remove attachment");
+}
 
-  const response = await fetch(
-    `${API_URL}/api/tickets/${ticketId}/attachments/${attachmentId}?${query.toString()}`,
-    {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: reason ?? null }),
-    }
-  );
+// ---------------------------------------------------------------------------
+// Feature 3 (Lab 3) — Public Comments and "Problem Appears Resolved"
+// (docs/lab-03/api-spec.md "Comments, Notes, and 'mark resolved'")
+// ---------------------------------------------------------------------------
+export async function fetchComments(ticketId: number): Promise<Comment[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/comments`);
+  return parseJsonOrThrow<Comment[]>(response, "Failed to load comments");
+}
 
-  const body = await response.json();
+export async function postComment(ticketId: number, body: string): Promise<Comment> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+  return parseJsonOrThrow<Comment>(response, "Failed to post comment");
+}
 
-  if (!response.ok) {
-    throw new ApiError(body.error ?? "Failed to remove attachment", response.status);
-  }
-
-  return body;
+export async function markTicketResolved(ticketId: number): Promise<Ticket> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/mark-resolved`, {
+    method: "POST",
+  });
+  return parseJsonOrThrow<Ticket>(response, "Failed to mark ticket resolved");
 }

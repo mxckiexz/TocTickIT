@@ -109,12 +109,9 @@ export interface AuthedRequest extends Request {
   user?: AuthenticatedUser;
 }
 
-// Attaches req.user or responds 401 — used by the auth routes themselves
-// (logout/me/change-password) in this branch. Wiring this onto Lab 2's
-// ticket/attachment/staff/admin routes, plus role/ownership checks on top of
-// it, is Feature 3's job (docs/lab-03/specification.md §3.1) — that's a
-// deliberate scope boundary, not an oversight: Lab 2's routes keep working
-// exactly as before until Feature 3 switches their identity source.
+// Attaches req.user or responds 401. Mounted on every protected route
+// (FR-07/BR-13's first rung) — role and ownership checks, where needed,
+// compose on top of this via requireRole/inline ownership lookups.
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const sessionId = req.cookies?.[SESSION_COOKIE_NAME];
   const user = await getSessionUser(sessionId);
@@ -128,10 +125,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
 }
 
 // api-spec.md's "Forced password change" note: every authenticated route
-// other than change-password itself should reject a caller who still has
-// mustChangePassword set. Composed as requireAuth + this, in that order.
-// Not yet mounted on any route in this branch — there is no *other*
-// protected route yet (Feature 3 adds the ones this would actually guard).
+// other than login (no session yet), /me and /logout (the client needs both
+// to *learn* mustChangePassword and to be able to leave that screen), and
+// change-password itself, rejects a caller who still has mustChangePassword
+// set. Composed as requireAuth + this, in that order, on every other
+// protected route below.
 export function requirePasswordUpToDate(req: AuthedRequest, res: Response, next: NextFunction) {
   if (req.user?.mustChangePassword) {
     return res.status(403).json({
@@ -142,16 +140,27 @@ export function requirePasswordUpToDate(req: AuthedRequest, res: Response, next:
   next();
 }
 
+// FR-07/BR-13: every protected route re-checks role independently of what
+// the UI shows. Compose after requireAuth (req.user must already be set).
+export function requireRole(...roles: Role[]) {
+  return (req: AuthedRequest, res: Response, next: NextFunction) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: "You do not have permission to perform this action.",
+      });
+    }
+    next();
+  };
+}
+
 // api-spec.md's CSRF note: SameSite=Lax plus an Origin allow-list on every
-// state-changing request. Mounted in app.ts on /api/auth/* (login, logout,
-// change-password), *before* the cookie parser, so a forged cross-origin
-// request is rejected before any session is looked up — a missing/mismatched
-// Origin is 403 even with no session at all, not 401 (specification.md BR-13's
-// note). Lab 2's ticket/attachment routes are deliberately not covered yet:
-// Feature 3 extends this to every protected route once it switches them to
-// session identity and the client is guaranteed to send a matching Origin
-// (a browser always does; Lab 2's tests, which build the Express app
-// directly with no browser, don't).
+// state-changing request, app-wide — mounted globally in app.ts, before the
+// cookie parser, so a forged cross-origin request is rejected before any
+// session is looked up (a missing/mismatched Origin is 403 even with no
+// session at all, not 401 — specification.md BR-13's note). Supertest-driven
+// tests (which build the Express app directly, not through a browser) must
+// set a matching Origin header on every state-changing call, same as a real
+// browser would.
 export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
 
 export function requireSameOrigin(req: Request, res: Response, next: NextFunction) {

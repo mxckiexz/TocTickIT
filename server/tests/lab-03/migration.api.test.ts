@@ -249,6 +249,156 @@ describe("Lab 2 -> Lab 3 migration (real migration SQL, exact before/after, roll
   });
 });
 
+// ---------------------------------------------------------------------------
+// Feature 3 (Issue #36) migration — same replay/rollback pattern as above,
+// one migration further: replays every migration up to and including the
+// auth foundation migration (so the fixture is seeded against the User-
+// based, pre-Feature-3 schema), then applies
+// 20260927120000_lab3_authorization_requester_regression and asserts
+// docs/lab-03/tests.md's MIG-04 invariants.
+// ---------------------------------------------------------------------------
+const FEATURE3_MIGRATION = "20260927120000_lab3_authorization_requester_regression";
+const preFeature3MigrationDirs = readdirSync(MIGRATIONS_DIR)
+  .filter((dir) => /^\d{14}_/.test(dir) && dir < FEATURE3_MIGRATION)
+  .sort();
+
+// Seeded directly against the post-auth-migration schema (User, not
+// Requester) — Feature 3 doesn't touch User/Session at all, only Ticket and
+// two new comment/note tables, so this fixture only needs enough User/
+// Category/RelatedSystem/Ticket/Attachment rows to exercise the Ticket-column
+// backfill.
+const F3_USERS = [
+  { id: 1, name: "Jennifer Anderson", email: "jennifer.anderson@toktickit.test", role: "REQUESTER", isActive: true, createdAt: "2026-08-16 10:27:13.123" },
+  { id: 2, name: "Michael Brown", email: "michael.brown@toktickit.test", role: "REQUESTER", isActive: true, createdAt: "2026-08-16 10:27:14.456" },
+  { id: 5, name: "Priya Nair", email: "priya.nair@toktickit.test", role: "IT_STAFF", isActive: true, createdAt: "2026-08-20 09:00:00.000" },
+];
+const F3_TICKETS = [
+  { id: 301, number: "TKT-MIG3-000301", requesterId: 1, summary: "Laptop won't boot", description: 'Line one\nLine two with "quotes"', priority: "HIGH" },
+  { id: 302, number: "TKT-MIG3-000302", requesterId: 2, summary: "VPN drops hourly", description: "Only on Wi-Fi.", priority: "MEDIUM" },
+  { id: 303, number: "TKT-MIG3-000303", requesterId: 1, summary: "Printer offline", description: "Floor 3.", priority: "LOW" },
+];
+
+function feature3FixtureStatements(): string[] {
+  const ts = "2026-09-20 09:00:00.000";
+  return [
+    `INSERT INTO "Category" ("id","name","isActive","createdAt") VALUES (1,'Hardware',true,'${ts}'),(2,'Software',true,'${ts}')`,
+    `INSERT INTO "RelatedSystem" ("id","name","isActive","createdAt") VALUES (1,'VPN',true,'${ts}'),(2,'Printer',true,'${ts}')`,
+    `INSERT INTO "User" ("id","name","email","passwordHash","role","isActive","mustChangePassword","createdAt","updatedAt") VALUES ${F3_USERS.map(
+      (u) => `(${u.id},${q(u.name)},${q(u.email)},'x','${u.role}',${u.isActive},false,'${u.createdAt}','${u.createdAt}')`
+    ).join(",")}`,
+    // currentStatus is still the pre-Feature-3 free-text column here —
+    // 'New' is the only value any Lab 2/pre-Feature-3 row ever had.
+    `INSERT INTO "Ticket" ("id","ticketNumber","requesterId","categoryId","relatedSystemId","summary","description","requestedPriority","currentStatus","createdAt","updatedAt") VALUES ${F3_TICKETS.map(
+      (t) => `(${t.id},${q(t.number)},${t.requesterId},1,1,${q(t.summary)},${q(t.description)},'${t.priority}','New','${ts}','${ts}')`
+    ).join(",")}`,
+    `INSERT INTO "Attachment" ("id","ticketId","originalFilename","storedFilename","mimeType","sizeBytes","createdAt","removedAt","removalReason") VALUES
+       (401,301,'boot-error.png','stored-401.png','image/png',2048,'${ts}',NULL,NULL),
+       (402,303,'wrong.png','stored-402.png','image/png',1024,'${ts}','2026-09-21 10:00:00.000','Uploaded the wrong file')`,
+  ];
+}
+
+async function runFeature3MigrationScenario() {
+  const prisma = getPrisma();
+  const schema = `mig3_test_${process.pid}_${Date.now()}`;
+
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+        await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schema}"`);
+
+        for (const dir of preFeature3MigrationDirs) {
+          for (const statement of statementsOf(dir)) await tx.$executeRawUnsafe(statement);
+        }
+        for (const statement of feature3FixtureStatements()) await tx.$executeRawUnsafe(statement);
+
+        const before = {
+          users: await dump(tx, "User"),
+          tickets: await dump(tx, "Ticket"),
+          attachments: await dump(tx, "Attachment"),
+        };
+
+        for (const statement of statementsOf(FEATURE3_MIGRATION)) await tx.$executeRawUnsafe(statement);
+
+        const after = {
+          tickets: await dump(tx, "Ticket"),
+          attachments: await dump(tx, "Attachment"),
+        };
+
+        throw new Rollback({ before, after });
+      },
+      { timeout: 120_000, maxWait: 20_000 }
+    );
+  } catch (error) {
+    if (error instanceof Rollback) return error.value as { before: any; after: any };
+    throw error;
+  }
+  throw new Error("unreachable: the scenario always ends in an intentional rollback");
+}
+
+describe("Feature 2 -> Feature 3 migration (Ticket owner/itPriority/status, real migration SQL, rolled back)", () => {
+  let before: Record<string, any>;
+  let after: Record<string, any>;
+
+  beforeAll(async () => {
+    ({ before, after } = await runFeature3MigrationScenario());
+  }, 180_000);
+
+  it("replays every pre-Feature-3 migration (including the auth migration) and loads the fixture", () => {
+    expect(preFeature3MigrationDirs).toContain(AUTH_MIGRATION);
+    expect(before.users).toHaveLength(F3_USERS.length);
+    expect(before.tickets).toHaveLength(F3_TICKETS.length);
+    expect(before.attachments).toHaveLength(2);
+    // Guards the assertions below against being vacuous: every fixture
+    // ticket really did start as the old free-text 'New'.
+    for (const ticket of before.tickets) expect(ticket.currentStatus).toBe("New");
+  });
+
+  it("MIG-04: every existing Ticket's currentStatus 'New' becomes TicketStatus.NEW", () => {
+    expect(after.tickets).toHaveLength(before.tickets.length);
+    for (const ticket of after.tickets) {
+      expect(ticket.currentStatus).toBe("NEW");
+    }
+  });
+
+  it("MIG-04: itPriority is copied exactly from requestedPriority for every existing ticket", () => {
+    const beforeById = new Map<number, Row>(before.tickets.map((t: Row) => [t.id, t]));
+    expect(after.tickets.length).toBeGreaterThan(0);
+    for (const ticket of after.tickets) {
+      expect(ticket.itPriority).toBe(beforeById.get(ticket.id)!.requestedPriority);
+    }
+  });
+
+  it("preserves every existing Ticket's other columns and every Attachment row without drift", () => {
+    const beforeById = new Map<number, Row>(before.tickets.map((t: Row) => [t.id, t]));
+    for (const ticket of after.tickets) {
+      const original = beforeById.get(ticket.id)!;
+      expect(ticket).toMatchObject({
+        ticketNumber: original.ticketNumber,
+        requesterId: original.requesterId,
+        categoryId: original.categoryId,
+        relatedSystemId: original.relatedSystemId,
+        summary: original.summary,
+        description: original.description,
+        requestedPriority: original.requestedPriority,
+        createdAt: original.createdAt,
+        updatedAt: original.updatedAt,
+      });
+    }
+    // Attachment isn't touched by this migration at all — byte-for-byte.
+    expect(after.attachments).toEqual(before.attachments);
+  });
+
+  it("leaves the new nullable ownership/resolution fields null for every existing ticket", () => {
+    expect(after.tickets.length).toBeGreaterThan(0);
+    for (const ticket of after.tickets) {
+      expect(ticket.ownerId).toBeNull();
+      expect(ticket.requesterMarkedResolvedAt).toBeNull();
+      expect(ticket.requesterMarkedResolvedById).toBeNull();
+    }
+  });
+});
+
 describe("live development database state (a schema check, not a before/after)", () => {
   it("has the auth migration recorded as finished, no Requester table, and Ticket.requesterId targeting User", async () => {
     const prisma = getPrisma();

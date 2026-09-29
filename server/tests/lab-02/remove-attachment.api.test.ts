@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
+import { CLIENT_ORIGIN } from "../../src/auth.js";
+import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/auth-fixtures.js";
 
 // Mirrors server/src/app.ts's own UPLOAD_DIR computation.
 const UPLOAD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads");
@@ -29,7 +31,13 @@ async function deleteUploadedFiles(ticketIds: number[]) {
   }
 }
 
+// Lab 3 (tests.md §2.3, API-12): re-run against session auth. BR-14 tightens
+// the cross-Requester rejection from Lab 2's 403 to 404 (§2.9, category 1).
 describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () => {
+  const ownerEmail = "remove-attachment-owner-fixture@toktickit.test";
+  const otherEmail = "remove-attachment-other-fixture@toktickit.test";
+  let ownerAgent: request.Agent;
+  let otherAgent: request.Agent;
   let ownerRequesterId: number;
   let otherRequesterId: number;
   let ticketId: number;
@@ -39,15 +47,15 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const owner = await prisma.user.findFirstOrThrow({ where: { role: "REQUESTER", isActive: true } });
-    const other = await prisma.user.findFirstOrThrow({
-      where: { role: "REQUESTER", isActive: true, NOT: { id: owner.id } },
-    });
-    const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });
-    const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({ where: { isActive: true } });
-
+    const { user: owner } = await createFixtureUser(ownerEmail);
+    const { user: other } = await createFixtureUser(otherEmail);
+    ownerAgent = await loginAgent(ownerEmail);
+    otherAgent = await loginAgent(otherEmail);
     ownerRequesterId = owner.id;
     otherRequesterId = other.id;
+
+    const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });
+    const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({ where: { isActive: true } });
 
     const ticket = await prisma.ticket.create({
       data: {
@@ -58,6 +66,7 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
         summary: "Remove-attachment test ticket",
         description: "Fixture for DELETE /api/tickets/:id/attachments/:attachmentId.",
         requestedPriority: "LOW",
+        itPriority: "LOW",
       },
     });
     ticketId = ticket.id;
@@ -72,6 +81,7 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
         summary: "Other ticket for cross-ticket removal test",
         description: "Fixture.",
         requestedPriority: "LOW",
+        itPriority: "LOW",
       },
     });
     otherTicketId = otherTicket.id;
@@ -83,25 +93,53 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
     await deleteUploadedFiles(createdTicketIds);
     await prisma.attachment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.ticket.deleteMany({ where: { id: { in: createdTicketIds } } });
+    await deleteFixtureUser(ownerEmail);
+    await deleteFixtureUser(otherEmail);
   });
 
-  async function uploadFixtureAttachment(forTicketId: number, requesterId: number, filename = "to-remove.png") {
-    const response = await request(app)
+  async function uploadFixtureAttachment(
+    forTicketId: number,
+    agent: request.Agent,
+    filename = "to-remove.png"
+  ) {
+    const response = await agent
       .post(`/api/tickets/${forTicketId}/attachments`)
-      .field("requesterId", String(requesterId))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from("fake bytes"), { filename, contentType: "image/png" })
       .expect(201);
     return response.body as { id: number; storedFilename: string };
   }
 
+  it("rejects an unauthenticated request", async () => {
+    const response = await request(app)
+      .delete(`/api/tickets/${ticketId}/attachments/1`)
+      .set("Origin", CLIENT_ORIGIN)
+      .expect(401);
+    expect(response.body.error).toBeDefined();
+  });
+
+  it("rejects a session whose role is not REQUESTER", async () => {
+    const staffEmail = "remove-attachment-staff-fixture@toktickit.test";
+    await createFixtureUser(staffEmail, { role: "IT_STAFF" });
+    const staffAgent = await loginAgent(staffEmail);
+
+    const response = await staffAgent
+      .delete(`/api/tickets/${ticketId}/attachments/1`)
+      .set("Origin", CLIENT_ORIGIN)
+      .expect(403);
+    expect(response.body.error).toBeDefined();
+
+    await deleteFixtureUser(staffEmail);
+  });
+
   it("soft-removes the attachment: sets removedAt, keeps the row, deletes the file", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId);
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent);
     const filePath = path.join(UPLOAD_DIR, uploaded.storedFilename);
     expect(existsSync(filePath)).toBe(true);
 
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(200);
 
     expect(response.body).toMatchObject({
@@ -122,17 +160,14 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
   });
 
   it("still appears in the attachment list after removal, marked with removedAt (BR-14: visible as metadata)", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "list-me-then-remove.png");
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "list-me-then-remove.png");
 
-    await request(app)
+    await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(200);
 
-    const listResponse = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const listResponse = await ownerAgent.get(`/api/tickets/${ticketId}/attachments`).expect(200);
 
     const entry = listResponse.body.find((a: { id: number }) => a.id === uploaded.id);
     expect(entry).toBeDefined();
@@ -142,11 +177,11 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
   });
 
   it("captures an optional removal reason", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "with-reason.png");
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "with-reason.png");
 
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .send({ reason: "Uploaded the wrong file" })
       .expect(200);
 
@@ -157,22 +192,22 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
   });
 
   it("records a null removal reason when none is given", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "no-reason.png");
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "no-reason.png");
 
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(200);
 
     expect(response.body.removalReason).toBeNull();
   });
 
   it("rejects a removal reason over 500 characters", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "reason-too-long.png");
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "reason-too-long.png");
 
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .send({ reason: "a".repeat(501) })
       .expect(400);
 
@@ -184,17 +219,14 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
   });
 
   it("blocks downloading a removed attachment (404, same as not existing)", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "download-then-remove.png");
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "download-then-remove.png");
 
-    await request(app)
+    await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(200);
 
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(404);
+    const response = await ownerAgent.get(`/api/tickets/${ticketId}/attachments/${uploaded.id}`).expect(404);
 
     expect(response.body.error).toBeDefined();
   });
@@ -212,19 +244,20 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
         summary: "Removal + limit interaction ticket",
         description: "5 uploads, remove 1, a 6th should now succeed.",
         requestedPriority: "LOW",
+        itPriority: "LOW",
       },
     });
     createdTicketIds.push(limitTicket.id);
 
     const uploaded: { id: number }[] = [];
     for (let i = 0; i < 5; i++) {
-      uploaded.push(await uploadFixtureAttachment(limitTicket.id, ownerRequesterId, `file-${i}.png`));
+      uploaded.push(await uploadFixtureAttachment(limitTicket.id, ownerAgent, `file-${i}.png`));
     }
 
     // At the limit — a 6th is rejected.
-    await request(app)
+    await ownerAgent
       .post(`/api/tickets/${limitTicket.id}/attachments`)
-      .field("requesterId", String(ownerRequesterId))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from("one too many"), {
         filename: "one-too-many.png",
         contentType: "image/png",
@@ -232,14 +265,14 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
       .expect(409);
 
     // Remove one — frees up a slot.
-    await request(app)
+    await ownerAgent
       .delete(`/api/tickets/${limitTicket.id}/attachments/${uploaded[0].id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(200);
 
-    await request(app)
+    await ownerAgent
       .post(`/api/tickets/${limitTicket.id}/attachments`)
-      .field("requesterId", String(ownerRequesterId))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from("now there's room"), {
         filename: "now-fits.png",
         contentType: "image/png",
@@ -247,13 +280,14 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
       .expect(201);
   });
 
-  it("rejects a Requester who does not own the ticket", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "not-yours-to-remove.png");
+  // BR-14 / AC-11
+  it("returns 404 (not 403) for a Requester who does not own the ticket", async () => {
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "not-yours-to-remove.png");
 
-    const response = await request(app)
+    const response = await otherAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: otherRequesterId })
-      .expect(403);
+      .set("Origin", CLIENT_ORIGIN)
+      .expect(404);
 
     expect(response.body.error).toBeDefined();
 
@@ -263,80 +297,63 @@ describe("DELETE /api/tickets/:id/attachments/:attachmentId (soft removal)", () 
   });
 
   it("rejects removing an attachment that belongs to a different ticket", async () => {
-    const uploaded = await uploadFixtureAttachment(otherTicketId, otherRequesterId, "belongs-elsewhere.png");
+    const uploaded = await uploadFixtureAttachment(otherTicketId, otherAgent, "belongs-elsewhere.png");
 
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects removing an attachment that is already removed", async () => {
-    const uploaded = await uploadFixtureAttachment(ticketId, ownerRequesterId, "double-remove.png");
+    const uploaded = await uploadFixtureAttachment(ticketId, ownerAgent, "double-remove.png");
 
-    await request(app)
+    await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(200);
 
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/${uploaded.id}`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a ticket id that does not exist", async () => {
-    const response = await request(app)
+    const response = await ownerAgent
       .delete("/api/tickets/999999/attachments/1")
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects an attachment id that does not exist", async () => {
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/999999`)
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a non-numeric ticket id", async () => {
-    const response = await request(app)
+    const response = await ownerAgent
       .delete("/api/tickets/not-a-number/attachments/1")
-      .query({ requesterId: ownerRequesterId })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a non-numeric attachment id", async () => {
-    const response = await request(app)
+    const response = await ownerAgent
       .delete(`/api/tickets/${ticketId}/attachments/not-a-number`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(400);
-
-    expect(response.body.error).toBeDefined();
-  });
-
-  it("rejects a missing requesterId", async () => {
-    const response = await request(app)
-      .delete(`/api/tickets/${ticketId}/attachments/1`)
-      .expect(400);
-
-    expect(response.body.error).toBeDefined();
-  });
-
-  it("rejects a non-numeric requesterId", async () => {
-    const response = await request(app)
-      .delete(`/api/tickets/${ticketId}/attachments/1`)
-      .query({ requesterId: "abc" })
+      .set("Origin", CLIENT_ORIGIN)
       .expect(400);
 
     expect(response.body.error).toBeDefined();

@@ -8,6 +8,7 @@ import { mkdirSync, unlink } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
+import { isLegalStatusTransition, statusRequiresConfirmation } from "./ticketStatus.js";
 import {
   AuthedRequest,
   AuthenticatedUser,
@@ -1280,6 +1281,307 @@ app.get(
       console.error("Failed to retrieve staff ticket queue:", error);
 
       res.status(500).json({ error: "Failed to retrieve staff ticket queue" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Feature 5 — IT Staff Ticket Detail & Workflow (Issue #38)
+// docs/lab-03/api-spec.md's "IT Staff endpoints" section, from
+// GET /api/staff/tickets/:id onward. Read (detail) is IT_STAFF/ADMINISTRATOR
+// (BR-39); every write route below it is IT_STAFF only — an ADMINISTRATOR
+// caller gets 403 on all five, the same as a REQUESTER would (AC-20b).
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/tickets/:id",
+  requireAuth,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // No ownership restriction (unlike the Requester's own GET
+      // /api/tickets/:id) — IT Staff/Administrator may open any ticket.
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          requester: { select: { name: true, email: true } },
+          owner: { select: { name: true, email: true } },
+        },
+      });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const [attachments, comments, notes] = await Promise.all([
+        prisma.attachment.findMany({
+          where: { ticketId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            ticketId: true,
+            originalFilename: true,
+            mimeType: true,
+            sizeBytes: true,
+            createdAt: true,
+            removedAt: true,
+            removalReason: true,
+          },
+        }),
+        prisma.publicComment.findMany({
+          where: { ticketId },
+          include: { author: { select: { name: true, role: true } } },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        }),
+        prisma.internalNote.findMany({
+          where: { ticketId },
+          include: { author: { select: { name: true, role: true } } },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        }),
+      ]);
+
+      const { requester, owner, ...ticketFields } = ticket;
+
+      res.status(200).json({
+        ticket: {
+          ...ticketFields,
+          requesterName: requester.name,
+          requesterEmail: requester.email,
+          ownerName: owner?.name ?? null,
+          ownerEmail: owner?.email ?? null,
+        },
+        attachments,
+        comments: comments.map(serializeAuthoredEntry),
+        notes: notes.map(serializeAuthoredEntry),
+      });
+    } catch (error) {
+      console.error("Failed to retrieve staff ticket detail:", error);
+
+      res.status(500).json({ error: "Failed to retrieve staff ticket detail" });
+    }
+  }
+);
+
+app.post(
+  "/api/staff/tickets/:id/claim",
+  requireAuth,
+  requireRole("IT_STAFF"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      // BR-18: claim only works while unassigned — use assign to reassign
+      // an already-owned ticket (to anyone, not just the current owner).
+      if (ticket.ownerId !== null) {
+        return res.status(409).json({
+          error: "Ticket is already assigned. Use assign to change its owner.",
+        });
+      }
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { ownerId: req.user!.id },
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Failed to claim ticket:", error);
+
+      res.status(500).json({ error: "Failed to claim ticket" });
+    }
+  }
+);
+
+app.post(
+  "/api/staff/tickets/:id/assign",
+  requireAuth,
+  requireRole("IT_STAFF"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    const ownerId = req.body?.ownerId;
+    if (!Number.isInteger(ownerId) || ownerId <= 0) {
+      return res.status(400).json({
+        errors: { ownerId: "ownerId is required and must be a positive integer." },
+      });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // Both queried up front (in parallel) so an invalid ownerId is a 400
+      // even when the ticket also doesn't exist — BR-13's 400-before-404.
+      const [ticket, targetUser] = await Promise.all([
+        prisma.ticket.findUnique({ where: { id: ticketId } }),
+        prisma.user.findFirst({ where: { id: ownerId, role: "IT_STAFF", isActive: true } }),
+      ]);
+
+      if (!targetUser) {
+        return res.status(400).json({
+          errors: { ownerId: "ownerId must reference an active IT Staff user." },
+        });
+      }
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { ownerId },
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Failed to assign ticket:", error);
+
+      res.status(500).json({ error: "Failed to assign ticket" });
+    }
+  }
+);
+
+app.patch(
+  "/api/staff/tickets/:id/priority",
+  requireAuth,
+  requireRole("IT_STAFF"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    const itPriority = req.body?.itPriority;
+    if (!REQUESTED_PRIORITIES.includes(itPriority)) {
+      return res.status(400).json({
+        errors: { itPriority: "itPriority must be LOW, MEDIUM, or HIGH." },
+      });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      // BR-20: requestedPriority is never touched by this route.
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { itPriority },
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Failed to update ticket priority:", error);
+
+      res.status(500).json({ error: "Failed to update ticket priority" });
+    }
+  }
+);
+
+app.patch(
+  "/api/staff/tickets/:id/status",
+  requireAuth,
+  requireRole("IT_STAFF"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+
+    const targetStatus = req.body?.currentStatus;
+    if (!TICKET_STATUSES.includes(targetStatus)) {
+      return res.status(400).json({
+        errors: { currentStatus: `currentStatus must be one of: ${TICKET_STATUSES.join(", ")}.` },
+      });
+    }
+
+    // BR-42: confirmation is checked before the matrix's legality check
+    // (400 before 409, per BR-13's order) — a target requiring confirmation
+    // with confirm missing/false is 400 even if the transition would also
+    // have been illegal.
+    if (statusRequiresConfirmation(targetStatus) && req.body?.confirm !== true) {
+      return res.status(400).json({
+        errors: { confirm: "Confirmation is required to set this status." },
+      });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      // BR-22: only the matrix's ✅ cells are legal, including rejecting a
+      // status "transitioning" to itself.
+      if (!isLegalStatusTransition(ticket.currentStatus, targetStatus)) {
+        return res.status(409).json({
+          error: `Cannot transition from ${ticket.currentStatus} to ${targetStatus}.`,
+        });
+      }
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { currentStatus: targetStatus },
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Failed to update ticket status:", error);
+
+      res.status(500).json({ error: "Failed to update ticket status" });
+    }
+  }
+);
+
+// FR-28/BR-41 — populates the claim/assign control's dropdown. Deliberately
+// not GET /api/admin/users: that route is Administrator-only and returns
+// every role, more data than a reassignment needs.
+app.get(
+  "/api/staff/assignable-users",
+  requireAuth,
+  requireRole("IT_STAFF"),
+  requirePasswordUpToDate,
+  async (_req: AuthedRequest, res: Response) => {
+    try {
+      const prisma = getPrisma();
+
+      const users = await prisma.user.findMany({
+        where: { role: "IT_STAFF", isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      });
+
+      res.status(200).json(users);
+    } catch (error) {
+      console.error("Failed to retrieve assignable users:", error);
+
+      res.status(500).json({ error: "Failed to retrieve assignable users" });
     }
   }
 );

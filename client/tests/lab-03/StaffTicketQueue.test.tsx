@@ -261,6 +261,33 @@ describe("StaffTicketQueue", () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 })));
   });
 
+  // Feature 5 (issue #38): clicking a ticket row opens the Staff Ticket
+  // Detail screen.
+  it("opens the Staff Ticket Detail screen when a ticket row is clicked", async () => {
+    mockLookups();
+    vi.spyOn(api, "fetchStaffTickets").mockResolvedValue({
+      tickets: [staffTicket()],
+      pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+    });
+    vi.spyOn(api, "fetchStaffTicketDetail").mockResolvedValue({
+      ticket: {
+        ...staffTicket(),
+        requesterEmail: "jennifer.anderson@toktickit.test",
+        ownerEmail: null,
+      },
+      attachments: [],
+      comments: [],
+      notes: [],
+    });
+
+    await openQueue();
+    const table = within(await screen.findByRole("table"));
+    fireEvent.click(table.getByText("TKT-2026-000001"));
+
+    expect(await screen.findByRole("heading", { name: "TKT-2026-000001" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Back to Ticket Queue/i })).toBeInTheDocument();
+  });
+
   it("shows the Forbidden panel on a 403, distinct from a generic error", async () => {
     mockLookups();
     vi.spyOn(api, "fetchStaffTickets").mockRejectedValue(

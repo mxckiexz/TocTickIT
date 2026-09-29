@@ -11,6 +11,7 @@ import {
   fetchRelatedSystems,
   fetchStaffTickets,
 } from "./api.js";
+import StaffTicketDetail from "./StaffTicketDetail.js";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -108,6 +109,7 @@ export default function StaffTicketQueue() {
     totalItems: number;
     totalPages: number;
   } | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
 
   const filtersActive = Boolean(
     search || categoryId || relatedSystemId || itPriority || currentStatus || ownerFilter
@@ -204,6 +206,10 @@ export default function StaffTicketQueue() {
         Unable to load the ticket queue. Please make sure the backend server is running.
       </div>
     );
+  }
+
+  if (selectedTicketId !== null) {
+    return <StaffTicketDetail ticketId={selectedTicketId} onBack={() => setSelectedTicketId(null)} />;
   }
 
   if (listState === "forbidden") {
@@ -396,7 +402,15 @@ export default function StaffTicketQueue() {
               <tbody>
                 {tickets.map((ticket) => (
                   <tr key={ticket.id}>
-                    <td>{ticket.ticketNumber}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0 align-baseline"
+                        onClick={() => setSelectedTicketId(ticket.id)}
+                      >
+                        {ticket.ticketNumber}
+                      </button>
+                    </td>
                     <td>{new Date(ticket.createdAt).toLocaleString()}</td>
                     <td>{ticket.summary}</td>
                     <td className="d-none d-lg-table-cell">{categoryName(ticket.categoryId)}</td>
@@ -426,7 +440,19 @@ export default function StaffTicketQueue() {
           {/* Mobile: stacked cards (ui-spec.md §6's mobile layout). */}
           <div className="d-md-none">
             {tickets.map((ticket) => (
-              <div key={ticket.id} className="border rounded p-2 mb-2">
+              <div
+                key={ticket.id}
+                className="border rounded p-2 mb-2"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedTicketId(ticket.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedTicketId(ticket.id);
+                  }
+                }}
+              >
                 <div className="d-flex justify-content-between align-items-center">
                   <strong>{ticket.ticketNumber}</strong>
                   <span className={statusBadgeClass(ticket.currentStatus)}>

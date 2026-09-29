@@ -47,7 +47,7 @@ handout's structure block is treated as illustrative naming, not a literal path.
 |---|---|---|---|---|---|
 | UNIT-01 | BR-06 | Password hashing helper produces a bcrypt hash, never the plaintext | Hash verifies against the original password; hash ≠ plaintext | `server/tests/lab-03/auth.api.test.ts` (helper import) | Planned |
 | UNIT-02 | BR-08 | New-password validator | Rejects < 8 chars; rejects value equal to current password; accepts a valid distinct password | `server/tests/lab-03/auth.api.test.ts` | Planned |
-| UNIT-03 | BR-22, §7.3 matrix | Status transition lookup, given (from, to) | Returns allowed for every ✅ cell, rejected for every other cell, including self-transitions | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
+| UNIT-03 | BR-22, §7.3 matrix | Status transition lookup, given (from, to) | Returns allowed for every ✅ cell, rejected for every other cell, including self-transitions | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass (Feature 5, issue #38) — as `isLegalStatusTransition()` in `server/src/ticketStatus.ts`, imported directly by the test (no HTTP), same pattern as `auth.ts`'s `hashPassword`/`validateNewPassword` |
 | UNIT-04 | BR-34 | Email-uniqueness comparison | Two emails differing only by case are treated as equal | `server/tests/lab-03/users-admin.api.test.ts` | Planned |
 | UNIT-05 | BR-25, BR-26 | Comment/note body validator | Rejects empty/whitespace-only; rejects > 2000 chars; accepts a valid body | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (as inline `POST .../comments` and `.../notes` body-validation assertions, not a standalone exported helper — see §12) |
 
@@ -116,21 +116,21 @@ handout's structure block is treated as illustrative naming, not a literal path.
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| API-28 | AC-15, BR-18 | `POST /api/staff/tickets/:id/claim` on an unassigned ticket | `200`, `ownerId` = caller | Planned |
-| API-29 | — | `claim` on an already-assigned ticket | `409` | Planned |
-| API-30 | AC-16, BR-18 | `POST .../assign` by a staff member who is not the current owner | `200` — succeeds; not restricted to the current owner | Planned |
-| API-31 | AC-17 | `assign` to a Requester-role id, an inactive user id, and a nonexistent id | All `400` | Planned |
-| API-32 | AC-18, BR-20 | `PATCH .../priority` | `200`; `itPriority` changes; `requestedPriority` unchanged | Planned |
-| API-33 | — | `PATCH .../priority` with an invalid value | `400` | Planned |
-| API-34 | AC-20a | Every ✅ transition in the §7.3 matrix, called as IT Staff, with `confirm: true` sent on every call (so this row isolates matrix legality from BR-42) | All `200`, `currentStatus` updated | Planned |
-| API-35 | AC-19, BR-22 | Every non-✅ cell in the matrix (sampled: same-state, and at least one illegal jump per row), each with `confirm: true` already sent | All `409`, `currentStatus` unchanged | Planned |
-| API-36 | AC-20a | A legal-per-matrix transition, called as Requester | `403` | Planned |
-| API-37 | — | `GET /api/staff/tickets/:id` response shape | Includes `ticket`, `attachments`, `comments`, `notes` in one payload | Planned |
-| API-57 | AC-31, BR-42 | A legal transition to each of `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`, called with `confirm` omitted, and again with `confirm: false` | Both `400`, `{ "errors": { "confirm": "..." } }`, `currentStatus` unchanged in every case | Planned |
-| API-58 | AC-31, BR-42 | The same four legal transitions as API-57, called with `confirm: true` | All `200`, `currentStatus` updated | Planned |
-| API-59 | BR-42 | A legal transition to a target **not** in the confirmation list (e.g. `NEW` → `IN_PROGRESS`), called with `confirm` omitted | `200` — confirmation is only required for the four listed targets | Planned |
-| API-60 | BR-13, BR-42 | A transition that is both illegal per the matrix **and** missing required confirmation (e.g. `NEW` → `CLOSED`, no `confirm`) | `400`, not `409` — the confirmation check runs before the legality check | Planned |
-| API-38 | — | `GET /api/staff/tickets/:id` for a nonexistent id | `404` | Planned |
+| API-28 | AC-15, BR-18 | `POST /api/staff/tickets/:id/claim` on an unassigned ticket | `200`, `ownerId` = caller | Pass (Feature 5, issue #38) |
+| API-29 | — | `claim` on an already-assigned ticket | `409` | Pass |
+| API-30 | AC-16, BR-18 | `POST .../assign` by a staff member who is not the current owner | `200` — succeeds; not restricted to the current owner | Pass |
+| API-31 | AC-17 | `assign` to a Requester-role id, an inactive user id, and a nonexistent id | All `400` | Pass — also covers an Administrator-role id, sampled in addition to the three listed here |
+| API-32 | AC-18, BR-20 | `PATCH .../priority` | `200`; `itPriority` changes; `requestedPriority` unchanged | Pass |
+| API-33 | — | `PATCH .../priority` with an invalid value | `400` | Pass |
+| API-34 | AC-20a | Every ✅ transition in the §7.3 matrix, called as IT Staff, with `confirm: true` sent on every call (so this row isolates matrix legality from BR-42) | All `200`, `currentStatus` updated | Pass — generated from `STATUS_TRANSITIONS` itself (every ✅ cell, 21 cases), not hand-enumerated |
+| API-35 | AC-19, BR-22 | Every non-✅ cell in the matrix (sampled: same-state, and at least one illegal jump per row), each with `confirm: true` already sent | All `409`, `currentStatus` unchanged | Pass |
+| API-36 | AC-20a | A legal-per-matrix transition, called as Requester | `403` | Pass |
+| API-37 | — | `GET /api/staff/tickets/:id` response shape | Includes `ticket`, `attachments`, `comments`, `notes` in one payload | Pass |
+| API-57 | AC-31, BR-42 | A legal transition to each of `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`, called with `confirm` omitted, and again with `confirm: false` | Both `400`, `{ "errors": { "confirm": "..." } }`, `currentStatus` unchanged in every case | Pass |
+| API-58 | AC-31, BR-42 | The same four legal transitions as API-57, called with `confirm: true` | All `200`, `currentStatus` updated | Pass |
+| API-59 | BR-42 | A legal transition to a target **not** in the confirmation list (e.g. `NEW` → `IN_PROGRESS`), called with `confirm` omitted | `200` — confirmation is only required for the four listed targets | Pass |
+| API-60 | BR-13, BR-42 | A transition that is both illegal per the matrix **and** missing required confirmation (e.g. `NEW` → `CLOSED`, no `confirm`) | `400`, not `409` — the confirmation check runs before the legality check | Pass |
+| API-38 | — | `GET /api/staff/tickets/:id` for a nonexistent id | `404` | Pass |
 
 ### 2.7 Administrator User Management (`server/tests/lab-03/users-admin.api.test.ts`)
 
@@ -156,12 +156,12 @@ idempotency.
 
 | Test ID | AC/BR | What it tests | Expected result | File | Final |
 |---|---|---|---|---|---|
-| API-49 | BR-19 | Attempt to submit a `requestedPriority` field on any route other than `POST /api/tickets` (e.g. as part of `PATCH .../priority`, or a second `POST /api/tickets/:id`-style call — no such update route exists) | No route accepts a `requestedPriority` change after creation; the field is immutable by construction, not by a runtime check | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
-| API-50 | BR-23 | An IT Staff caller who is **not** the ticket's current owner performs a status transition | `200` — succeeds, transition rights aren't owner-restricted (distinct from API-34, which doesn't specifically vary the caller's owner-vs-not relationship) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
+| API-49 | BR-19 | Attempt to submit a `requestedPriority` field on any route other than `POST /api/tickets` (e.g. as part of `PATCH .../priority`, or a second `POST /api/tickets/:id`-style call — no such update route exists) | No route accepts a `requestedPriority` change after creation; the field is immutable by construction, not by a runtime check | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass (Feature 5, issue #38) — `PATCH .../priority` sent with a stray `requestedPriority` field ignores it |
+| API-50 | BR-23 | An IT Staff caller who is **not** the ticket's current owner performs a status transition | `200` — succeeds, transition rights aren't owner-restricted (distinct from API-34, which doesn't specifically vary the caller's owner-vs-not relationship) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
 | API-52 | AC-29, BR-40 | `POST /api/tickets/:id/mark-resolved` on a ticket whose `currentStatus` is each of `RESOLVED`, `CLOSED`, `CANCELLED` | All `409`; `requesterMarkedResolvedAt` unchanged from before the call | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (sampled with `CLOSED`; `RESOLVED`/`CANCELLED` share the same `RESOLVE_BLOCKED_STATUSES` check in `app.ts`, not a separate code path per status) |
-| API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-queue.api.test.ts` | Planned — deferred to Feature 5 (issue #38); this route populates the claim/assign control, which doesn't exist until then |
-| API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/authorization.api.test.ts` | Partial (Feature 4, issue #37) — `GET /api/staff/tickets` covered in `server/tests/lab-03/staff-queue.api.test.ts` ("is readable by Administrator too"); `GET /api/staff/tickets/:id` is Feature 5 |
-| API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/authorization.api.test.ts` | Planned |
+| API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-queue.api.test.ts` | Pass (Feature 5, issue #38) — moved to `server/tests/lab-03/staff-ticket-detail.api.test.ts`, alongside the claim/assign control it populates |
+| API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/authorization.api.test.ts` | Pass — `GET /api/staff/tickets` covered in `staff-queue.api.test.ts` (Feature 4); `GET /api/staff/tickets/:id` covered in `staff-ticket-detail.api.test.ts` (Feature 5), not a separate `authorization.api.test.ts` file |
+| API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/authorization.api.test.ts` | Pass — `server/tests/lab-03/staff-ticket-detail.api.test.ts`, one test per route, not a separate `authorization.api.test.ts` file |
 | API-56 | BR-39 | `POST /api/tickets/:id/comments` and `POST /api/tickets/:id/notes` as Administrator | Both `403` (Administrator never posts, even though it can read both) | `server/tests/lab-03/comments-notes.api.test.ts` (not a separate `authorization.api.test.ts` — see §12) | Pass |
 | SEC-08 | BR-13 | A request that is simultaneously unauthenticated (no session) **and** has an invalid body (e.g. a malformed `POST /api/auth/login`) | `401`, not `400` — proves the ladder's stated order (auth before validation) rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Planned |
 | SEED-01 | §7.5 | Run `npm run prisma:seed` twice in a row | Second run makes no changes (same row counts, no unique-constraint errors) — confirms the seed script's `upsert` pattern is actually idempotent, not just documented as such | `server/tests/lab-03/migration.api.test.ts` | Planned |
@@ -218,13 +218,13 @@ with `RequesterBanner.tsx`).
 | UI-05 | Requester Ticket Detail | Public Comments: empty/loaded/posting/validation/error states | Matches `ui-spec.md` §5.1 | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Comments", ...)` block inside `client/tests/lab-02/ticket-detail.test.tsx` (extended rather than a separate Lab 3 file, since it's the same component/screen) |
 | UI-06 | Requester Ticket Detail | "Problem Appears Resolved": available/confirming/saving/success | Matches `ui-spec.md` §5.2; status badge unaffected | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Problem Appears Resolved", ...)` block in the same file as UI-05 |
 | UI-07 | Staff Ticket Queue | Loading/empty/no-results/forbidden/error states; search+filter+sort inputs fire the right query params | Matches `ui-spec.md` §6 | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass (Feature 4, issue #37) — the Owner filter is "All owners"/"Unassigned only" only (no per-staff-member picker yet; that needs Feature 5's assignable-users endpoint) |
-| UI-08 | Staff Ticket Detail | Claim/reassign control, IT Priority selector next to read-only Requested Priority, status `<select>` limited to legal next states | Matches `ui-spec.md` §7 | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
-| UI-09 | Staff Ticket Detail | Internal Notes panel visually distinct from Public Comments (asserts distinct class/label, not just presence) | Matches `ui-spec.md` §7's "Internal — IT Staff only" label | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
+| UI-08 | Staff Ticket Detail | Claim/reassign control, IT Priority selector next to read-only Requested Priority, status `<select>` limited to legal next states | Matches `ui-spec.md` §7 | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 5, issue #38) |
+| UI-09 | Staff Ticket Detail | Internal Notes panel visually distinct from Public Comments (asserts distinct class/label, not just presence) | Matches `ui-spec.md` §7's "Internal — IT Staff only" label | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass |
 | UI-10 | User Management | List loading/empty/no-results; search + role filter | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
 | UI-11 | User Management | Create form validation, including duplicate-email `409` surfaced under Email field | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
 | UI-12 | User Management | Edit form: self-suspend guard message, last-admin guard message, both rendered at the correct control | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
 | UI-13 | User Management | Reset-password action success message | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
-| UI-14 | Staff Ticket Detail | Selecting `Resolved`/`Closed`/`Reopened`/`Cancelled` opens the confirm/cancel step and sends `confirm: true` only on confirm; selecting any other target sends the request immediately, no confirm step shown; cancelling reverts the `<select>` and sends nothing | Matches `ui-spec.md` §7's status-control bullet (BR-42) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
+| UI-14 | Staff Ticket Detail | Selecting `Resolved`/`Closed`/`Reopened`/`Cancelled` opens the confirm/cancel step and sends `confirm: true` only on confirm; selecting any other target sends the request immediately, no confirm step shown; cancelling reverts the `<select>` and sends nothing | Matches `ui-spec.md` §7's status-control bullet (BR-42) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 5, issue #38) |
 
 ## 4. UI style conformance
 
@@ -461,6 +461,41 @@ re-merged; that's expected, not a mistake in this branch.
   test assertions flaky until they were rewritten to scope on a `search` term unique to this
   file's own fixture tickets. Not fixed here (out of scope for this feature) — worth a
   dedicated cleanup pass before Release Integration (issue #41) if it keeps growing.
+
+**On `feature/5-it-staff-ticket-detail-workflow`** (issue #38) — IT Staff Ticket Detail &
+Workflow. Branched directly off `lab3-staging` (Features 3 and 4 were both already merged
+in by this point) — a clean base, unlike Features 3/4's forced sibling-branch workaround.
+
+- Server: `server/src/ticketStatus.ts` (new) — the §7.3 status transition matrix and its
+  confirmation-required set as pure, directly-unit-testable data/functions (`UNIT-03`), the
+  same pattern `auth.ts` already established for `hashPassword`/`validateNewPassword`.
+  `server/src/app.ts` gains `GET /api/staff/tickets/:id` (ticket + attachments + comments +
+  notes in one response, IT_STAFF/ADMINISTRATOR read), `POST .../claim`, `POST .../assign`,
+  `PATCH .../priority`, `PATCH .../status` (BR-42's 400-before-409 confirmation order), and
+  `GET /api/staff/assignable-users` — the last five IT_STAFF only (ADMINISTRATOR gets `403`,
+  same as a Requester, BR-39/AC-20b).
+- Client: `StaffTicketDetail.tsx` (new, ui-spec.md §7) — ownership control (claim/reassign,
+  the latter backed by `GET /api/staff/assignable-users`), an IT Priority `<select>` beside
+  the read-only Requested Priority badge, a status `<select>` populated only with the
+  current status's legal next states (mirroring `ticketStatus.ts`'s matrix client-side) plus
+  the current value (disabled), the same confirm/cancel step as the Requester's "Problem
+  Appears Resolved" for the four confirmation-required targets, Public Comments (staff can
+  post), a visually distinct Internal Notes panel ("Internal — IT Staff only" label,
+  bordered/tinted), and the requester-marked-resolved note. `StaffTicketQueue.tsx`'s ticket
+  rows are now clickable (desktop button, mobile card with keyboard support) and open this
+  screen.
+- Test run: **server 294/294** (`npx vitest run`, 15 files, includes the new
+  `staff-ticket-detail.api.test.ts` — 88 tests, generated in part from `STATUS_TRANSITIONS`
+  itself rather than hand-enumerated), **client 92/92** (`npx vitest run`, 10 files, includes
+  the new `StaffTicketDetail.test.tsx` and the Queue's new navigation test), both
+  `npx tsc --noEmit` and `npm run build` clean on both packages. Manually verified end to end
+  in a live browser session as a real IT Staff account: claim, the exact legal-next-states
+  list on the status `<select>` (confirmed it updates correctly after each transition),
+  the confirm-required flow for both Cancel and Confirm, a non-confirm-required transition
+  applying immediately, and posting an Internal Note (visually distinct panel, correct
+  author/role/timestamp) all worked against the real API.
+- Not built on this branch: the Administrator User Management screen (Feature 6, issue #39)
+  — the App Shell still shows its placeholder for `ADMINISTRATOR` sessions.
 
 ## 13. Known gaps to close before Release Integration (issue #41)
 

@@ -325,3 +325,55 @@ export async function markTicketResolved(ticketId: number): Promise<Ticket> {
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to mark ticket resolved");
 }
+
+// ---------------------------------------------------------------------------
+// Feature 4 (Lab 3, issue #37) — IT Staff Ticket Queue
+// (docs/lab-03/api-spec.md "GET /api/staff/tickets")
+// ---------------------------------------------------------------------------
+export type StaffTicketSortField = "createdAt" | "updatedAt" | "itPriority" | "currentStatus";
+
+// The Lab 2 Ticket fields, plus the two the queue needs and Lab 2 never had
+// a reason to join in: who the ticket belongs to, and who (if anyone) owns
+// it on the IT Staff side.
+export type StaffTicketSummary = Ticket & {
+  requesterName: string;
+  ownerName: string | null;
+};
+
+export interface StaffTicketListResponse {
+  tickets: StaffTicketSummary[];
+  pagination: Pagination;
+}
+
+export interface FetchStaffTicketsParams {
+  search?: string;
+  categoryId?: number;
+  relatedSystemId?: number;
+  itPriority?: Priority;
+  currentStatus?: TicketStatus;
+  // 0 means "unassigned only" — a meaningful, distinct value from "no
+  // filter", so every call site here must check `!== undefined`, never
+  // truthiness (0 is falsy but not absent).
+  ownerId?: number;
+  sortBy?: StaffTicketSortField;
+  sortDir?: SortDir;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function fetchStaffTickets(params: FetchStaffTicketsParams): Promise<StaffTicketListResponse> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.categoryId) query.set("categoryId", String(params.categoryId));
+  if (params.relatedSystemId) query.set("relatedSystemId", String(params.relatedSystemId));
+  if (params.itPriority) query.set("itPriority", params.itPriority);
+  if (params.currentStatus) query.set("currentStatus", params.currentStatus);
+  if (params.ownerId !== undefined) query.set("ownerId", String(params.ownerId));
+  if (params.sortBy) query.set("sortBy", params.sortBy);
+  if (params.sortDir) query.set("sortDir", params.sortDir);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+
+  const response = await apiFetch(`/api/staff/tickets?${query.toString()}`);
+  return parseJsonOrThrow<StaffTicketListResponse>(response, "Failed to load the ticket queue");
+}

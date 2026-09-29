@@ -1099,4 +1099,168 @@ app.post(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Feature 4 — IT Staff Ticket Queue (Issue #37)
+// docs/lab-03/api-spec.md "GET /api/staff/tickets". Read-only for both
+// IT_STAFF and ADMINISTRATOR (BR-39) — every ticket, not scoped to any one
+// Requester the way Lab 2's GET /api/tickets is. A REQUESTER caller gets
+// 403 on every /api/staff/* route (AC-28a).
+// ---------------------------------------------------------------------------
+const STAFF_TICKET_SORT_FIELDS = ["createdAt", "updatedAt", "itPriority", "currentStatus"] as const;
+type StaffTicketSortField = (typeof STAFF_TICKET_SORT_FIELDS)[number];
+const STAFF_DEFAULT_SORT_BY: StaffTicketSortField = "createdAt";
+const STAFF_DEFAULT_SORT_DIR = "desc";
+const STAFF_DEFAULT_PAGE_SIZE = 20;
+const STAFF_MAX_PAGE_SIZE = 50;
+
+app.get(
+  "/api/staff/tickets",
+  requireAuth,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const where: Record<string, unknown> = {};
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    if (search) {
+      where.OR = [
+        { summary: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { ticketNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    if (req.query.categoryId !== undefined) {
+      const categoryId = Number(req.query.categoryId);
+      if (!Number.isInteger(categoryId) || categoryId <= 0) {
+        return res.status(400).json({ error: "categoryId must be a positive integer." });
+      }
+      where.categoryId = categoryId;
+    }
+
+    if (req.query.relatedSystemId !== undefined) {
+      const relatedSystemId = Number(req.query.relatedSystemId);
+      if (!Number.isInteger(relatedSystemId) || relatedSystemId <= 0) {
+        return res.status(400).json({ error: "relatedSystemId must be a positive integer." });
+      }
+      where.relatedSystemId = relatedSystemId;
+    }
+
+    if (req.query.itPriority !== undefined) {
+      if (!REQUESTED_PRIORITIES.includes(req.query.itPriority as (typeof REQUESTED_PRIORITIES)[number])) {
+        return res.status(400).json({ error: "itPriority must be LOW, MEDIUM, or HIGH." });
+      }
+      where.itPriority = req.query.itPriority;
+    }
+
+    if (req.query.currentStatus !== undefined) {
+      if (!TICKET_STATUSES.includes(req.query.currentStatus as TicketStatus)) {
+        return res.status(400).json({
+          error: `currentStatus must be one of: ${TICKET_STATUSES.join(", ")}.`,
+        });
+      }
+      where.currentStatus = req.query.currentStatus;
+    }
+
+    // ownerId=0 means "unassigned only" (where.ownerId: null); any other
+    // non-negative integer filters to that specific owner.
+    if (req.query.ownerId !== undefined) {
+      const ownerId = Number(req.query.ownerId);
+      if (!Number.isInteger(ownerId) || ownerId < 0) {
+        return res.status(400).json({
+          error: "ownerId must be a non-negative integer (0 means unassigned).",
+        });
+      }
+      where.ownerId = ownerId === 0 ? null : ownerId;
+    }
+
+    const sortByParam = req.query.sortBy;
+    const sortBy: StaffTicketSortField =
+      sortByParam === undefined ? STAFF_DEFAULT_SORT_BY : (sortByParam as StaffTicketSortField);
+    if (!STAFF_TICKET_SORT_FIELDS.includes(sortBy)) {
+      return res.status(400).json({
+        error: `sortBy must be one of: ${STAFF_TICKET_SORT_FIELDS.join(", ")}.`,
+      });
+    }
+
+    const sortDirParam = req.query.sortDir;
+    const sortDirValue = sortDirParam === undefined ? STAFF_DEFAULT_SORT_DIR : sortDirParam;
+    if (sortDirValue !== "asc" && sortDirValue !== "desc") {
+      return res.status(400).json({ error: "sortDir must be asc or desc." });
+    }
+    const sortDir: Prisma.SortOrder = sortDirValue;
+
+    const pageParam = req.query.page;
+    const page = pageParam === undefined ? 1 : Number(pageParam);
+    if (!Number.isInteger(page) || page <= 0) {
+      return res.status(400).json({ error: "page must be a positive integer." });
+    }
+
+    const pageSizeParam = req.query.pageSize;
+    const pageSize = pageSizeParam === undefined ? STAFF_DEFAULT_PAGE_SIZE : Number(pageSizeParam);
+    if (!Number.isInteger(pageSize) || pageSize <= 0 || pageSize > STAFF_MAX_PAGE_SIZE) {
+      return res.status(400).json({
+        error: `pageSize must be a positive integer up to ${STAFF_MAX_PAGE_SIZE}.`,
+      });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // id desc as a tiebreaker keeps order stable when two tickets share the
+      // sorted-on value, same convention as Lab 2's GET /api/tickets.
+      let orderBy: Prisma.TicketOrderByWithRelationInput[];
+      switch (sortBy) {
+        case "updatedAt":
+          orderBy = [{ updatedAt: sortDir }, { id: "desc" }];
+          break;
+        case "itPriority":
+          orderBy = [{ itPriority: sortDir }, { id: "desc" }];
+          break;
+        case "currentStatus":
+          orderBy = [{ currentStatus: sortDir }, { id: "desc" }];
+          break;
+        case "createdAt":
+        default:
+          orderBy = [{ createdAt: sortDir }, { id: "desc" }];
+      }
+
+      const [tickets, totalItems] = await Promise.all([
+        prisma.ticket.findMany({
+          where,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          include: {
+            requester: { select: { name: true } },
+            owner: { select: { name: true } },
+          },
+        }),
+        prisma.ticket.count({ where }),
+      ]);
+
+      res.status(200).json({
+        // Flattened onto the ticket itself (StaffTicketSummary) rather than
+        // nested requester/owner objects — the queue table only ever needs
+        // the name, never the rest of either User row.
+        tickets: tickets.map(({ requester, owner, ...ticket }) => ({
+          ...ticket,
+          requesterName: requester.name,
+          ownerName: owner?.name ?? null,
+        })),
+        pagination: {
+          page,
+          pageSize,
+          totalItems,
+          totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+        },
+      });
+    } catch (error) {
+      console.error("Failed to retrieve staff ticket queue:", error);
+
+      res.status(500).json({ error: "Failed to retrieve staff ticket queue" });
+    }
+  }
+);
+
 export default app;

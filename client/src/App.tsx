@@ -4,6 +4,7 @@ import ChangePassword from "./ChangePassword.js";
 import CreateTicketForm from "./CreateTicketForm.js";
 import Login from "./Login.js";
 import MyTickets from "./MyTickets.js";
+import StaffTicketQueue from "./StaffTicketQueue.js";
 
 type CheckState = "idle" | "loading" | "success" | "error";
 type TicketView = "none" | "createTicket" | "myTickets";
@@ -185,12 +186,7 @@ export default function App() {
           </div>
         )}
 
-        {currentUser.role === "IT_STAFF" && (
-          <div className="mt-4">
-            <h2 className="h5">Ticket Queue</h2>
-            <p className="text-muted">Coming soon.</p>
-          </div>
-        )}
+        {currentUser.role === "IT_STAFF" && <StaffTicketQueue />}
 
         {currentUser.role === "ADMINISTRATOR" && (
           <div className="mt-4">

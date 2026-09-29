@@ -74,7 +74,7 @@ handout's structure block is treated as illustrative naming, not a literal path.
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
 | SEC-01 | AC-27 | Every `/api/admin/*` route called by Requester and IT Staff sessions | All `403` | Planned |
-| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Planned |
+| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Partial (Feature 4, issue #37) — covers `GET /api/staff/tickets` (the only `/api/staff/*` route that exists so far); the claim/assign/priority/status/assignable-users routes are Feature 5 |
 | SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Pass — `server/tests/lab-02/create-ticket.api.test.ts` ("ignores a requesterId in the body") and `my-tickets.api.test.ts` ("ignores a requesterId query param"), not a separate `authorization.api.test.ts` file (see §12) |
 | SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Pass — one "returns 404 (not 403)" test per route in `server/tests/lab-02/ticket-detail.api.test.ts`, `attachments.api.test.ts`, `inspect-attachments.api.test.ts`, `remove-attachment.api.test.ts`, plus `server/tests/lab-03/comments-notes.api.test.ts` for `.../comments` and `.../mark-resolved` |
 | SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Pass — `server/tests/lab-03/comments-notes.api.test.ts` (API-21) |
@@ -105,12 +105,12 @@ handout's structure block is treated as illustrative naming, not a literal path.
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| API-22 | AC-14 | `GET /api/staff/tickets` with no filters, as IT Staff | `200`, tickets from multiple Requesters returned | Planned |
-| API-23 | AC-14 | Search, category/relatedSystem/itPriority/status/owner filters, each independently | Each filters correctly; combining two narrows further | Planned |
-| API-24 | — | `ownerId=0` filter | Returns only unassigned tickets | Planned |
-| API-25 | — | Sort by each of `createdAt`/`updatedAt`/`itPriority`/`currentStatus`, both directions | Order matches; ties broken by `id desc` (same pattern as Lab 2) | Planned |
-| API-26 | — | Pagination: `page`/`pageSize`, `pageSize` over max (50) | `400` for over-max; correct slicing otherwise | Planned |
-| API-27 | — | Invalid `currentStatus`/`itPriority` query value | `400`, not silently ignored | Planned |
+| API-22 | AC-14 | `GET /api/staff/tickets` with no filters, as IT Staff | `200`, tickets from multiple Requesters returned | Pass (Feature 4, issue #37) |
+| API-23 | AC-14 | Search, category/relatedSystem/itPriority/status/owner filters, each independently | Each filters correctly; combining two narrows further | Pass |
+| API-24 | — | `ownerId=0` filter | Returns only unassigned tickets | Pass |
+| API-25 | — | Sort by each of `createdAt`/`updatedAt`/`itPriority`/`currentStatus`, both directions | Order matches; ties broken by `id desc` (same pattern as Lab 2) | Pass |
+| API-26 | — | Pagination: `page`/`pageSize`, `pageSize` over max (50) | `400` for over-max; correct slicing otherwise | Pass |
+| API-27 | — | Invalid `currentStatus`/`itPriority` query value | `400`, not silently ignored | Pass |
 
 ### 2.6 IT Staff Ticket Detail / ownership / priority / status (`server/tests/lab-03/staff-ticket-detail.api.test.ts`)
 
@@ -159,8 +159,8 @@ idempotency.
 | API-49 | BR-19 | Attempt to submit a `requestedPriority` field on any route other than `POST /api/tickets` (e.g. as part of `PATCH .../priority`, or a second `POST /api/tickets/:id`-style call — no such update route exists) | No route accepts a `requestedPriority` change after creation; the field is immutable by construction, not by a runtime check | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
 | API-50 | BR-23 | An IT Staff caller who is **not** the ticket's current owner performs a status transition | `200` — succeeds, transition rights aren't owner-restricted (distinct from API-34, which doesn't specifically vary the caller's owner-vs-not relationship) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
 | API-52 | AC-29, BR-40 | `POST /api/tickets/:id/mark-resolved` on a ticket whose `currentStatus` is each of `RESOLVED`, `CLOSED`, `CANCELLED` | All `409`; `requesterMarkedResolvedAt` unchanged from before the call | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (sampled with `CLOSED`; `RESOLVED`/`CANCELLED` share the same `RESOLVE_BLOCKED_STATUSES` check in `app.ts`, not a separate code path per status) |
-| API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-queue.api.test.ts` | Planned |
-| API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/authorization.api.test.ts` | Planned |
+| API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-queue.api.test.ts` | Planned — deferred to Feature 5 (issue #38); this route populates the claim/assign control, which doesn't exist until then |
+| API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/authorization.api.test.ts` | Partial (Feature 4, issue #37) — `GET /api/staff/tickets` covered in `server/tests/lab-03/staff-queue.api.test.ts` ("is readable by Administrator too"); `GET /api/staff/tickets/:id` is Feature 5 |
 | API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/authorization.api.test.ts` | Planned |
 | API-56 | BR-39 | `POST /api/tickets/:id/comments` and `POST /api/tickets/:id/notes` as Administrator | Both `403` (Administrator never posts, even though it can read both) | `server/tests/lab-03/comments-notes.api.test.ts` (not a separate `authorization.api.test.ts` — see §12) | Pass |
 | SEC-08 | BR-13 | A request that is simultaneously unauthenticated (no session) **and** has an invalid body (e.g. a malformed `POST /api/auth/login`) | `401`, not `400` — proves the ladder's stated order (auth before validation) rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Planned |
@@ -217,7 +217,7 @@ with `RequesterBanner.tsx`).
 | UI-04 | App Shell | Nav renders only the current role's destinations (3 cases: each role) | Matches `ui-spec.md` §3 table | `client/tests/lab-03/AppShell.test.tsx` (new — kept out of `client/tests/lab-01/App.test.tsx` so Lab 1's own test file doesn't grow Lab 3 concerns) | Partial — the Requester nav path (New Ticket/My Tickets, no other destination rendered) is exercised throughout `client/tests/lab-02/*.test.tsx`; IT Staff/Administrator only get a placeholder panel each (their real screens are Feature 4/5), so there's no dedicated `AppShell.test.tsx` asserting all three role cases yet |
 | UI-05 | Requester Ticket Detail | Public Comments: empty/loaded/posting/validation/error states | Matches `ui-spec.md` §5.1 | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Comments", ...)` block inside `client/tests/lab-02/ticket-detail.test.tsx` (extended rather than a separate Lab 3 file, since it's the same component/screen) |
 | UI-06 | Requester Ticket Detail | "Problem Appears Resolved": available/confirming/saving/success | Matches `ui-spec.md` §5.2; status badge unaffected | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Problem Appears Resolved", ...)` block in the same file as UI-05 |
-| UI-07 | Staff Ticket Queue | Loading/empty/no-results/forbidden/error states; search+filter+sort inputs fire the right query params | Matches `ui-spec.md` §6 | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Planned |
+| UI-07 | Staff Ticket Queue | Loading/empty/no-results/forbidden/error states; search+filter+sort inputs fire the right query params | Matches `ui-spec.md` §6 | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass (Feature 4, issue #37) — the Owner filter is "All owners"/"Unassigned only" only (no per-staff-member picker yet; that needs Feature 5's assignable-users endpoint) |
 | UI-08 | Staff Ticket Detail | Claim/reassign control, IT Priority selector next to read-only Requested Priority, status `<select>` limited to legal next states | Matches `ui-spec.md` §7 | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
 | UI-09 | Staff Ticket Detail | Internal Notes panel visually distinct from Public Comments (asserts distinct class/label, not just presence) | Matches `ui-spec.md` §7's "Internal — IT Staff only" label | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Planned |
 | UI-10 | User Management | List loading/empty/no-results; search + role filter | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
@@ -426,6 +426,41 @@ Requester Regression:
   breaks): `GET/POST /api/staff/*` (IT Staff Ticket Queue/Detail), `GET/POST/PATCH
   /api/admin/*` (Administrator User Management) — the App Shell renders a placeholder panel
   for `IT_STAFF`/`ADMINISTRATOR` sessions rather than a real screen for either.
+
+**On `feature/4-it-staff-ticket-queue`** (issue #37) — IT Staff Ticket Queue. Branched from
+`feature/3-authorization-requester-regression` rather than `lab3-staging` directly: Feature
+3's PR (#45) was merged into `lab3-staging` and then reverted (its merge landed before
+review was complete), so `lab3-staging` doesn't currently have the session/role
+infrastructure this feature depends on, even though the feature branch itself does. This
+branch's diff against `lab3-staging` will include Feature 3's changes until #45 is
+re-merged; that's expected, not a mistake in this branch.
+
+- Server: `GET /api/staff/tickets` (`server/src/app.ts`) — `requireAuth,
+  requireRole("IT_STAFF", "ADMINISTRATOR"), requirePasswordUpToDate`; search/category/
+  relatedSystem/itPriority/currentStatus/ownerId filters, sort by
+  `createdAt`/`updatedAt`/`itPriority`/`currentStatus` (`id desc` tiebreak), pagination
+  (default page size 20, max 50). Response flattens `requesterName`/`ownerName` onto each
+  ticket rather than nesting the joined `User` rows.
+- Client: `StaffTicketQueue.tsx` (ui-spec.md §6) — search box, filter dropdowns, sortable
+  column headers, desktop table (full columns) → tablet table (Category/Last Updated
+  dropped at the `lg` breakpoint) → mobile stacked cards with a collapsible "Filters"
+  disclosure, wired into the App Shell as the `IT_STAFF` nav destination. The Owner filter
+  is "All owners"/"Unassigned only" only — a per-staff-member picker needs
+  `GET /api/staff/assignable-users`, which is Feature 5's job.
+- Test run: **server 204/204** (`npx vitest run`, 13 files, includes the new
+  `staff-queue.api.test.ts`), **client 70/70** (`npx vitest run`, 8 files, includes the new
+  `StaffTicketQueue.test.tsx`), both `npx tsc --noEmit` and `npm run build` clean on both
+  packages. Manually verified in a live browser session against a real IT Staff account:
+  the queue loads real (accumulated dev-DB) ticket data, filters/search/sort/pagination all
+  fire the expected request, and the responsive layout was checked at desktop (1024px),
+  tablet (768px), and mobile (375px) — including the mobile Filters disclosure toggling
+  open/closed.
+- A large amount of leftover ticket data from many past e2e/manual test runs was found to
+  have accumulated, un-scoped, in the shared dev database (this route is the first one with
+  no per-Requester scoping, so it's the first to surface it); this made several exact-match
+  test assertions flaky until they were rewritten to scope on a `search` term unique to this
+  file's own fixture tickets. Not fixed here (out of scope for this feature) — worth a
+  dedicated cleanup pass before Release Integration (issue #41) if it keeps growing.
 
 ## 13. Known gaps to close before Release Integration (issue #41)
 

@@ -4,14 +4,12 @@ import {
   Category,
   Priority,
   RelatedSystem,
-  Requester,
   Ticket,
   createTicket,
   fetchCategories,
   fetchRelatedSystems,
   uploadAttachment,
 } from "./api.js";
-import RequesterBanner from "./RequesterBanner.js";
 
 const SUMMARY_MAX_LENGTH = 150;
 const DESCRIPTION_MAX_LENGTH = 2000;
@@ -19,12 +17,10 @@ const DESCRIPTION_MAX_LENGTH = 2000;
 type LookupState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting";
 
-interface CreateTicketFormProps {
-  requester: Requester;
-  onSwitchRequester: () => void;
-}
-
-export default function CreateTicketForm({ requester, onSwitchRequester }: CreateTicketFormProps) {
+// Lab 3: identity comes from the logged-in session (FR-08/BR-03) — this
+// form no longer takes a Requester prop, and doesn't send a requesterId
+// anywhere; the server derives it from the session cookie.
+export default function CreateTicketForm() {
   const [lookupState, setLookupState] = useState<LookupState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
   const [relatedSystems, setRelatedSystems] = useState<RelatedSystem[]>([]);
@@ -98,7 +94,6 @@ export default function CreateTicketForm({ requester, onSwitchRequester }: Creat
 
     try {
       const ticket = await createTicket({
-        requesterId: requester.id,
         categoryId: Number(categoryId),
         relatedSystemId: Number(relatedSystemId),
         summary,
@@ -108,7 +103,7 @@ export default function CreateTicketForm({ requester, onSwitchRequester }: Creat
 
       if (file) {
         try {
-          await uploadAttachment(ticket.id, requester.id, file);
+          await uploadAttachment(ticket.id, file);
         } catch (attachmentError) {
           console.error("Attachment upload failed:", attachmentError);
           setAttachmentWarning(
@@ -146,7 +141,6 @@ export default function CreateTicketForm({ requester, onSwitchRequester }: Creat
   if (createdTicket) {
     return (
       <div className="mt-4">
-        <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} />
         <div className="alert alert-success" role="status">
           <p className="mb-1">Ticket created successfully.</p>
           <p className="mb-1">
@@ -170,8 +164,6 @@ export default function CreateTicketForm({ requester, onSwitchRequester }: Creat
 
   return (
     <form className="mt-4" onSubmit={handleSubmit} noValidate>
-      <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} />
-
       <h2 className="h5">Create a New Ticket</h2>
 
       {fieldErrors.requesterId && (

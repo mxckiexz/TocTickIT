@@ -3,41 +3,42 @@ import {
   ApiError,
   AttachmentSummary,
   Category,
+  Comment,
   RelatedSystem,
-  Requester,
   Ticket,
+  fetchComments,
   fetchTicketAttachments,
   fetchTicketDetail,
+  markTicketResolved,
+  postComment,
   removeAttachment,
   ticketAttachmentUrl,
   uploadAttachment,
 } from "./api.js";
-import RequesterBanner from "./RequesterBanner.js";
 
 // Mirrors server/src/app.ts's MAX_ACTIVE_ATTACHMENTS_PER_TICKET — a client-
 // side hint only (disables the upload control at the limit); the server is
 // the real gate and still enforces this with its own 409.
 const MAX_ATTACHMENTS_PER_TICKET = 5;
+// Mirrors the server's COMMENT_BODY_MAX_LENGTH (BR-26).
+const COMMENT_MAX_LENGTH = 2000;
+// ui-spec.md §5.2 — the button is hidden once the ticket is in one of these.
+const RESOLVE_BLOCKED_STATUSES = ["RESOLVED", "CLOSED", "CANCELLED"];
 
 interface TicketDetailProps {
   ticketId: number;
-  requester: Requester;
   categories: Category[];
   relatedSystems: RelatedSystem[];
   onBack: () => void;
-  onSwitchRequester: () => void;
 }
 
 type LoadState = "loading" | "ready" | "error";
+type ResolveUiState = "idle" | "confirming" | "saving";
 
-export default function TicketDetail({
-  ticketId,
-  requester,
-  categories,
-  relatedSystems,
-  onBack,
-  onSwitchRequester,
-}: TicketDetailProps) {
+// Lab 3: identity comes from the logged-in session (FR-08/BR-03) — no
+// Requester prop needed anymore. Adds Public Comments and "Problem Appears
+// Resolved" below the Attachments section (ui-spec.md §5).
+export default function TicketDetail({ ticketId, categories, relatedSystems, onBack }: TicketDetailProps) {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -64,6 +65,17 @@ export default function TicketDetail({
   const [pendingRemoval, setPendingRemoval] = useState<AttachmentSummary | null>(null);
   const [removalReasonInput, setRemovalReasonInput] = useState("");
 
+  const [commentsState, setCommentsState] = useState<LoadState>("loading");
+  const [commentsError, setCommentsError] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentBody, setCommentBody] = useState("");
+  const [commentFieldError, setCommentFieldError] = useState("");
+  const [commentPostState, setCommentPostState] = useState<"idle" | "posting">("idle");
+  const [commentPostError, setCommentPostError] = useState("");
+
+  const [resolveUiState, setResolveUiState] = useState<ResolveUiState>("idle");
+  const [resolveError, setResolveError] = useState("");
+
   // Only active (non-removed) attachments count toward the 5-attachment
   // limit — a removed one stays in `attachments` (BR-14: still visible as
   // metadata) but shouldn't block adding a new file.
@@ -73,7 +85,7 @@ export default function TicketDetail({
     let cancelled = false;
     setLoadState("loading");
 
-    fetchTicketDetail(ticketId, requester.id)
+    fetchTicketDetail(ticketId)
       .then((result) => {
         if (cancelled) return;
         setTicket(result);
@@ -91,7 +103,7 @@ export default function TicketDetail({
     return () => {
       cancelled = true;
     };
-  }, [ticketId, requester.id]);
+  }, [ticketId]);
 
   // Fetched independently of the ticket's own fields — a network hiccup on
   // one shouldn't have to block the other, and the ownership check runs
@@ -100,7 +112,7 @@ export default function TicketDetail({
     let cancelled = false;
     setAttachmentsState("loading");
 
-    fetchTicketAttachments(ticketId, requester.id)
+    fetchTicketAttachments(ticketId)
       .then((result) => {
         if (cancelled) return;
         setAttachments(result);
@@ -118,7 +130,30 @@ export default function TicketDetail({
     return () => {
       cancelled = true;
     };
-  }, [ticketId, requester.id, attachmentsRefreshKey]);
+  }, [ticketId, attachmentsRefreshKey]);
+
+  // Also fetched independently, same reasoning as attachments above.
+  useEffect(() => {
+    let cancelled = false;
+    setCommentsState("loading");
+
+    fetchComments(ticketId)
+      .then((result) => {
+        if (cancelled) return;
+        setComments(result);
+        setCommentsState("ready");
+      })
+      .catch((error) => {
+        console.error("Failed to load comments:", error);
+        if (cancelled) return;
+        setCommentsError(error instanceof ApiError ? error.message : "Unable to load comments.");
+        setCommentsState("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketId]);
 
   async function handleUploadSubmit(event: FormEvent) {
     event.preventDefault();
@@ -128,7 +163,7 @@ export default function TicketDetail({
     setUploadError("");
 
     try {
-      await uploadAttachment(ticketId, requester.id, uploadFile);
+      await uploadAttachment(ticketId, uploadFile);
       setUploadFile(null);
       setAttachmentsRefreshKey((key) => key + 1);
     } catch (error) {
@@ -163,7 +198,7 @@ export default function TicketDetail({
     setRemoveError("");
 
     try {
-      await removeAttachment(ticketId, attachment.id, requester.id, reason || undefined);
+      await removeAttachment(ticketId, attachment.id, reason || undefined);
       setAttachmentsRefreshKey((key) => key + 1);
     } catch (error) {
       console.error("Failed to remove attachment:", error);
@@ -173,6 +208,57 @@ export default function TicketDetail({
     } finally {
       setRemovingId(null);
       setRemovalReasonInput("");
+    }
+  }
+
+  async function handlePostComment(event: FormEvent) {
+    event.preventDefault();
+    if (commentPostState === "posting") return;
+
+    const trimmed = commentBody.trim();
+    setCommentFieldError("");
+    setCommentPostError("");
+
+    // BR-25/BR-26, mirrored client-side; the server re-checks independently.
+    if (!trimmed) {
+      setCommentFieldError("Comment cannot be empty.");
+      return;
+    }
+    if (trimmed.length > COMMENT_MAX_LENGTH) {
+      setCommentFieldError(`Comment must be ${COMMENT_MAX_LENGTH} characters or fewer.`);
+      return;
+    }
+
+    setCommentPostState("posting");
+
+    try {
+      const comment = await postComment(ticketId, commentBody);
+      setComments((current) => [...current, comment]);
+      setCommentBody("");
+    } catch (error) {
+      console.error("Failed to post comment:", error);
+      setCommentPostError(
+        error instanceof ApiError ? error.message : "Unable to post your comment."
+      );
+    } finally {
+      setCommentPostState("idle");
+    }
+  }
+
+  async function handleConfirmResolve() {
+    setResolveUiState("saving");
+    setResolveError("");
+
+    try {
+      const updated = await markTicketResolved(ticketId);
+      setTicket(updated);
+      setResolveUiState("idle");
+    } catch (error) {
+      console.error("Failed to mark ticket resolved:", error);
+      setResolveError(
+        error instanceof ApiError ? error.message : "Unable to mark this ticket resolved."
+      );
+      setResolveUiState("idle");
     }
   }
 
@@ -190,8 +276,6 @@ export default function TicketDetail({
 
   return (
     <div className="mt-4">
-      <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} label="Viewing as" />
-
       <button type="button" className="btn btn-link btn-sm p-0 mb-3" onClick={onBack}>
         ← Back to My Tickets
       </button>
@@ -267,7 +351,7 @@ export default function TicketDetail({
                 ) : (
                   <li key={attachment.id} className="mb-1 d-flex align-items-center gap-2">
                     <a
-                      href={ticketAttachmentUrl(ticket.id, attachment.id, requester.id)}
+                      href={ticketAttachmentUrl(ticket.id, attachment.id)}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -336,6 +420,123 @@ export default function TicketDetail({
                 </div>
               )}
             </form>
+          )}
+
+          <h3 className="h6 mt-4">Comments</h3>
+
+          {commentsState === "loading" && <p>Loading comments…</p>}
+
+          {commentsState === "error" && (
+            <div className="alert alert-danger" role="alert">
+              {commentsError}
+            </div>
+          )}
+
+          {commentsState === "ready" && comments.length === 0 && (
+            <p className="text-muted">No comments yet.</p>
+          )}
+
+          {commentsState === "ready" && comments.length > 0 && (
+            <ul className="list-unstyled">
+              {comments.map((comment) => (
+                <li key={comment.id} className="mb-2 pb-2 border-bottom">
+                  <div className="d-flex align-items-center gap-2">
+                    <strong>{comment.authorName}</strong>
+                    <span className="badge text-bg-secondary">{comment.authorRole}</span>
+                    <span className="text-muted small">
+                      {new Date(comment.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                    {comment.body}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {commentPostError && (
+            <div className="alert alert-danger py-1 px-2 small" role="alert">
+              {commentPostError}
+            </div>
+          )}
+
+          {commentsState === "ready" && (
+            <form className="mt-2" onSubmit={handlePostComment}>
+              <label htmlFor="newComment" className="form-label small mb-1">
+                Add a comment
+              </label>
+              <textarea
+                id="newComment"
+                className="form-control form-control-sm"
+                rows={2}
+                maxLength={COMMENT_MAX_LENGTH}
+                value={commentBody}
+                onChange={(event) => setCommentBody(event.target.value)}
+                disabled={commentPostState === "posting"}
+              />
+              {commentFieldError && (
+                <div className="text-danger small mt-1">{commentFieldError}</div>
+              )}
+              <button
+                type="submit"
+                className="btn btn-success btn-sm mt-2"
+                disabled={commentPostState === "posting"}
+              >
+                {commentPostState === "posting" ? "Posting…" : "Post comment"}
+              </button>
+            </form>
+          )}
+
+          {!RESOLVE_BLOCKED_STATUSES.includes(ticket.currentStatus) && (
+            <div className="mt-4">
+              <h3 className="h6">Problem Appears Resolved</h3>
+
+              {ticket.requesterMarkedResolvedAt ? (
+                <p className="text-success small mb-0">
+                  You marked this as resolved on{" "}
+                  {new Date(ticket.requesterMarkedResolvedAt).toLocaleString()}.
+                </p>
+              ) : resolveUiState === "confirming" ? (
+                <div>
+                  <p className="mb-2 small">
+                    Mark this problem as resolved? This is a signal to IT Staff, not a status
+                    change — the ticket stays open until IT Staff closes it.
+                  </p>
+                  <div className="d-flex gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-success btn-sm"
+                      onClick={() => setResolveUiState("idle")}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-success btn-sm"
+                      onClick={handleConfirmResolve}
+                    >
+                      Yes, mark resolved
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline-success btn-sm"
+                  onClick={() => setResolveUiState("confirming")}
+                  disabled={resolveUiState === "saving"}
+                >
+                  {resolveUiState === "saving" ? "Saving…" : "Problem Appears Resolved"}
+                </button>
+              )}
+
+              {resolveError && (
+                <div className="alert alert-danger py-1 px-2 small mt-2" role="alert">
+                  {resolveError}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

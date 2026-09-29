@@ -2,41 +2,47 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
-import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/auth-fixtures.js";
 
-// Lab 3 (tests.md §2.3, API-12): re-run against session auth — requesterId
-// is no longer a query param (FR-08/BR-03); the endpoint is always scoped to
-// whoever is logged in. currentStatus values move from Lab 2's free-text
-// ("New", "Resolved") to the TicketStatus enum ("NEW", "RESOLVED").
 describe("GET /api/tickets", () => {
-  const requesterAEmail = "mytix-a-fixture@toktickit.test";
-  const requesterBEmail = "mytix-b-fixture@toktickit.test";
-  const noTicketsEmail = "mytix-no-tickets-fixture@toktickit.test";
-  let agentA: request.Agent;
-  let agentB: request.Agent;
-  let agentNoTickets: request.Agent;
   let requesterAId: number;
   let requesterBId: number;
+  let requesterWithNoTicketsId: number;
   const createdTicketIds: number[] = [];
 
   beforeAll(async () => {
     const prisma = getPrisma();
-
-    const { user: requesterA } = await createFixtureUser(requesterAEmail);
-    const { user: requesterB } = await createFixtureUser(requesterBEmail);
-    await createFixtureUser(noTicketsEmail);
-    agentA = await loginAgent(requesterAEmail);
-    agentB = await loginAgent(requesterBEmail);
-    agentNoTickets = await loginAgent(noTicketsEmail);
-    requesterAId = requesterA.id;
-    requesterBId = requesterB.id;
-
+    const [requesterA, requesterB] = await prisma.user.findMany({
+      where: { role: "REQUESTER", isActive: true },
+      take: 2,
+      orderBy: { id: "asc" },
+    });
     const category = await prisma.category.findFirstOrThrow({
       where: { isActive: true },
     });
     const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({
       where: { isActive: true },
     });
+
+    requesterAId = requesterA.id;
+    requesterBId = requesterB.id;
+
+    // Dedicated fixture for the empty-list case — a seeded requester "found
+    // to have no tickets right now" is fragile (any other test or manual
+    // run against the same DB could leave it with tickets). This one is
+    // created here and nothing ever creates a ticket against it, so the
+    // empty-list assertion holds regardless of what else is in the DB.
+    const requesterWithNoTickets = await prisma.user.upsert({
+      where: { email: "no-tickets-fixture@toktickit.test" },
+      update: { isActive: true },
+      create: {
+        name: "No Tickets Fixture",
+        email: "no-tickets-fixture@toktickit.test",
+        role: "REQUESTER",
+        passwordHash: "test-fixture-hash",
+        isActive: true,
+      },
+    });
+    requesterWithNoTicketsId = requesterWithNoTickets.id;
 
     async function createTicket(requesterId: number, summary: string) {
       const ticket = await prisma.ticket.create({
@@ -48,7 +54,6 @@ describe("GET /api/tickets", () => {
           summary,
           description: "My Tickets list test fixture.",
           requestedPriority: "LOW",
-          itPriority: "LOW",
         },
       });
       createdTicketIds.push(ticket.id);
@@ -66,29 +71,16 @@ describe("GET /api/tickets", () => {
     await prisma.ticket.deleteMany({
       where: { id: { in: createdTicketIds } },
     });
-    await deleteFixtureUser(requesterAEmail);
-    await deleteFixtureUser(requesterBEmail);
-    await deleteFixtureUser(noTicketsEmail);
+    // Tickets first (FK), then the fixture User itself — leave nothing
+    // behind for this test file to have created.
+    await prisma.user.delete({ where: { id: requesterWithNoTicketsId } });
   });
 
-  it("rejects an unauthenticated request", async () => {
-    const response = await request(app).get("/api/tickets").expect(401);
-    expect(response.body.error).toBeDefined();
-  });
-
-  it("rejects a session whose role is not REQUESTER", async () => {
-    const staffEmail = "mytix-staff-fixture@toktickit.test";
-    await createFixtureUser(staffEmail, { role: "IT_STAFF" });
-    const staffAgent = await loginAgent(staffEmail);
-
-    const response = await staffAgent.get("/api/tickets").expect(403);
-    expect(response.body.error).toBeDefined();
-
-    await deleteFixtureUser(staffEmail);
-  });
-
-  it("returns only the logged-in Requester's own tickets (ownership)", async () => {
-    const response = await agentA.get("/api/tickets").expect(200);
+  it("returns only the selected Requester's own tickets (ownership)", async () => {
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterAId })
+      .expect(200);
 
     expect(response.body.tickets.length).toBeGreaterThanOrEqual(2);
     for (const ticket of response.body.tickets) {
@@ -99,16 +91,11 @@ describe("GET /api/tickets", () => {
     expect(summaries).not.toContain("Requester B ticket");
   });
 
-  it("does not return Requester A's tickets when Requester B is logged in", async () => {
-    const response = await agentB.get("/api/tickets").expect(200);
-
-    const summaries = response.body.tickets.map((t: { summary: string }) => t.summary);
-    expect(summaries).toContain("Requester B ticket");
-    expect(summaries).not.toContain("Requester A ticket 1");
-  });
-
-  it("ignores a requesterId query param — always scoped to the session", async () => {
-    const response = await agentB.get("/api/tickets").query({ requesterId: requesterAId }).expect(200);
+  it("does not return Requester A's tickets when Requester B is selected", async () => {
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterBId })
+      .expect(200);
 
     const summaries = response.body.tickets.map((t: { summary: string }) => t.summary);
     expect(summaries).toContain("Requester B ticket");
@@ -116,7 +103,10 @@ describe("GET /api/tickets", () => {
   });
 
   it("orders tickets newest first by default", async () => {
-    const response = await agentA.get("/api/tickets").expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterAId })
+      .expect(200);
 
     const dates = response.body.tickets.map((t: { createdAt: string }) =>
       new Date(t.createdAt).getTime()
@@ -144,7 +134,6 @@ describe("GET /api/tickets", () => {
         summary: "Tie-break ticket 1",
         description: "Same createdAt as the next one, on purpose.",
         requestedPriority: "LOW",
-        itPriority: "LOW",
         createdAt: sameInstant,
       },
     });
@@ -157,13 +146,15 @@ describe("GET /api/tickets", () => {
         summary: "Tie-break ticket 2",
         description: "Same createdAt as the previous one, on purpose.",
         requestedPriority: "LOW",
-        itPriority: "LOW",
         createdAt: sameInstant,
       },
     });
     createdTicketIds.push(first.id, second.id);
 
-    const response = await agentA.get("/api/tickets").expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterAId })
+      .expect(200);
 
     const tieIds = response.body.tickets
       .map((t: { id: number }) => t.id)
@@ -172,7 +163,10 @@ describe("GET /api/tickets", () => {
   });
 
   it("returns an empty tickets array for a Requester with no tickets", async () => {
-    const response = await agentNoTickets.get("/api/tickets").expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterWithNoTicketsId })
+      .expect(200);
 
     expect(response.body.tickets).toEqual([]);
     expect(response.body.pagination).toMatchObject({
@@ -182,8 +176,26 @@ describe("GET /api/tickets", () => {
     });
   });
 
+  it("rejects a missing requesterId", async () => {
+    const response = await request(app).get("/api/tickets").expect(400);
+
+    expect(response.body.error).toBeDefined();
+  });
+
+  it("rejects a requesterId of 0", async () => {
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: 0 })
+      .expect(400);
+
+    expect(response.body.error).toBeDefined();
+  });
+
   it("includes a pagination envelope even on an unfiltered request", async () => {
-    const response = await agentA.get("/api/tickets").expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId: requesterAId })
+      .expect(200);
 
     expect(response.body.pagination).toMatchObject({
       page: 1,
@@ -196,8 +208,7 @@ describe("GET /api/tickets", () => {
 });
 
 describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)", () => {
-  const email = "feature5-fixture@toktickit.test";
-  let agent: request.Agent;
+  let requesterId: number;
   let categoryAId: number;
   let categoryBId: number;
   let relatedSystemAId: number;
@@ -209,8 +220,18 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const { user: requester } = await createFixtureUser(email);
-    agent = await loginAgent(email);
+    const requester = await prisma.user.upsert({
+      where: { email: "feature5-fixture@toktickit.test" },
+      update: { isActive: true },
+      create: {
+        name: "Feature 5 Fixture",
+        email: "feature5-fixture@toktickit.test",
+        role: "REQUESTER",
+        passwordHash: "test-fixture-hash",
+        isActive: true,
+      },
+    });
+    requesterId = requester.id;
 
     const [categoryA, categoryB] = await prisma.category.findMany({
       where: { isActive: true },
@@ -231,13 +252,12 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
       const ticket = await prisma.ticket.create({
         data: {
           ticketNumber: `TEST-F5-${key}-${Date.now()}-${Math.random()}`,
-          requesterId: requester.id,
+          requesterId,
           categoryId: categoryAId,
           relatedSystemId: relatedSystemAId,
           summary: `Fixture ticket ${key}`,
           description: "Feature 5 filter/search/sort fixture.",
           requestedPriority: "LOW",
-          itPriority: "LOW",
           ...overrides,
         },
       });
@@ -252,14 +272,12 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
       categoryId: categoryAId,
       relatedSystemId: relatedSystemAId,
       requestedPriority: "LOW",
-      itPriority: "LOW",
     });
     await createTicket("bravo", {
       summary: "Printer paper jam on the 3rd floor",
       categoryId: categoryBId,
       relatedSystemId: relatedSystemAId,
       requestedPriority: "HIGH",
-      itPriority: "HIGH",
     });
     await createTicket("charlie", {
       summary: "Email search feels slow this week",
@@ -267,21 +285,18 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
       categoryId: categoryAId,
       relatedSystemId: relatedSystemBId,
       requestedPriority: "MEDIUM",
-      itPriority: "MEDIUM",
     });
     await createTicket("delta", {
       summary: "VPN disconnects randomly",
       categoryId: categoryBId,
       relatedSystemId: relatedSystemBId,
       requestedPriority: "HIGH",
-      itPriority: "HIGH",
     });
     await createTicket("echo", {
       summary: "Laptop battery drains quickly",
       categoryId: categoryAId,
       relatedSystemId: relatedSystemAId,
       requestedPriority: "LOW",
-      itPriority: "LOW",
     });
   });
 
@@ -290,7 +305,7 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
     await prisma.ticket.deleteMany({
       where: { id: { in: createdTicketIds } },
     });
-    await deleteFixtureUser(email);
+    await prisma.user.delete({ where: { id: requesterId } });
   });
 
   function summariesOf(tickets: Array<{ summary: string }>) {
@@ -298,35 +313,47 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
   }
 
   it("filters by search text matching the summary", async () => {
-    const response = await agent.get("/api/tickets").query({ search: "battery" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, search: "battery" })
+      .expect(200);
 
     expect(summariesOf(response.body.tickets)).toEqual(["Laptop battery drains quickly"]);
   });
 
   it("search is case-insensitive", async () => {
-    const response = await agent.get("/api/tickets").query({ search: "BATTERY" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, search: "BATTERY" })
+      .expect(200);
 
     expect(summariesOf(response.body.tickets)).toEqual(["Laptop battery drains quickly"]);
   });
 
   it("filters by search text matching the description", async () => {
-    const response = await agent.get("/api/tickets").query({ search: "zzyzx-widget-42" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, search: "zzyzx-widget-42" })
+      .expect(200);
 
     const ids = response.body.tickets.map((t: { id: number }) => t.id);
     expect(ids).toEqual([ticketIds.charlie]);
   });
 
   it("filters by search text matching the ticketNumber", async () => {
-    const response = await agent.get("/api/tickets").query({ search: ticketNumbers.delta }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, search: ticketNumbers.delta })
+      .expect(200);
 
     const ids = response.body.tickets.map((t: { id: number }) => t.id);
     expect(ids).toEqual([ticketIds.delta]);
   });
 
   it("returns an empty result (not an error) when nothing matches the search", async () => {
-    const response = await agent
+    const response = await request(app)
       .get("/api/tickets")
-      .query({ search: "no-ticket-should-ever-match-this" })
+      .query({ requesterId, search: "no-ticket-should-ever-match-this" })
       .expect(200);
 
     expect(response.body.tickets).toEqual([]);
@@ -334,103 +361,130 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
   });
 
   it("filters by categoryId", async () => {
-    const response = await agent.get("/api/tickets").query({ categoryId: categoryBId }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, categoryId: categoryBId })
+      .expect(200);
 
     const ids = response.body.tickets.map((t: { id: number }) => t.id).sort();
     expect(ids).toEqual([ticketIds.bravo, ticketIds.delta].sort());
   });
 
   it("filters by relatedSystemId", async () => {
-    const response = await agent.get("/api/tickets").query({ relatedSystemId: relatedSystemBId }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, relatedSystemId: relatedSystemBId })
+      .expect(200);
 
     const ids = response.body.tickets.map((t: { id: number }) => t.id).sort();
     expect(ids).toEqual([ticketIds.charlie, ticketIds.delta].sort());
   });
 
   it("filters by requestedPriority", async () => {
-    const response = await agent.get("/api/tickets").query({ requestedPriority: "HIGH" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, requestedPriority: "HIGH" })
+      .expect(200);
 
     const ids = response.body.tickets.map((t: { id: number }) => t.id).sort();
     expect(ids).toEqual([ticketIds.bravo, ticketIds.delta].sort());
   });
 
   it("filters by currentStatus", async () => {
-    const response = await agent.get("/api/tickets").query({ currentStatus: "NEW" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, currentStatus: "New" })
+      .expect(200);
 
     expect(response.body.tickets.length).toBe(5);
   });
 
   it("returns an empty result for a currentStatus no ticket currently has", async () => {
-    const response = await agent.get("/api/tickets").query({ currentStatus: "RESOLVED" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, currentStatus: "Resolved" })
+      .expect(200);
 
     expect(response.body.tickets).toEqual([]);
   });
 
-  it("rejects a currentStatus that isn't a valid TicketStatus value", async () => {
-    const response = await agent.get("/api/tickets").query({ currentStatus: "Resolved" }).expect(400);
-
-    expect(response.body.error).toBeDefined();
-  });
-
   it("combines a category filter with a search term", async () => {
-    const response = await agent
+    const response = await request(app)
       .get("/api/tickets")
-      .query({ categoryId: categoryAId, search: "battery" })
+      .query({ requesterId, categoryId: categoryAId, search: "battery" })
       .expect(200);
 
     expect(summariesOf(response.body.tickets)).toEqual(["Laptop battery drains quickly"]);
   });
 
   it("rejects a non-numeric categoryId", async () => {
-    const response = await agent.get("/api/tickets").query({ categoryId: "not-a-number" }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, categoryId: "not-a-number" })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a requestedPriority outside LOW/MEDIUM/HIGH", async () => {
-    const response = await agent.get("/api/tickets").query({ requestedPriority: "URGENT" }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, requestedPriority: "URGENT" })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("sorts by summary ascending", async () => {
-    const response = await agent.get("/api/tickets").query({ sortBy: "summary", sortDir: "asc" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, sortBy: "summary", sortDir: "asc" })
+      .expect(200);
 
     const summaries = summariesOf(response.body.tickets);
     expect(summaries).toEqual([...summaries].sort((a, b) => a.localeCompare(b)));
   });
 
   it("sorts by summary descending", async () => {
-    const response = await agent.get("/api/tickets").query({ sortBy: "summary", sortDir: "desc" }).expect(200);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, sortBy: "summary", sortDir: "desc" })
+      .expect(200);
 
     const summaries = summariesOf(response.body.tickets);
     expect(summaries).toEqual([...summaries].sort((a, b) => b.localeCompare(a)));
   });
 
   it("rejects a sortBy that isn't a supported field", async () => {
-    const response = await agent.get("/api/tickets").query({ sortBy: "id" }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, sortBy: "id" })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a sortDir that isn't asc or desc", async () => {
-    const response = await agent.get("/api/tickets").query({ sortDir: "sideways" }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, sortDir: "sideways" })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("paginates results across pages without gaps or duplicates", async () => {
-    const page1 = await agent
+    const page1 = await request(app)
       .get("/api/tickets")
-      .query({ sortBy: "summary", sortDir: "asc", page: 1, pageSize: 2 })
+      .query({ requesterId, sortBy: "summary", sortDir: "asc", page: 1, pageSize: 2 })
       .expect(200);
-    const page2 = await agent
+    const page2 = await request(app)
       .get("/api/tickets")
-      .query({ sortBy: "summary", sortDir: "asc", page: 2, pageSize: 2 })
+      .query({ requesterId, sortBy: "summary", sortDir: "asc", page: 2, pageSize: 2 })
       .expect(200);
-    const page3 = await agent
+    const page3 = await request(app)
       .get("/api/tickets")
-      .query({ sortBy: "summary", sortDir: "asc", page: 3, pageSize: 2 })
+      .query({ requesterId, sortBy: "summary", sortDir: "asc", page: 3, pageSize: 2 })
       .expect(200);
 
     expect(page1.body.tickets).toHaveLength(2);
@@ -450,19 +504,28 @@ describe("GET /api/tickets — search, filter, sort, and pagination (Feature 5)"
   });
 
   it("rejects a page of 0", async () => {
-    const response = await agent.get("/api/tickets").query({ page: 0 }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, page: 0 })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a pageSize over the maximum", async () => {
-    const response = await agent.get("/api/tickets").query({ pageSize: 51 }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, pageSize: 51 })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a non-numeric pageSize", async () => {
-    const response = await agent.get("/api/tickets").query({ pageSize: "lots" }).expect(400);
+    const response = await request(app)
+      .get("/api/tickets")
+      .query({ requesterId, pageSize: "lots" })
+      .expect(400);
 
     expect(response.body.error).toBeDefined();
   });

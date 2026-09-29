@@ -4,16 +4,22 @@ import {
   Pagination,
   Priority,
   RelatedSystem,
+  Requester,
   Ticket,
-  TicketStatus,
   fetchCategories,
   fetchRelatedSystems,
   fetchTickets,
 } from "./api.js";
+import RequesterBanner from "./RequesterBanner.js";
 import TicketDetail from "./TicketDetail.js";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
+
+interface MyTicketsProps {
+  requester: Requester;
+  onSwitchRequester: () => void;
+}
 
 type LookupState = "loading" | "ready" | "error";
 type ListState = "loading" | "ready" | "error";
@@ -25,22 +31,7 @@ const SORT_OPTIONS = [
   { value: "summary-desc", label: "Summary (Z–A)", sortBy: "summary", sortDir: "desc" },
 ] as const;
 
-// Lab 3: currentStatus moved from Lab 2's free-text ("New") to a proper
-// TicketStatus enum.
-const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
-  { value: "NEW", label: "New" },
-  { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "WAITING_FOR_REQUESTER", label: "Waiting for Requester" },
-  { value: "RESOLVED", label: "Resolved" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "REOPENED", label: "Reopened" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
-
-// Lab 3: identity comes from the logged-in session (FR-08/BR-03) — always
-// scoped to the caller's own tickets, no Requester prop needed anymore.
-export default function MyTickets() {
+export default function MyTickets({ requester, onSwitchRequester }: MyTicketsProps) {
   const [lookupState, setLookupState] = useState<LookupState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
   const [relatedSystems, setRelatedSystems] = useState<RelatedSystem[]>([]);
@@ -103,11 +94,12 @@ export default function MyTickets() {
     const sortOption = SORT_OPTIONS.find((option) => option.value === sortValue) ?? SORT_OPTIONS[0];
 
     fetchTickets({
+      requesterId: requester.id,
       search: search || undefined,
       categoryId: categoryId ? Number(categoryId) : undefined,
       relatedSystemId: relatedSystemId ? Number(relatedSystemId) : undefined,
       requestedPriority: (requestedPriority as Priority) || undefined,
-      currentStatus: (currentStatus as TicketStatus) || undefined,
+      currentStatus: currentStatus || undefined,
       sortBy: sortOption.sortBy,
       sortDir: sortOption.sortDir,
       page,
@@ -128,6 +120,7 @@ export default function MyTickets() {
       cancelled = true;
     };
   }, [
+    requester.id,
     search,
     categoryId,
     relatedSystemId,
@@ -162,15 +155,19 @@ export default function MyTickets() {
     return (
       <TicketDetail
         ticketId={selectedTicketId}
+        requester={requester}
         categories={categories}
         relatedSystems={relatedSystems}
         onBack={() => setSelectedTicketId(null)}
+        onSwitchRequester={onSwitchRequester}
       />
     );
   }
 
   return (
     <div className="mt-4">
+      <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} label="Viewing as" />
+
       <h2 className="h5">My Tickets</h2>
 
       <div className="row g-2 mb-3">
@@ -235,11 +232,7 @@ export default function MyTickets() {
             onChange={(event) => setCurrentStatus(event.target.value)}
           >
             <option value="">All statuses</option>
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            <option value="New">New</option>
           </select>
         </div>
         <div className="col-6 col-md-2">

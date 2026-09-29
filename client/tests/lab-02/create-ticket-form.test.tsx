@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
-import { mockLoggedInUser } from "../helpers/auth.js";
 
 const categories = [
   { id: 1, name: "Hardware" },
@@ -13,21 +12,21 @@ const relatedSystems = [
   { id: 1, name: "Email" },
   { id: 2, name: "VPN" },
 ];
+const requesters = [
+  { id: 1, name: "Jennifer Anderson", email: "jennifer.anderson@toktickit.test" },
+  { id: 2, name: "Michael Brown", email: "michael.brown@toktickit.test" },
+];
 
-const ticket: api.Ticket = {
+const ticket = {
   id: 42,
   ticketNumber: "TKT-2026-000042",
   requesterId: 1,
-  ownerId: null,
   categoryId: 1,
   relatedSystemId: 1,
   summary: "Laptop battery drains quickly",
   description: "Battery drains much faster than usual.",
-  requestedPriority: "MEDIUM",
-  itPriority: "MEDIUM",
-  currentStatus: "NEW",
-  requesterMarkedResolvedAt: null,
-  requesterMarkedResolvedById: null,
+  requestedPriority: "MEDIUM" as const,
+  currentStatus: "New",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -35,14 +34,18 @@ const ticket: api.Ticket = {
 function mockLookups() {
   vi.spyOn(api, "fetchCategories").mockResolvedValue(categories);
   vi.spyOn(api, "fetchRelatedSystems").mockResolvedValue(relatedSystems);
+  vi.spyOn(api, "fetchRequesters").mockResolvedValue(requesters);
 }
 
-// Lab 3: identity comes from the session (mocked getCurrentUser), not a
-// Development Requester picker — opening the form is just a nav click now.
-async function openForm() {
-  mockLoggedInUser();
+async function openFormAsRequester(requesterLabel: RegExp = /Jennifer Anderson/) {
   render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: /New Ticket/i }));
+  fireEvent.click(screen.getByRole("button", { name: /New Ticket/i }));
+
+  await screen.findByRole("button", { name: /Continue as this Requester/i });
+  fireEvent.change(screen.getByLabelText(/^Requester/i), {
+    target: { value: String(requesters.find((r) => requesterLabel.test(r.name))!.id) },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Continue as this Requester/i }));
 
   await screen.findByRole("button", { name: /Submit Ticket/i });
 }
@@ -58,38 +61,52 @@ function fillRequiredFields() {
   });
 }
 
-describe("CreateTicketForm", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+describe("Development Requester + CreateTicketForm", () => {
+  beforeEach(() => {
+    localStorage.clear();
   });
 
-  it("does not fetch anything until New Ticket is clicked", async () => {
-    mockLoggedInUser();
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("does not fetch anything until New Ticket is clicked", () => {
+    const fetchRequestersSpy = vi.spyOn(api, "fetchRequesters");
     const fetchCategoriesSpy = vi.spyOn(api, "fetchCategories");
     render(<App />);
 
-    await screen.findByRole("button", { name: /New Ticket/i });
+    expect(fetchRequestersSpy).not.toHaveBeenCalled();
     expect(fetchCategoriesSpy).not.toHaveBeenCalled();
   });
 
-  it("loads categories/related systems once New Ticket is opened, with no Requester field in the form", async () => {
+  it("shows the Development Requester picker before the ticket form, and no Requester field inside the form", async () => {
     mockLookups();
-    await openForm();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /New Ticket/i }));
 
-    expect(api.fetchCategories).toHaveBeenCalledTimes(1);
+    await screen.findByRole("button", { name: /Continue as this Requester/i });
+    expect(api.fetchCategories).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/^Requester/i), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue as this Requester/i }));
+
+    await screen.findByRole("button", { name: /Submit Ticket/i });
     expect(screen.queryByLabelText(/^Requester/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Creating as/i)).toHaveTextContent("Jennifer Anderson");
   });
 
-  it("submits the form under the logged-in session's identity and shows the returned unique Ticket Number", async () => {
+  it("submits the form as the selected requester and shows the returned unique Ticket Number", async () => {
     mockLookups();
     const createTicketSpy = vi.spyOn(api, "createTicket").mockResolvedValue(ticket);
-    await openForm();
+    await openFormAsRequester();
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /Submit Ticket/i }));
 
     expect(await screen.findByText("TKT-2026-000042")).toBeInTheDocument();
     expect(createTicketSpy).toHaveBeenCalledWith({
+      requesterId: 1,
       categoryId: 1,
       relatedSystemId: 1,
       summary: "Laptop battery drains quickly",
@@ -98,10 +115,10 @@ describe("CreateTicketForm", () => {
     });
   });
 
-  it("lets the same session submit another ticket", async () => {
+  it("keeps the same requester active for creating another ticket", async () => {
     mockLookups();
     vi.spyOn(api, "createTicket").mockResolvedValue(ticket);
-    await openForm();
+    await openFormAsRequester();
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /Submit Ticket/i }));
@@ -109,7 +126,17 @@ describe("CreateTicketForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Create another ticket/i }));
 
-    expect(await screen.findByRole("button", { name: /Submit Ticket/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Creating as/i)).toHaveTextContent("Jennifer Anderson");
+    expect(screen.queryByLabelText(/^Requester/i)).not.toBeInTheDocument();
+  });
+
+  it("returns to the requester picker when Switch requester is clicked", async () => {
+    mockLookups();
+    await openFormAsRequester();
+
+    fireEvent.click(screen.getByRole("button", { name: /Switch requester/i }));
+
+    expect(await screen.findByRole("button", { name: /Continue as this Requester/i })).toBeInTheDocument();
   });
 
   it("disables the submit button while the request is in flight", async () => {
@@ -120,7 +147,7 @@ describe("CreateTicketForm", () => {
         resolveCreate = resolve;
       })
     );
-    await openForm();
+    await openFormAsRequester();
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /Submit Ticket/i }));
@@ -138,7 +165,7 @@ describe("CreateTicketForm", () => {
         summary: "Summary is required.",
       })
     );
-    await openForm();
+    await openFormAsRequester();
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /Submit Ticket/i }));
@@ -147,7 +174,7 @@ describe("CreateTicketForm", () => {
     expect(screen.getByRole("button", { name: /Submit Ticket/i })).toBeInTheDocument();
   });
 
-  it("uploads the selected attachment after the ticket is created", async () => {
+  it("uploads the selected attachment as the active requester after the ticket is created", async () => {
     mockLookups();
     vi.spyOn(api, "createTicket").mockResolvedValue(ticket);
     const uploadSpy = vi.spyOn(api, "uploadAttachment").mockResolvedValue({
@@ -161,7 +188,7 @@ describe("CreateTicketForm", () => {
       removedAt: null,
       removalReason: null,
     });
-    await openForm();
+    await openFormAsRequester();
 
     fillRequiredFields();
     const file = new File(["fake-image-bytes"], "screenshot.png", { type: "image/png" });
@@ -171,7 +198,7 @@ describe("CreateTicketForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit Ticket/i }));
 
     await screen.findByText("TKT-2026-000042");
-    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(ticket.id, file));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(ticket.id, 1, file));
   });
 
   it("still shows the Ticket Number if the attachment upload fails", async () => {
@@ -180,7 +207,7 @@ describe("CreateTicketForm", () => {
     vi.spyOn(api, "uploadAttachment").mockRejectedValue(
       new ApiError("Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.", 415)
     );
-    await openForm();
+    await openFormAsRequester();
 
     fillRequiredFields();
     const file = new File(["not-an-image"], "malware.exe", { type: "application/x-msdownload" });

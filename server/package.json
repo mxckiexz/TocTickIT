@@ -9,7 +9,6 @@
     "start": "node dist/index.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "e2e:fixture": "tsx scripts/e2e-fixture.ts",
     "test": "vitest run"
   },
   "prisma": {

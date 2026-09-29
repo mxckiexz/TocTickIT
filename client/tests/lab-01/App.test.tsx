@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
-import { mockLoggedInUser } from "../helpers/auth.js";
 
 describe("App", () => {
   afterEach(() => {
@@ -10,17 +9,13 @@ describe("App", () => {
   });
 
   // WORKED EXAMPLE — provided for you.
-  it("renders the TokTickIT heading", async () => {
-    mockLoggedInUser();
+  it("renders the TokTickIT heading", () => {
     render(<App />);
-    expect(await screen.findByText(/TokTickIT/i)).toBeInTheDocument();
+    expect(screen.getByText(/TokTickIT/i)).toBeInTheDocument();
   });
 
-  // Issue 4. Lab 3: Check System now lives inside the authenticated shell
-  // (its own API calls require a session too), so every test here logs in
-  // first via the mocked GET /api/auth/me.
+  // Issue 4
   it("shows Online and the seeded categories on success", async () => {
-    mockLoggedInUser();
     vi.spyOn(api, "checkSystem").mockResolvedValue({
       online: true,
       categories: [
@@ -34,7 +29,7 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: /Check System/i })
+      screen.getByRole("button", { name: /Check System/i })
     );
 
     expect(screen.getByText("Loading categories...")).toBeInTheDocument();
@@ -48,7 +43,6 @@ describe("App", () => {
   });
 
   it("shows an Offline error message when the API is unavailable", async () => {
-    mockLoggedInUser();
     vi.spyOn(api, "checkSystem").mockRejectedValue(
       new Error("Backend unavailable")
     );
@@ -56,7 +50,7 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: /Check System/i })
+      screen.getByRole("button", { name: /Check System/i })
     );
 
     const alert = await screen.findByRole("alert");

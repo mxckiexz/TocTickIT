@@ -231,6 +231,22 @@ describe("GET /api/staff/tickets", () => {
     expect(ids).toEqual([ticketIds.charlie, ticketIds.delta].sort());
   });
 
+  // Review fix: a categoryId/relatedSystemId that doesn't reference an
+  // existing row is a 400, not a silently-empty 200 — the id itself must be
+  // valid, not merely well-formed.
+  it("rejects a categoryId that does not reference an existing Category", async () => {
+    const response = await staffAgent.get("/api/staff/tickets").query({ categoryId: 999999 }).expect(400);
+    expect(response.body.error).toBeDefined();
+  });
+
+  it("rejects a relatedSystemId that does not reference an existing Related System", async () => {
+    const response = await staffAgent
+      .get("/api/staff/tickets")
+      .query({ relatedSystemId: 999999 })
+      .expect(400);
+    expect(response.body.error).toBeDefined();
+  });
+
   it("filters by itPriority", async () => {
     const response = await staffAgent
       .get("/api/staff/tickets")

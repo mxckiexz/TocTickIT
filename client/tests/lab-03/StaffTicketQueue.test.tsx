@@ -67,6 +67,31 @@ describe("StaffTicketQueue", () => {
     expect(screen.getByRole("heading", { name: "Ticket Queue" })).toBeInTheDocument();
   });
 
+  // Review fix: the mobile Filters disclosure sits above the search box and
+  // collapses only the secondary filter dropdowns — search stays visible
+  // (and usable) whether or not Filters is expanded.
+  it("keeps the search box visible on mobile while the other filters are collapsed", async () => {
+    mockLookups();
+    const fetchSpy = vi.spyOn(api, "fetchStaffTickets").mockResolvedValue({
+      tickets: [],
+      pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 1 },
+    });
+    await openQueue();
+    fetchSpy.mockClear();
+
+    // Collapsed by default — "Filter by category" (a secondary filter) has
+    // exactly one match (the desktop copy); the search box still has two
+    // (mobile's always-visible one, plus the desktop copy).
+    expect(screen.getAllByLabelText(/Search tickets/i)).toHaveLength(2);
+    expect(screen.getAllByLabelText(/Filter by category/i)).toHaveLength(1);
+
+    const searchBox = screen.getAllByLabelText(/Search tickets/i)[0];
+    fireEvent.change(searchBox, { target: { value: "battery" } });
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.objectContaining({ search: "battery" }))
+    );
+  });
+
   // UI-04: role-scoped nav — a Requester never sees the Ticket Queue.
   it("is never rendered for a Requester session", async () => {
     mockLookups();
@@ -154,7 +179,11 @@ describe("StaffTicketQueue", () => {
     await openQueue();
     fetchSpy.mockClear();
 
-    const searchBox = screen.getByLabelText(/Search tickets/i);
+    // The search box renders twice — once always-visible on mobile, once
+    // inside the CSS-hidden-but-still-in-jsdom desktop layout (review fix:
+    // search now stays outside the mobile Filters disclosure) — either one
+    // drives the same `searchInput` state, so acting on the first is enough.
+    const searchBox = screen.getAllByLabelText(/Search tickets/i)[0];
     fireEvent.change(searchBox, { target: { value: "b" } });
     fireEvent.change(searchBox, { target: { value: "ba" } });
     fireEvent.change(searchBox, { target: { value: "battery" } });

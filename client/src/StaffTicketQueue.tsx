@@ -214,18 +214,23 @@ export default function StaffTicketQueue() {
     );
   }
 
-  const filtersRow = (
+  // Search stays visible regardless of the mobile Filters disclosure
+  // (ui-spec.md §6: "Filters collapse into a single 'Filters' disclosure
+  // button above the search box" — the button sits above search, and search
+  // itself is never part of what collapses).
+  const searchInputEl = (
+    <input
+      type="search"
+      className="form-control"
+      placeholder="Search summary, description, or ticket number…"
+      aria-label="Search tickets"
+      value={searchInput}
+      onChange={(event) => setSearchInput(event.target.value)}
+    />
+  );
+
+  const filterControls = (
     <div className="row g-2 mb-3">
-      <div className="col-12 col-lg-4">
-        <input
-          type="search"
-          className="form-control"
-          placeholder="Search summary, description, or ticket number…"
-          aria-label="Search tickets"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-        />
-      </div>
       <div className="col-6 col-lg-2">
         <select
           className="form-select"
@@ -302,6 +307,8 @@ export default function StaffTicketQueue() {
     <div className="mt-4">
       <h2 className="h5">Ticket Queue</h2>
 
+      {/* Mobile: Filters disclosure button, then the always-visible search
+          box, then the rest of the filter controls only when open. */}
       <div className="d-md-none mb-2">
         <button
           type="button"
@@ -311,9 +318,16 @@ export default function StaffTicketQueue() {
           Filters {filtersOpen ? "▲" : "▼"}
         </button>
       </div>
+      <div className="d-md-none mb-2">{searchInputEl}</div>
+      {filtersOpen && <div className="d-md-none">{filterControls}</div>}
 
-      <div className="d-none d-md-block">{filtersRow}</div>
-      {filtersOpen && <div className="d-md-none">{filtersRow}</div>}
+      {/* Desktop/tablet: search and filters shown together, no disclosure. */}
+      <div className="d-none d-md-block">
+        <div className="row g-2 mb-3">
+          <div className="col-12 col-lg-4">{searchInputEl}</div>
+          <div className="col-12 col-lg-8">{filterControls}</div>
+        </div>
+      </div>
 
       {listState === "loading" && <p>Loading tickets…</p>}
 

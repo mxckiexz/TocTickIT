@@ -1130,20 +1130,20 @@ app.get(
       ];
     }
 
+    let categoryId: number | undefined;
     if (req.query.categoryId !== undefined) {
-      const categoryId = Number(req.query.categoryId);
+      categoryId = Number(req.query.categoryId);
       if (!Number.isInteger(categoryId) || categoryId <= 0) {
         return res.status(400).json({ error: "categoryId must be a positive integer." });
       }
-      where.categoryId = categoryId;
     }
 
+    let relatedSystemId: number | undefined;
     if (req.query.relatedSystemId !== undefined) {
-      const relatedSystemId = Number(req.query.relatedSystemId);
+      relatedSystemId = Number(req.query.relatedSystemId);
       if (!Number.isInteger(relatedSystemId) || relatedSystemId <= 0) {
         return res.status(400).json({ error: "relatedSystemId must be a positive integer." });
       }
-      where.relatedSystemId = relatedSystemId;
     }
 
     if (req.query.itPriority !== undefined) {
@@ -1206,6 +1206,27 @@ app.get(
 
     try {
       const prisma = getPrisma();
+
+      // The API contract requires each id to reference an existing row, not
+      // just be a positive integer — an unknown id is a 400 (a mistyped
+      // filter), not a silent empty-result 200.
+      if (categoryId !== undefined) {
+        const category = await prisma.category.findUnique({ where: { id: categoryId } });
+        if (!category) {
+          return res.status(400).json({ error: "categoryId does not reference an existing Category." });
+        }
+        where.categoryId = categoryId;
+      }
+
+      if (relatedSystemId !== undefined) {
+        const relatedSystem = await prisma.relatedSystem.findUnique({ where: { id: relatedSystemId } });
+        if (!relatedSystem) {
+          return res
+            .status(400)
+            .json({ error: "relatedSystemId does not reference an existing Related System." });
+        }
+        where.relatedSystemId = relatedSystemId;
+      }
 
       // id desc as a tiebreaker keeps order stable when two tickets share the
       // sorted-on value, same convention as Lab 2's GET /api/tickets.

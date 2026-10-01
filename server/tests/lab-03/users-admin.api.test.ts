@@ -368,4 +368,120 @@ describe("Administrator User Management", () => {
       expect(row).toBeDefined();
     });
   });
+
+  // Review fix: requireSameOrigin is mounted globally in app.ts
+  // (`app.use(requireSameOrigin)`, before every route is registered), so it
+  // already covers these three routes exactly as it covers every other
+  // mutating route in the app — there is no separate requireCsrf function
+  // anywhere in this codebase; api-spec.md's documented CSRF defense *is*
+  // the SameSite=Lax cookie plus this Origin allow-list, not a second,
+  // additional mechanism. What was actually missing was regression coverage
+  // proving that global middleware reaches these specific routes — only
+  // auth.api.test.ts's SEC-07 block tested it before this. This mirrors that
+  // block's exact pattern for the three mutating Administrator routes.
+  describe("Origin gate on the mutating Administrator routes (review fix)", () => {
+    const FORGED_ORIGINS = ["https://evil.example", `${CLIENT_ORIGIN}.evil.example`, "null"];
+
+    it("rejects POST /api/admin/users with no Origin header", async () => {
+      const response = await adminAgent.post("/api/admin/users").send({
+        name: "x",
+        email: "origin-gate-noop@toktickit.test",
+        role: "IT_STAFF",
+        password: "Fixture-Pass1",
+      });
+      expect(response.status).toBe(403);
+    });
+
+    it.each(FORGED_ORIGINS)("rejects POST /api/admin/users with mismatched Origin %s", async (origin) => {
+      const response = await adminAgent
+        .post("/api/admin/users")
+        .set("Origin", origin)
+        .send({ name: "x", email: "origin-gate-noop@toktickit.test", role: "IT_STAFF", password: "Fixture-Pass1" });
+      expect(response.status).toBe(403);
+    });
+
+    it("rejects PATCH /api/admin/users/:id with no Origin header", async () => {
+      const response = await adminAgent.patch(`/api/admin/users/${adminId}`).send({ name: "Unchanged" });
+      expect(response.status).toBe(403);
+    });
+
+    it.each(FORGED_ORIGINS)("rejects PATCH /api/admin/users/:id with mismatched Origin %s", async (origin) => {
+      const response = await adminAgent.patch(`/api/admin/users/${adminId}`).set("Origin", origin).send({ name: "Unchanged" });
+      expect(response.status).toBe(403);
+    });
+
+    it("rejects POST /api/admin/users/:id/reset-password with no Origin header", async () => {
+      const response = await adminAgent
+        .post(`/api/admin/users/${adminId}/reset-password`)
+        .send({ password: "Fixture-Pass1" });
+      expect(response.status).toBe(403);
+    });
+
+    it.each(FORGED_ORIGINS)(
+      "rejects POST /api/admin/users/:id/reset-password with mismatched Origin %s",
+      async (origin) => {
+        const response = await adminAgent
+          .post(`/api/admin/users/${adminId}/reset-password`)
+          .set("Origin", origin)
+          .send({ password: "Fixture-Pass1" });
+        expect(response.status).toBe(403);
+      }
+    );
+  });
+
+  // BR-34/review fix: the case-insensitive uniqueness race.
+  describe("Case-insensitive email uniqueness under concurrency (review fix)", () => {
+    it("exactly one of two concurrent creates with differently-cased forms of the same email succeeds", async () => {
+      const base = `race-fixture-${Date.now()}-${Math.random()}`;
+      const email = `${base}@toktickit.test`;
+
+      const [a, b] = await Promise.all([
+        createUser(adminAgent, { email: email.toLowerCase() }),
+        createUser(adminAgent, { email: email.toUpperCase() }),
+      ]);
+
+      const statuses = [a.status, b.status].sort();
+      expect(statuses).toEqual([201, 409]);
+
+      const winner = a.status === 201 ? a : b;
+      const rows = await getPrisma().user.findMany({
+        where: { email: { equals: email, mode: "insensitive" } },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(winner.body.id);
+    });
+
+    it("exactly one of two concurrent edits moving different users to the same differently-cased email succeeds", async () => {
+      const target = await createUser(adminAgent, { role: "REQUESTER" });
+      const other = await createUser(adminAgent, { role: "REQUESTER" });
+      expect(target.status).toBe(201);
+      expect(other.status).toBe(201);
+
+      const base = `race-edit-fixture-${Date.now()}-${Math.random()}`;
+      const email = `${base}@toktickit.test`;
+
+      try {
+        const [a, b] = await Promise.all([
+          withOrigin(adminAgent.patch(`/api/admin/users/${target.body.id}`)).send({ email: email.toLowerCase() }),
+          withOrigin(adminAgent.patch(`/api/admin/users/${other.body.id}`)).send({ email: email.toUpperCase() }),
+        ]);
+
+        const statuses = [a.status, b.status].sort();
+        expect(statuses).toEqual([200, 409]);
+
+        const rows = await getPrisma().user.findMany({
+          where: { email: { equals: email, mode: "insensitive" } },
+        });
+        expect(rows).toHaveLength(1);
+      } finally {
+        // The winning request changed its user's email away from what
+        // `createdEmails` tracks (its original, pre-race email), so the
+        // normal afterEach cleanup wouldn't find it by that original
+        // address — delete both fixture users by id directly instead.
+        const prisma = getPrisma();
+        await prisma.session.deleteMany({ where: { userId: { in: [target.body.id, other.body.id] } } });
+        await prisma.user.deleteMany({ where: { id: { in: [target.body.id, other.body.id] } } });
+      }
+    });
+  });
 });

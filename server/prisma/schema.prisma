@@ -38,6 +38,12 @@ enum Role {
 model User {
   id                 Int      @id @default(autoincrement())
   name               String
+  // @unique below is case-sensitive (a plain btree index) — BR-34's
+  // case-insensitive uniqueness is additionally enforced by a separate
+  // "User_email_lower_key" unique index on LOWER(email), added via raw SQL
+  // in migration 20261002080000_lab3_admin_email_case_insensitive_unique
+  // since Prisma's schema DSL has no expression-index syntax to declare it
+  // here directly.
   email              String   @unique
   passwordHash       String
   role               Role

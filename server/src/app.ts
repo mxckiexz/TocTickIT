@@ -1618,6 +1618,19 @@ const ADMIN_USER_SELECT = {
   createdAt: true,
 } as const;
 
+// BR-34's case-insensitive uniqueness is enforced by a database-level
+// unique index on LOWER(email) (migration
+// 20261002080000_lab3_admin_email_case_insensitive_unique), not only by the
+// findFirst pre-checks in the create/edit handlers below — those pre-checks
+// give a clean error for the common case, but only the database can
+// actually prevent two concurrent requests with differently-cased emails
+// from both passing a pre-check before either row exists. This recognizes
+// that race's unique-violation error (Postgres SQLSTATE 23505, surfaced by
+// Prisma as P2002) so it can be translated into the same documented 409.
+function isUniqueEmailViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
 app.get(
   "/api/admin/users",
   requireAuth,
@@ -1725,6 +1738,17 @@ app.post(
 
       res.status(201).json(created);
     } catch (error) {
+      // BR-34/review fix: the findFirst pre-check above is a courtesy (a
+      // clean error for the common, non-concurrent case) — the actual
+      // invariant is enforced by the database's own case-insensitive unique
+      // index (migration 20261002080000_lab3_admin_email_case_insensitive_unique),
+      // so two requests racing with differently-cased emails can't both
+      // succeed. Whichever one loses that race lands here as a unique
+      // violation, translated to the same 409 the pre-check would have given.
+      if (isUniqueEmailViolation(error)) {
+        return res.status(409).json({ errors: { email: "This email is already in use." } });
+      }
+
       console.error("Failed to create user:", error);
 
       res.status(500).json({ error: "Failed to create user" });
@@ -1834,6 +1858,14 @@ app.patch(
 
       res.status(200).json(updated);
     } catch (error) {
+      // BR-34/review fix: same race as the create route above — the
+      // findFirst pre-check is a courtesy, the database's case-insensitive
+      // unique index is the actual guard. api-spec.md's PATCH contract uses
+      // the singular { error } shape here, not { errors: { email } }.
+      if (isUniqueEmailViolation(error)) {
+        return res.status(409).json({ error: "This email is already in use." });
+      }
+
       console.error("Failed to update user:", error);
 
       res.status(500).json({ error: "Failed to update user" });

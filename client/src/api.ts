@@ -377,3 +377,85 @@ export async function fetchStaffTickets(params: FetchStaffTicketsParams): Promis
   const response = await apiFetch(`/api/staff/tickets?${query.toString()}`);
   return parseJsonOrThrow<StaffTicketListResponse>(response, "Failed to load the ticket queue");
 }
+
+// ---------------------------------------------------------------------------
+// Feature 5 (Lab 3, issue #38) — IT Staff Ticket Detail & Workflow
+// (docs/lab-03/api-spec.md "GET /api/staff/tickets/:id" onward)
+// ---------------------------------------------------------------------------
+export type StaffTicket = Ticket & {
+  requesterName: string;
+  requesterEmail: string;
+  ownerName: string | null;
+  ownerEmail: string | null;
+};
+
+export interface StaffTicketDetailResponse {
+  ticket: StaffTicket;
+  attachments: AttachmentSummary[];
+  comments: Comment[];
+  // InternalNote shares PublicComment's exact shape server-side.
+  notes: Comment[];
+}
+
+export interface AssignableUser {
+  id: number;
+  name: string;
+}
+
+export async function fetchStaffTicketDetail(ticketId: number): Promise<StaffTicketDetailResponse> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}`);
+  return parseJsonOrThrow<StaffTicketDetailResponse>(response, "Failed to load ticket");
+}
+
+export async function claimTicket(ticketId: number): Promise<Ticket> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}/claim`, { method: "POST" });
+  return parseJsonOrThrow<Ticket>(response, "Failed to claim ticket");
+}
+
+export async function assignTicket(ticketId: number, ownerId: number): Promise<Ticket> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}/assign`, {
+    method: "POST",
+    body: JSON.stringify({ ownerId }),
+  });
+  return parseJsonOrThrow<Ticket>(response, "Failed to assign ticket");
+}
+
+export async function updateTicketItPriority(ticketId: number, itPriority: Priority): Promise<Ticket> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}/priority`, {
+    method: "PATCH",
+    body: JSON.stringify({ itPriority }),
+  });
+  return parseJsonOrThrow<Ticket>(response, "Failed to update priority");
+}
+
+export async function updateTicketStatus(
+  ticketId: number,
+  currentStatus: TicketStatus,
+  confirm?: boolean
+): Promise<Ticket> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ currentStatus, confirm }),
+  });
+  return parseJsonOrThrow<Ticket>(response, "Failed to update status");
+}
+
+export async function fetchAssignableUsers(): Promise<AssignableUser[]> {
+  const response = await apiFetch("/api/staff/assignable-users");
+  return parseJsonOrThrow<AssignableUser[]>(response, "Failed to load assignable users");
+}
+
+// Internal Notes share Public Comments' request/response shape and
+// validation rules server-side (docs/lab-03/api-spec.md) — IT Staff only.
+export async function fetchNotes(ticketId: number): Promise<Comment[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/notes`);
+  return parseJsonOrThrow<Comment[]>(response, "Failed to load notes");
+}
+
+export async function postNote(ticketId: number, body: string): Promise<Comment> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+  return parseJsonOrThrow<Comment>(response, "Failed to post note");
+}

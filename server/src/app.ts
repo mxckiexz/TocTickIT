@@ -1382,24 +1382,36 @@ app.post(
     try {
       const prisma = getPrisma();
 
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) {
-        return res.status(404).json({ error: "Ticket not found." });
-      }
+      // Atomic claim: the WHERE clause's ownerId: null is checked and
+      // written in the same statement, so two concurrent claims on the same
+      // ticket can't both read "unassigned" and both win — only the update
+      // whose WHERE still matches at execution time affects a row. A plain
+      // findUnique-then-update here would be a classic TOCTOU race (found
+      // in review): both requests could read ownerId: null before either
+      // writes, and the second write would silently overwrite the first
+      // claimant instead of getting BR-18's required 409.
+      const result = await prisma.ticket.updateMany({
+        where: { id: ticketId, ownerId: null },
+        data: { ownerId: req.user!.id },
+      });
 
-      // BR-18: claim only works while unassigned — use assign to reassign
-      // an already-owned ticket (to anyone, not just the current owner).
-      if (ticket.ownerId !== null) {
+      if (result.count === 0) {
+        // Distinguish "doesn't exist" (404) from "exists but already
+        // claimed" (409, BR-18) — the updateMany above can't tell these
+        // apart on its own, since both leave count at 0.
+        const exists = await prisma.ticket.findUnique({
+          where: { id: ticketId },
+          select: { id: true },
+        });
+        if (!exists) {
+          return res.status(404).json({ error: "Ticket not found." });
+        }
         return res.status(409).json({
           error: "Ticket is already assigned. Use assign to change its owner.",
         });
       }
 
-      const updated = await prisma.ticket.update({
-        where: { id: ticketId },
-        data: { ownerId: req.user!.id },
-      });
-
+      const updated = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
       res.status(200).json(updated);
     } catch (error) {
       console.error("Failed to claim ticket:", error);

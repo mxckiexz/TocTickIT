@@ -261,6 +261,33 @@ describe("IT Staff Ticket Detail & Workflow", () => {
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
+
+    // Concurrency regression (found in review): claim must be atomic. A
+    // read-then-write implementation lets two concurrent claims both observe
+    // ownerId: null and both succeed, silently overwriting one claimant with
+    // the other instead of the second one getting BR-18's required 409.
+    it("under concurrent claims from two staff sessions, exactly one succeeds and the owner is the winner", async () => {
+      const ticket = await createTicket();
+
+      const [resultA, resultB] = await Promise.all([
+        staffAAgent.post(`/api/staff/tickets/${ticket.id}/claim`).set("Origin", CLIENT_ORIGIN),
+        staffBAgent.post(`/api/staff/tickets/${ticket.id}/claim`).set("Origin", CLIENT_ORIGIN),
+      ]);
+
+      // Exactly one 200 and one 409 — never both 200 (the race the fix
+      // closes) and never both 409 (would mean neither claim ever landed).
+      const statuses = [resultA.status, resultB.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const expectedWinnerId = resultA.status === 200 ? staffAId : staffBId;
+      const winnerResult = resultA.status === 200 ? resultA : resultB;
+      expect(winnerResult.body.ownerId).toBe(expectedWinnerId);
+
+      // The row in the DB agrees with whichever response actually got 200 —
+      // no silent overwrite by the losing request.
+      const row = await getPrisma().ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(row.ownerId).toBe(expectedWinnerId);
+    });
   });
 
   describe("POST /api/staff/tickets/:id/assign", () => {

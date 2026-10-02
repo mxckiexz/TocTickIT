@@ -459,3 +459,70 @@ export async function postNote(ticketId: number, body: string): Promise<Comment>
   });
   return parseJsonOrThrow<Comment>(response, "Failed to post note");
 }
+
+// ---------------------------------------------------------------------------
+// Feature 6 (Lab 3, issue #39) — Administrator User Management
+// (docs/lab-03/api-spec.md "Administrator endpoints")
+// ---------------------------------------------------------------------------
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+export interface FetchAdminUsersParams {
+  search?: string;
+  role?: Role;
+}
+
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  role: Role;
+  isActive?: boolean;
+  password: string;
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  email?: string;
+  role?: Role;
+  isActive?: boolean;
+}
+
+export async function fetchAdminUsers(params: FetchAdminUsersParams = {}): Promise<AdminUser[]> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.role) query.set("role", params.role);
+
+  const response = await apiFetch(`/api/admin/users?${query.toString()}`);
+  return parseJsonOrThrow<AdminUser[]>(response, "Failed to load users");
+}
+
+export async function createUser(input: CreateUserInput): Promise<AdminUser> {
+  const response = await apiFetch("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return parseJsonOrThrow<AdminUser>(response, "Failed to create user");
+}
+
+export async function updateUser(userId: number, input: UpdateUserInput): Promise<AdminUser> {
+  const response = await apiFetch(`/api/admin/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return parseJsonOrThrow<AdminUser>(response, "Failed to update user");
+}
+
+export async function resetUserPassword(userId: number, password: string): Promise<AdminUser> {
+  const response = await apiFetch(`/api/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+  return parseJsonOrThrow<AdminUser>(response, "Failed to reset password");
+}

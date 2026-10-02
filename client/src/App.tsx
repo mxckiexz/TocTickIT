@@ -5,6 +5,7 @@ import CreateTicketForm from "./CreateTicketForm.js";
 import Login from "./Login.js";
 import MyTickets from "./MyTickets.js";
 import StaffTicketQueue from "./StaffTicketQueue.js";
+import UserManagement from "./UserManagement.js";
 
 type CheckState = "idle" | "loading" | "success" | "error";
 type TicketView = "none" | "createTicket" | "myTickets";
@@ -188,12 +189,7 @@ export default function App() {
 
         {currentUser.role === "IT_STAFF" && <StaffTicketQueue />}
 
-        {currentUser.role === "ADMINISTRATOR" && (
-          <div className="mt-4">
-            <h2 className="h5">User Management</h2>
-            <p className="text-muted">Coming soon.</p>
-          </div>
-        )}
+        {currentUser.role === "ADMINISTRATOR" && <UserManagement />}
       </div>
     </div>
   );

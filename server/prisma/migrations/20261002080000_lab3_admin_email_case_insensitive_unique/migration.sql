@@ -1,0 +1,16 @@
+-- Lab 3 — Administrator User Management (Issue #39) review fix.
+--
+-- BR-34 requires email uniqueness to be case-insensitive. The existing
+-- "User_email_key" unique index (from the Lab 3 auth-foundation migration)
+-- is a plain btree on "email" and is therefore case-SENSITIVE — it does not
+-- stop "Alex@x.test" and "alex@x.test" from coexisting. The application
+-- layer's findFirst-then-create/update pre-check caught this in the common,
+-- non-concurrent case, but two requests racing with differently-cased forms
+-- of the same email could both pass that pre-check before either row
+-- existed (found in review).
+--
+-- A second, separate unique index on LOWER(email) closes that race at the
+-- database level — the actual source of truth for the invariant, not just
+-- an application-level courtesy check. "email" itself is left exactly as
+-- submitted; only this index normalizes it for the uniqueness comparison.
+CREATE UNIQUE INDEX "User_email_lower_key" ON "User" ((LOWER("email")));

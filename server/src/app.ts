@@ -14,6 +14,7 @@ import {
   AuthenticatedUser,
   CLIENT_ORIGIN,
   DUMMY_PASSWORD_HASH,
+  MIN_PASSWORD_LENGTH,
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
   createSession,
@@ -1594,6 +1595,368 @@ app.get(
       console.error("Failed to retrieve assignable users:", error);
 
       res.status(500).json({ error: "Failed to retrieve assignable users" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Lab 3 — Administrator User Management (Issue #39)
+// docs/lab-03/api-spec.md "Administrator endpoints". Every route here
+// requires role ADMINISTRATOR (AC-27) — a Requester or IT Staff caller gets
+// 403 on all four. Never a DELETE route (BR-38): suspension (isActive:
+// false) is the only way to remove a user's access.
+// ---------------------------------------------------------------------------
+const ROLES: Role[] = ["REQUESTER", "IT_STAFF", "ADMINISTRATOR"];
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ADMIN_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  isActive: true,
+  mustChangePassword: true,
+  createdAt: true,
+} as const;
+
+// Arbitrary, fixed key for the transaction-scoped advisory lock that
+// serializes every request able to change who is an active Administrator
+// (PATCH /api/admin/users/:id's role/isActive changes — BR-37). Any 64-bit
+// constant works as long as nothing else in the app takes a lock on the same
+// key; "37" is just a mnemonic for the rule it protects.
+const ADMIN_INVARIANT_LOCK_KEY = 4_100_037;
+
+// BR-34's case-insensitive uniqueness is enforced by a database-level
+// unique index on LOWER(email) (migration
+// 20261002080000_lab3_admin_email_case_insensitive_unique), not only by the
+// findFirst pre-checks in the create/edit handlers below — those pre-checks
+// give a clean error for the common case, but only the database can
+// actually prevent two concurrent requests with differently-cased emails
+// from both passing a pre-check before either row exists. This recognizes
+// that race's unique-violation error (Postgres SQLSTATE 23505, surfaced by
+// Prisma as P2002) so it can be translated into the same documented 409.
+function isUniqueEmailViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+app.get(
+  "/api/admin/users",
+  requireAuth,
+  requireRole("ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const roleParam = req.query.role;
+
+    if (roleParam !== undefined && !ROLES.includes(roleParam as Role)) {
+      return res.status(400).json({
+        error: "role must be one of: REQUESTER, IT_STAFF, ADMINISTRATOR.",
+      });
+    }
+
+    const where: Prisma.UserWhereInput = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (roleParam !== undefined) {
+      where.role = roleParam as Role;
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // No pagination (specification.md §8.5's explicit exclusion) — the
+      // full matching list is returned every time.
+      const users = await prisma.user.findMany({
+        where,
+        select: ADMIN_USER_SELECT,
+        orderBy: { id: "asc" },
+      });
+
+      res.status(200).json(users);
+    } catch (error) {
+      console.error("Failed to retrieve users:", error);
+
+      res.status(500).json({ error: "Failed to retrieve users" });
+    }
+  }
+);
+
+app.post(
+  "/api/admin/users",
+  requireAuth,
+  requireRole("ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const body = req.body ?? {};
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const role = body.role;
+    const isActive = typeof body.isActive === "boolean" ? body.isActive : true;
+    const password = typeof body.password === "string" ? body.password : "";
+
+    const errors: Record<string, string> = {};
+    if (!name) errors.name = "Name is required.";
+    if (!email) {
+      errors.email = "Email is required.";
+    } else if (!EMAIL_SHAPE.test(email)) {
+      errors.email = "Email must be a valid email address.";
+    }
+    // BR-32: exactly one of the three roles — not zero, not an array, not an
+    // unrecognized string.
+    if (!ROLES.includes(role)) {
+      errors.role = "role must be exactly one of REQUESTER, IT_STAFF, ADMINISTRATOR.";
+    }
+    if (!password || password.length < MIN_PASSWORD_LENGTH) {
+      errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ errors });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // BR-34: case-insensitive uniqueness, checked explicitly up front so
+      // the duplicate case is a clean 409 rather than relying on the DB's
+      // own unique constraint (which is case-sensitive) to catch it.
+      const existing = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+      });
+      if (existing) {
+        return res.status(409).json({ errors: { email: "This email is already in use." } });
+      }
+
+      const created = await prisma.user.create({
+        data: {
+          name,
+          email,
+          role,
+          isActive,
+          passwordHash: await hashPassword(password),
+          // Every admin-created account is forced to change its (admin-
+          // chosen) default password at first login, regardless of isActive.
+          mustChangePassword: true,
+        },
+        select: ADMIN_USER_SELECT,
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      // BR-34/review fix: the findFirst pre-check above is a courtesy (a
+      // clean error for the common, non-concurrent case) — the actual
+      // invariant is enforced by the database's own case-insensitive unique
+      // index (migration 20261002080000_lab3_admin_email_case_insensitive_unique),
+      // so two requests racing with differently-cased emails can't both
+      // succeed. Whichever one loses that race lands here as a unique
+      // violation, translated to the same 409 the pre-check would have given.
+      if (isUniqueEmailViolation(error)) {
+        return res.status(409).json({ errors: { email: "This email is already in use." } });
+      }
+
+      console.error("Failed to create user:", error);
+
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  }
+);
+
+app.patch(
+  "/api/admin/users/:id",
+  requireAuth,
+  requireRole("ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: "Invalid user id." });
+    }
+
+    const body = req.body ?? {};
+    const data: Prisma.UserUpdateInput = {};
+    const errors: Record<string, string> = {};
+
+    // Only fields actually present in the body are validated/applied —
+    // never the password (reset-password, below, is the only way to change
+    // it, per api-spec.md's "Never changes the password" note).
+    if (body.name !== undefined) {
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!name) errors.name = "Name cannot be empty.";
+      else data.name = name;
+    }
+    if (body.email !== undefined) {
+      const email = typeof body.email === "string" ? body.email.trim() : "";
+      if (!email || !EMAIL_SHAPE.test(email)) {
+        errors.email = "Email must be a valid email address.";
+      } else {
+        data.email = email;
+      }
+    }
+    if (body.role !== undefined) {
+      if (!ROLES.includes(body.role)) {
+        errors.role = "role must be one of REQUESTER, IT_STAFF, ADMINISTRATOR.";
+      } else {
+        data.role = body.role;
+      }
+    }
+    if (body.isActive !== undefined) {
+      if (typeof body.isActive !== "boolean") {
+        errors.isActive = "isActive must be a boolean.";
+      } else {
+        data.isActive = body.isActive;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ errors });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      // BR-37 (review fix): the "count the other active Administrators, then
+      // update" sequence must be atomic with respect to every other request
+      // that could change who is an active Administrator. Without that, two
+      // requests can each read "one other active Administrator remains"
+      // before either update commits, both pass the guard, and both commit —
+      // e.g. two sole-remaining Administrators demoting themselves, or two
+      // Administrators deactivating each other, at the same moment — leaving
+      // zero. A transaction-scoped advisory lock serializes exactly those
+      // requests (only ones touching role/isActive; name/email edits can't
+      // affect the invariant and skip it): the second waits until the first
+      // commits, then reads the post-commit state and gets its own 409.
+      // Everything that reads state the guard depends on (the target row
+      // itself included) is read *inside* the lock, not before it.
+      const touchesAdminInvariant = data.role !== undefined || data.isActive !== undefined;
+
+      type Outcome =
+        | { kind: "ok"; user: Prisma.UserGetPayload<{ select: typeof ADMIN_USER_SELECT }> }
+        | { kind: "notFound" }
+        | { kind: "emailTaken" }
+        | { kind: "selfSuspend" }
+        | { kind: "lastAdmin" };
+
+      const outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
+        if (touchesAdminInvariant) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ADMIN_INVARIANT_LOCK_KEY}::bigint)`;
+        }
+
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) return { kind: "notFound" };
+
+        // BR-34: uniqueness re-checked against every *other* user (the
+        // database's LOWER(email) index remains the real guard — see the
+        // P2002 handling below).
+        if (typeof data.email === "string") {
+          const duplicate = await tx.user.findFirst({
+            where: { email: { equals: data.email, mode: "insensitive" }, NOT: { id: userId } },
+          });
+          if (duplicate) return { kind: "emailTaken" };
+        }
+
+        // BR-36/FR-26: an Administrator can never deactivate their own
+        // account (edits to other fields on self are still fine).
+        if (data.isActive === false && userId === req.user!.id) {
+          return { kind: "selfSuspend" };
+        }
+
+        // BR-37/FR-27: the system always has at least one active
+        // Administrator. Only relevant when the target is currently an
+        // active Administrator and this update would deactivate them or
+        // move them to a different role.
+        const targetLosesActiveAdminStatus =
+          user.role === "ADMINISTRATOR" &&
+          user.isActive &&
+          (data.isActive === false || (data.role !== undefined && data.role !== "ADMINISTRATOR"));
+
+        if (targetLosesActiveAdminStatus) {
+          const otherActiveAdmins = await tx.user.count({
+            where: { role: "ADMINISTRATOR", isActive: true, NOT: { id: userId } },
+          });
+          if (otherActiveAdmins === 0) return { kind: "lastAdmin" };
+        }
+
+        const updated = await tx.user.update({
+          where: { id: userId },
+          data,
+          select: ADMIN_USER_SELECT,
+        });
+        return { kind: "ok", user: updated };
+      });
+
+      switch (outcome.kind) {
+        case "notFound":
+          return res.status(404).json({ error: "User not found." });
+        case "emailTaken":
+          return res.status(409).json({ error: "This email is already in use." });
+        case "selfSuspend":
+          return res.status(409).json({ error: "You cannot suspend your own account." });
+        case "lastAdmin":
+          return res.status(409).json({ error: "At least one active Administrator is required." });
+        case "ok":
+          return res.status(200).json(outcome.user);
+      }
+    } catch (error) {
+      // BR-34/review fix: same race as the create route above — the
+      // findFirst pre-check is a courtesy, the database's case-insensitive
+      // unique index is the actual guard. api-spec.md's PATCH contract uses
+      // the singular { error } shape here, not { errors: { email } }.
+      if (isUniqueEmailViolation(error)) {
+        return res.status(409).json({ error: "This email is already in use." });
+      }
+
+      console.error("Failed to update user:", error);
+
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  }
+);
+
+app.post(
+  "/api/admin/users/:id/reset-password",
+  requireAuth,
+  requireRole("ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: "Invalid user id." });
+    }
+
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!password || password.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({
+        errors: { password: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` },
+      });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      // BR-35/FR-25: no self/last-admin restriction here — only
+      // *deactivating* the last active Administrator is blocked, not
+      // resetting their password.
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: await hashPassword(password),
+          mustChangePassword: true,
+        },
+        select: ADMIN_USER_SELECT,
+      });
+
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error("Failed to reset user's password:", error);
+
+      res.status(500).json({ error: "Failed to reset user's password" });
     }
   }
 );

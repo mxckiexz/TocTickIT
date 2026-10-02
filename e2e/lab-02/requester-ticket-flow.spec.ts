@@ -7,7 +7,9 @@ import { test, expect } from "@playwright/test";
 // real login, against the dedicated e2e fixture account that
 // e2e/global-setup.ts restores to a known password before every run.
 test("a Requester creates a ticket and later finds it in My Tickets", async ({ page }) => {
-  const uniqueSummary = `E2E flow check ${Date.now()}`;
+  // "[e2e]" is the managed prefix server/scripts/e2e-fixture.ts sweeps before
+  // every run, so this ticket doesn't accumulate across runs.
+  const uniqueSummary = `[e2e] Lab 2 flow check ${Date.now()}`;
 
   await page.goto("/");
 

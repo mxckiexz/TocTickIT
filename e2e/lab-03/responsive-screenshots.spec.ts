@@ -33,6 +33,26 @@ async function expectTableFitsItsWrapper(page: Page) {
   expect(clipped, "table is wider than its wrapper (columns clipped off-screen)").toBeLessThanOrEqual(0);
 }
 
+// Visual-checklist item "no clipping", for dropdowns: a <select> that is too
+// narrow for its selected option's text truncates it ("All related syster")
+// without any overflow the checks above can see. Measure the selected text
+// with the select's own font against its usable width (padding + arrow ~ 44px).
+async function expectSelectLabelsNotTruncated(page: Page) {
+  const truncated = await page.locator("select:visible").evaluateAll((selects) =>
+    (selects as HTMLSelectElement[])
+      .map((select) => {
+        const style = getComputedStyle(select);
+        const ctx = document.createElement("canvas").getContext("2d")!;
+        ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        const text = select.selectedOptions[0]?.text ?? "";
+        const needed = ctx.measureText(text).width + 44;
+        return needed > select.clientWidth ? `"${text}" needs ~${Math.ceil(needed)}px, select is ${select.clientWidth}px` : null;
+      })
+      .filter(Boolean)
+  );
+  expect(truncated, "dropdown labels are truncated").toEqual([]);
+}
+
 test.describe.configure({ mode: "serial" });
 
 for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
@@ -77,6 +97,7 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
         else await expect(lastUpdatedColumn).toBeVisible();
         await expectTableFitsItsWrapper(page);
       }
+      await expectSelectLabelsNotTruncated(page);
       await expectNoHorizontalOverflow(page);
       await shot(page, "staff-queue", viewportName);
     });
@@ -111,6 +132,7 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
       // Create/Edit forms stay usable single-column at every width.
       await page.getByRole("button", { name: "Create user" }).click();
       await expect(page.getByLabel(/Default password/i)).toBeVisible();
+      await expectSelectLabelsNotTruncated(page);
       await expectNoHorizontalOverflow(page);
       await shot(page, "user-management", `create-user-${viewportName}`);
       await logout(page);

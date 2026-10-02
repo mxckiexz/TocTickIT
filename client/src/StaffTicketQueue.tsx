@@ -237,7 +237,7 @@ export default function StaffTicketQueue() {
 
   const filterControls = (
     <div className="row g-2 mb-3">
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by category"
@@ -252,7 +252,7 @@ export default function StaffTicketQueue() {
           ))}
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by related system"
@@ -267,7 +267,7 @@ export default function StaffTicketQueue() {
           ))}
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by IT priority"
@@ -280,7 +280,7 @@ export default function StaffTicketQueue() {
           <option value="HIGH">High</option>
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by status"
@@ -295,7 +295,7 @@ export default function StaffTicketQueue() {
           ))}
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by owner"

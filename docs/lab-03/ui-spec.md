@@ -320,7 +320,9 @@ part, with what remains stated. Reference widths used: 1280 / 800 / 375px (Playw
       own wrapper); the shell is now 1140px for IT Staff/Administrator (Requester stays
       640px). (2) The queue's five filter dropdowns were squeezed to ~100px beside the
       search box and their labels truncated ("All categ…"); search now sits on its own row
-      above the filters.
+      above the filters, and the filters share the row equally (the first attempt still
+      clipped "All related systems" by ~12px; a measured-text check on every visible
+      dropdown now guards it, and was confirmed to fail on the old layout).
 - [x] Internal Notes are visually unmistakable from Public Comments on the IT Staff Ticket
       Detail screen (§7): tinted, bordered panel with an "Internal — IT Staff only" label,
       at all three widths.

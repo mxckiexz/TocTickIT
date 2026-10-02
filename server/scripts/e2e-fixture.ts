@@ -1,3 +1,6 @@
+import { unlink } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getPrisma } from "../src/prisma.js";
 import { hashPassword } from "../src/auth.js";
 import type { Role } from "@prisma/client";
@@ -43,6 +46,18 @@ const FIXTURE_ACCOUNTS: Array<{
   { email: E2E_INACTIVE_EMAIL, name: "E2E Inactive User", role: "REQUESTER", password: E2E_REQUESTER_PASSWORD, isActive: false, mustChangePassword: false },
 ];
 
+// Every ticket any e2e spec creates or this script seeds uses ONE managed
+// prefix, so cleanup is a single rule: summary starts with "[e2e]". Two older
+// prefixes predate that rule — Lab 2's graded flow spec used
+// "E2E flow check <timestamp>" and its one-off evidence generator used
+// "PDF evidence — …" — and their leftovers had piled up in the dev database
+// (11 + 4 at the time this was fixed, visible as stale rows in the committed
+// Staff Queue screenshot). They're swept too, once and for good: the flow spec
+// now uses the managed prefix, and nothing creates the old ones any more.
+const MANAGED_SUMMARY_PREFIX = "[e2e]";
+const LEGACY_E2E_SUMMARY_PREFIXES = ["E2E flow check ", "PDF evidence — "];
+const UPLOAD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "uploads");
+
 export const E2E_STAFF_FLOW_TICKET = "[e2e] Staff flow ticket";
 export const E2E_REQUESTER_RESOLVE_TICKET = "[e2e] Requester resolve ticket";
 
@@ -76,18 +91,31 @@ async function main() {
     await prisma.user.deleteMany({ where: { id: { in: leftoverIds } } });
   }
 
-  // Fresh e2e tickets every run: remove the previous run's (and anything
-  // hanging off them), then recreate in a known state.
+  // Fresh e2e tickets every run: remove every previous run's (and anything
+  // hanging off them — comments, notes, attachment rows AND their files on
+  // disk), then recreate the two seeded ones in a known state.
   const staleTickets = await prisma.ticket.findMany({
-    where: { summary: { startsWith: "[e2e]" } },
+    where: {
+      OR: [MANAGED_SUMMARY_PREFIX, ...LEGACY_E2E_SUMMARY_PREFIXES].map((prefix) => ({
+        summary: { startsWith: prefix },
+      })),
+    },
     select: { id: true },
   });
   const staleIds = staleTickets.map((t) => t.id);
   if (staleIds.length > 0) {
+    const attachments = await prisma.attachment.findMany({
+      where: { ticketId: { in: staleIds } },
+      select: { storedFilename: true },
+    });
     await prisma.internalNote.deleteMany({ where: { ticketId: { in: staleIds } } });
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: staleIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: staleIds } } });
     await prisma.ticket.deleteMany({ where: { id: { in: staleIds } } });
+    // Best-effort: a soft-removed attachment's file is already gone.
+    await Promise.all(
+      attachments.map((a) => unlink(path.join(UPLOAD_DIR, a.storedFilename)).catch(() => undefined))
+    );
   }
 
   const requester = await prisma.user.findUniqueOrThrow({ where: { email: E2E_REQUESTER_EMAIL } });

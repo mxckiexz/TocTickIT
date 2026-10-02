@@ -1618,6 +1618,13 @@ const ADMIN_USER_SELECT = {
   createdAt: true,
 } as const;
 
+// Arbitrary, fixed key for the transaction-scoped advisory lock that
+// serializes every request able to change who is an active Administrator
+// (PATCH /api/admin/users/:id's role/isActive changes — BR-37). Any 64-bit
+// constant works as long as nothing else in the app takes a lock on the same
+// key; "37" is just a mnemonic for the rule it protects.
+const ADMIN_INVARIANT_LOCK_KEY = 4_100_037;
+
 // BR-34's case-insensitive uniqueness is enforced by a database-level
 // unique index on LOWER(email) (migration
 // 20261002080000_lab3_admin_email_case_insensitive_unique), not only by the
@@ -1809,54 +1816,88 @@ app.patch(
     try {
       const prisma = getPrisma();
 
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        return res.status(404).json({ error: "User not found." });
-      }
+      // BR-37 (review fix): the "count the other active Administrators, then
+      // update" sequence must be atomic with respect to every other request
+      // that could change who is an active Administrator. Without that, two
+      // requests can each read "one other active Administrator remains"
+      // before either update commits, both pass the guard, and both commit —
+      // e.g. two sole-remaining Administrators demoting themselves, or two
+      // Administrators deactivating each other, at the same moment — leaving
+      // zero. A transaction-scoped advisory lock serializes exactly those
+      // requests (only ones touching role/isActive; name/email edits can't
+      // affect the invariant and skip it): the second waits until the first
+      // commits, then reads the post-commit state and gets its own 409.
+      // Everything that reads state the guard depends on (the target row
+      // itself included) is read *inside* the lock, not before it.
+      const touchesAdminInvariant = data.role !== undefined || data.isActive !== undefined;
 
-      // BR-34: uniqueness re-checked against every *other* user.
-      if (typeof data.email === "string") {
-        const duplicate = await prisma.user.findFirst({
-          where: { email: { equals: data.email, mode: "insensitive" }, NOT: { id: userId } },
-        });
-        if (duplicate) {
-          return res.status(409).json({ error: "This email is already in use." });
+      type Outcome =
+        | { kind: "ok"; user: Prisma.UserGetPayload<{ select: typeof ADMIN_USER_SELECT }> }
+        | { kind: "notFound" }
+        | { kind: "emailTaken" }
+        | { kind: "selfSuspend" }
+        | { kind: "lastAdmin" };
+
+      const outcome = await prisma.$transaction(async (tx): Promise<Outcome> => {
+        if (touchesAdminInvariant) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ADMIN_INVARIANT_LOCK_KEY}::bigint)`;
         }
-      }
 
-      // BR-36/FR-26: an Administrator can never deactivate their own
-      // account (edits to other fields on self are still fine).
-      if (data.isActive === false && userId === req.user!.id) {
-        return res.status(409).json({ error: "You cannot suspend your own account." });
-      }
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) return { kind: "notFound" };
 
-      // BR-37/FR-27: the system always has at least one active
-      // Administrator. Only relevant when the target is currently an active
-      // Administrator and this update would deactivate them or move them to
-      // a different role.
-      const targetLosesActiveAdminStatus =
-        user.role === "ADMINISTRATOR" &&
-        user.isActive &&
-        (data.isActive === false || (data.role !== undefined && data.role !== "ADMINISTRATOR"));
-
-      if (targetLosesActiveAdminStatus) {
-        const otherActiveAdmins = await prisma.user.count({
-          where: { role: "ADMINISTRATOR", isActive: true, NOT: { id: userId } },
-        });
-        if (otherActiveAdmins === 0) {
-          return res.status(409).json({
-            error: "At least one active Administrator is required.",
+        // BR-34: uniqueness re-checked against every *other* user (the
+        // database's LOWER(email) index remains the real guard — see the
+        // P2002 handling below).
+        if (typeof data.email === "string") {
+          const duplicate = await tx.user.findFirst({
+            where: { email: { equals: data.email, mode: "insensitive" }, NOT: { id: userId } },
           });
+          if (duplicate) return { kind: "emailTaken" };
         }
-      }
 
-      const updated = await prisma.user.update({
-        where: { id: userId },
-        data,
-        select: ADMIN_USER_SELECT,
+        // BR-36/FR-26: an Administrator can never deactivate their own
+        // account (edits to other fields on self are still fine).
+        if (data.isActive === false && userId === req.user!.id) {
+          return { kind: "selfSuspend" };
+        }
+
+        // BR-37/FR-27: the system always has at least one active
+        // Administrator. Only relevant when the target is currently an
+        // active Administrator and this update would deactivate them or
+        // move them to a different role.
+        const targetLosesActiveAdminStatus =
+          user.role === "ADMINISTRATOR" &&
+          user.isActive &&
+          (data.isActive === false || (data.role !== undefined && data.role !== "ADMINISTRATOR"));
+
+        if (targetLosesActiveAdminStatus) {
+          const otherActiveAdmins = await tx.user.count({
+            where: { role: "ADMINISTRATOR", isActive: true, NOT: { id: userId } },
+          });
+          if (otherActiveAdmins === 0) return { kind: "lastAdmin" };
+        }
+
+        const updated = await tx.user.update({
+          where: { id: userId },
+          data,
+          select: ADMIN_USER_SELECT,
+        });
+        return { kind: "ok", user: updated };
       });
 
-      res.status(200).json(updated);
+      switch (outcome.kind) {
+        case "notFound":
+          return res.status(404).json({ error: "User not found." });
+        case "emailTaken":
+          return res.status(409).json({ error: "This email is already in use." });
+        case "selfSuspend":
+          return res.status(409).json({ error: "You cannot suspend your own account." });
+        case "lastAdmin":
+          return res.status(409).json({ error: "At least one active Administrator is required." });
+        case "ok":
+          return res.status(200).json(outcome.user);
+      }
     } catch (error) {
       // BR-34/review fix: same race as the create route above — the
       // findFirst pre-check is a courtesy, the database's case-insensitive

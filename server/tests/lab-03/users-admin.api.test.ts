@@ -205,16 +205,21 @@ describe("Administrator User Management", () => {
     });
   });
 
-  // Design note: BR-37's guard only has to fire for an Administrator acting
-  // on *themself* — cross-admin actions (A deactivates/demotes B) can never
-  // actually drop the active-Administrator count to zero through this API,
-  // because the caller (A) must themselves be an active Administrator to
-  // pass requireRole("ADMINISTRATOR") in the first place, so A always
-  // remains as "the other active Administrator" once B's request completes.
-  // And self *deactivation* is already blocked unconditionally by the
-  // self-suspend guard (API-43/BR-36), checked first. So the one scenario
-  // that exercises BR-37 specifically (not BR-36) is: a sole active
+  // Design note: for a single, sequential request, BR-37's guard only has to
+  // fire for an Administrator acting on *themself* — cross-admin actions
+  // (A deactivates/demotes B) can't drop the count to zero, because the
+  // caller (A) must themselves be an active Administrator to pass
+  // requireRole("ADMINISTRATOR"), so A is always "the other active
+  // Administrator". And self *deactivation* is already blocked by the
+  // self-suspend guard (API-43/BR-36), checked first. So the sequential
+  // scenario that exercises BR-37 specifically is: a sole active
   // Administrator changes their *own role* away from ADMINISTRATOR.
+  //
+  // That reasoning only holds one request at a time. Concurrently, two
+  // requests can each read "one other active Administrator remains" before
+  // either commits (see the "BR-37 under concurrency" block below, added in
+  // review) — which is what the advisory-lock transaction in the PATCH
+  // handler exists to prevent.
   describe("Self-suspend and last-admin guards (API-43, API-44, API-45)", () => {
     it("rejects an Administrator deactivating their own account", async () => {
       const response = await withOrigin(adminAgent.patch(`/api/admin/users/${adminId}`)).send({ isActive: false });
@@ -482,6 +487,115 @@ describe("Administrator User Management", () => {
         await prisma.session.deleteMany({ where: { userId: { in: [target.body.id, other.body.id] } } });
         await prisma.user.deleteMany({ where: { id: { in: [target.body.id, other.body.id] } } });
       }
+    });
+  });
+
+  // BR-37/review fix: the last-active-Administrator invariant under
+  // concurrency. The count check and the update used to be separate
+  // statements, so two requests could each read "one other active
+  // Administrator remains" before either committed, both pass the guard, and
+  // both commit — leaving zero. PATCH now takes a transaction-scoped
+  // advisory lock around the check-and-update, so the second request waits,
+  // then sees the first's committed result and gets its own 409.
+  describe("BR-37 under concurrency (review fix)", () => {
+    // Sets up *exactly two* active Administrators in the whole system for
+    // the duration of `run` (the two it creates, with sessions, plus every
+    // other pre-existing active Administrator — seeded or fixture —
+    // deactivated directly via Prisma, bypassing the guard under test),
+    // then restores everything afterward even if `run` throws.
+    async function withExactlyTwoActiveAdmins(
+      run: (a: { id: number; agent: request.Agent }, b: { id: number; agent: request.Agent }) => Promise<void>
+    ) {
+      const prisma = getPrisma();
+
+      const created = await Promise.all([
+        createUser(adminAgent, { role: "ADMINISTRATOR", name: "Concurrent Admin A" }),
+        createUser(adminAgent, { role: "ADMINISTRATOR", name: "Concurrent Admin B" }),
+      ]);
+      expect(created.map((c) => c.status)).toEqual([201, 201]);
+      const [aBody, bBody] = [created[0].body, created[1].body];
+      const ids = [aBody.id, bBody.id];
+
+      // Admin-created accounts start mustChangePassword: true, which would
+      // block these calls at requirePasswordUpToDate before they reach the
+      // guard under test.
+      await prisma.user.updateMany({ where: { id: { in: ids } }, data: { mustChangePassword: false } });
+      const [agentA, agentB] = await Promise.all([
+        loginAgent(aBody.email, "Fixture-Pass1"),
+        loginAgent(bBody.email, "Fixture-Pass1"),
+      ]);
+
+      const othersToRestore = await prisma.user.findMany({
+        where: { role: "ADMINISTRATOR", isActive: true, id: { notIn: ids } },
+        select: { id: true },
+      });
+
+      try {
+        await prisma.user.updateMany({
+          where: { id: { in: othersToRestore.map((o) => o.id) } },
+          data: { isActive: false },
+        });
+        expect(await prisma.user.count({ where: { role: "ADMINISTRATOR", isActive: true } })).toBe(2);
+
+        await run({ id: aBody.id, agent: agentA }, { id: bBody.id, agent: agentB });
+      } finally {
+        await prisma.user.updateMany({
+          where: { id: { in: othersToRestore.map((o) => o.id) } },
+          data: { isActive: true },
+        });
+        await prisma.session.deleteMany({ where: { userId: { in: ids } } });
+        await prisma.user.deleteMany({ where: { id: { in: ids } } });
+      }
+    }
+
+    it("two simultaneous self-demotions: exactly one succeeds, one gets 409, one active Administrator remains", async () => {
+      await withExactlyTwoActiveAdmins(async (a, b) => {
+        const [resA, resB] = await Promise.all([
+          withOrigin(a.agent.patch(`/api/admin/users/${a.id}`)).send({ role: "IT_STAFF" }),
+          withOrigin(b.agent.patch(`/api/admin/users/${b.id}`)).send({ role: "IT_STAFF" }),
+        ]);
+
+        expect([resA.status, resB.status].sort()).toEqual([200, 409]);
+        const loser = resA.status === 409 ? resA : resB;
+        expect(loser.body.error).toBe("At least one active Administrator is required.");
+
+        const prisma = getPrisma();
+        const activeAdmins = await prisma.user.findMany({ where: { role: "ADMINISTRATOR", isActive: true } });
+        expect(activeAdmins).toHaveLength(1);
+        // The survivor is the request that got the 409 (it stayed an
+        // Administrator); the winner demoted itself.
+        const survivorId = resA.status === 409 ? a.id : b.id;
+        expect(activeAdmins[0].id).toBe(survivorId);
+      });
+    });
+
+    it("two Administrators concurrently deactivating each other: exactly one succeeds, one gets 409, one active Administrator remains", async () => {
+      await withExactlyTwoActiveAdmins(async (a, b) => {
+        // Cross-targeting avoids the self-suspend guard, so only BR-37 can
+        // stop the second request: each request alone is safe (the other
+        // admin would remain), together they would leave nobody.
+        const [resA, resB] = await Promise.all([
+          withOrigin(a.agent.patch(`/api/admin/users/${b.id}`)).send({ isActive: false }),
+          withOrigin(b.agent.patch(`/api/admin/users/${a.id}`)).send({ isActive: false }),
+        ]);
+
+        // Exactly one wins. The loser is normally the guard's 409 — but if
+        // the winner commits before the loser's *session lookup* even runs,
+        // the loser has already been deactivated (BR-16) and gets a plain
+        // 401 instead; both mean "the second deactivation did not happen",
+        // which is the invariant. Without the advisory lock the outcome is
+        // [200, 200], which neither branch allows.
+        const statuses = [resA.status, resB.status].sort();
+        expect(statuses[0]).toBe(200);
+        expect([401, 409]).toContain(statuses[1]);
+        if (statuses[1] === 409) {
+          const loser = resA.status === 409 ? resA : resB;
+          expect(loser.body.error).toBe("At least one active Administrator is required.");
+        }
+
+        const activeAdmins = await getPrisma().user.findMany({ where: { role: "ADMINISTRATOR", isActive: true } });
+        expect(activeAdmins).toHaveLength(1);
+      });
     });
   });
 });

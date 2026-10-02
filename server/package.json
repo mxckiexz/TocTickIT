@@ -10,6 +10,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "e2e:fixture": "tsx scripts/e2e-fixture.ts",
+    "e2e:admins": "tsx scripts/e2e-admins.ts",
     "test": "vitest run"
   },
   "prisma": {

@@ -286,18 +286,41 @@ artifacts/lab-03/screenshots/
 ```
 
 matching the required repository structure (handout §12). Visual-inspection checklist
-(verified against the screenshots before Release Integration, issue #41):
+(completed in Feature 7, issue #40, by opening every screenshot — not just by
+asserting on them). `[x]` = checked and satisfied, `[~]` = checked, satisfied only in
+part, with what remains stated. Reference widths used: 1280 / 800 / 375px (Playwright
+`responsive-screenshots.spec.ts`).
 
-- [ ] Every screen uses only the Zen Green tokens in §1 — no stray colors.
-- [ ] Role-scoped navigation never shows a destination the current role can't reach.
-- [ ] Badges are legible and never rely on color alone.
-- [ ] Editable vs. read-only fields are visually distinct (`--zg-readonly-bg`) on every
-      screen that mixes both (IT Staff Ticket Detail's IT Priority vs. Requested Priority
-      being the clearest case).
-- [ ] Error messages are positioned consistently (inline under the field for validation,
-      a banner above the form/table for request failures) across all six new screens.
-- [ ] Focus states are visible on every interactive control at every breakpoint.
-- [ ] No clipping, overlap, or horizontal scroll at 375px (mobile), 768px (tablet), or
-      1280px (desktop) reference widths.
-- [ ] Internal Notes are visually unmistakable from Public Comments on the IT Staff Ticket
-      Detail screen (§7).
+- [~] Every screen uses only the Zen Green tokens in §1 — no stray colors. A grep of the
+      Lab 3 components finds no hard-coded colors (the one inline style is
+      `var(--zg-pale-green, …)`, a token). **Gap:** badges use plain Bootstrap semantic
+      classes (`text-bg-success/warning/danger/secondary`) and every role badge is the same
+      green — the per-role outline/solid mapping in §1's badge table was never built.
+- [x] Role-scoped navigation never shows a destination the current role can't reach.
+      (E2E: a Requester sees no User Management and gets `403` from `/api/admin/users`;
+      each role's shell was captured.)
+- [x] Badges are legible and never rely on color alone — every badge carries its text
+      label (HIGH, In Progress, Suspended, …).
+- [~] Editable vs. read-only fields are visually distinct on every screen that mixes both.
+      IT Priority is a select next to Requested Priority's badge on the staff detail
+      screens, plainly different at all three widths. **Note:** the read-only side is a
+      badge, not a disabled input, so `--zg-readonly-bg` isn't the mechanism in use here.
+- [~] Error messages are positioned consistently (inline under the field for validation, a
+      banner above the form/table for request failures). The login failure banner (above
+      the submit button) is captured at all three widths; inline field errors
+      (Change Password, Create/Edit user) are asserted by the E2E and component tests but
+      not captured in screenshots.
+- [~] Focus states are visible. A11Y-02 verifies the Login controls (email, password,
+      submit). **Gap:** not swept across every interactive control on every screen.
+- [x] No clipping, overlap, or horizontal scroll at the reference widths — **after two
+      defects found by inspecting the screenshots and fixed in Feature 7:** (1) the app
+      shell was capped at 640px, so at desktop width the Staff Queue's Status/Owner/Last
+      Updated columns were cut off the right edge of the table (the wrapper scrolled, so
+      the page-level overflow check passed — the check now also compares each table to its
+      own wrapper); the shell is now 1140px for IT Staff/Administrator (Requester stays
+      640px). (2) The queue's five filter dropdowns were squeezed to ~100px beside the
+      search box and their labels truncated ("All categ…"); search now sits on its own row
+      above the filters.
+- [x] Internal Notes are visually unmistakable from Public Comments on the IT Staff Ticket
+      Detail screen (§7): tinted, bordered panel with an "Internal — IT Staff only" label,
+      at all three widths.

@@ -101,8 +101,15 @@ export default function App() {
     return <ChangePassword onChanged={handlePasswordChanged} />;
   }
 
+  // The Requester screens are narrow forms/lists and read best at 640px; the
+  // IT Staff Ticket Queue (9 columns) and Administrator User Management
+  // tables don't fit there — at 640px the Status/Owner columns were clipped
+  // off the right edge of the table at desktop width (caught by inspecting
+  // the Feature 7 screenshots, not by an assertion).
+  const shellMaxWidth = currentUser.role === "REQUESTER" ? 640 : 1140;
+
   return (
-    <div className="container py-5" style={{ maxWidth: 640 }}>
+    <div className="container py-5" style={{ maxWidth: shellMaxWidth }}>
       <div className="zg-app-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h1 className="h3 mb-0">
           TokTickIT <span className="text-success">IT Service Desk</span>

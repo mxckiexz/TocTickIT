@@ -237,7 +237,7 @@ export default function StaffTicketQueue() {
 
   const filterControls = (
     <div className="row g-2 mb-3">
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by category"
@@ -252,7 +252,7 @@ export default function StaffTicketQueue() {
           ))}
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by related system"
@@ -267,7 +267,7 @@ export default function StaffTicketQueue() {
           ))}
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by IT priority"
@@ -280,7 +280,7 @@ export default function StaffTicketQueue() {
           <option value="HIGH">High</option>
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by status"
@@ -295,7 +295,7 @@ export default function StaffTicketQueue() {
           ))}
         </select>
       </div>
-      <div className="col-6 col-lg-2">
+      <div className="col-6 col-lg">
         <select
           className="form-select"
           aria-label="Filter by owner"
@@ -330,8 +330,12 @@ export default function StaffTicketQueue() {
       {/* Desktop/tablet: search and filters shown together, no disclosure. */}
       <div className="d-none d-md-block">
         <div className="row g-2 mb-3">
-          <div className="col-12 col-lg-4">{searchInputEl}</div>
-          <div className="col-12 col-lg-8">{filterControls}</div>
+          {/* Stacked, not side by side: with the search box beside five
+              filters each dropdown got ~100px and its "All categories" /
+              "All related systems" labels were clipped (seen in the Feature 7
+              desktop screenshot). */}
+          <div className="col-12">{searchInputEl}</div>
+          <div className="col-12">{filterControls}</div>
         </div>
       </div>
 

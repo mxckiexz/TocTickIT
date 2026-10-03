@@ -11,7 +11,18 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
+  globalTeardown: "./e2e/global-teardown.ts",
+  // Lab 2's two one-off evidence generators for the already-submitted Lab 2
+  // PDF. Both drive the removed Development Requester picker (each says so in
+  // its own header) and are explicitly "not part of the graded automated
+  // suite" — leaving them in the default run just makes it permanently red.
+  // Lab 2's graded flow (requester-ticket-flow.spec.ts) still runs.
+  testIgnore: ["**/lab-02/pdf-evidence.spec.ts", "**/lab-02/responsive-screenshots.spec.ts"],
   fullyParallel: false,
+  // One worker: every spec shares one real Postgres database and one set of
+  // fixture accounts/tickets, and the last-Administrator spec temporarily
+  // changes a system-wide invariant (BR-37) — files must not overlap.
+  workers: 1,
   retries: 0,
   reporter: [["list"]],
   use: {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
-import { app } from "../../src/app.js";
+import { app, validateCommentBody } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { CLIENT_ORIGIN } from "../../src/auth.js";
 import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/auth-fixtures.js";
@@ -8,6 +8,29 @@ import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/aut
 // Lab 3 (docs/lab-03/tests.md §2.4, API-15..21): Public Comments, Internal
 // Notes, and "Problem Appears Resolved" (api-spec.md "Comments, Notes, and
 // 'mark resolved'").
+// UNIT-05 (BR-25, BR-26): the pure body validator behind both the comments and
+// the notes routes, without an HTTP round trip.
+describe("comment/note body validator (UNIT-05)", () => {
+  it("rejects empty, whitespace-only, and non-string bodies", () => {
+    for (const bad of ["", "   ", "\n\t ", undefined, null, 42, {}]) {
+      expect(validateCommentBody(bad)).toEqual({ error: "Body is required." });
+    }
+  });
+
+  it("rejects a body over 2000 characters, but accepts exactly 2000", () => {
+    expect(validateCommentBody("a".repeat(2001))).toEqual({ error: "Body must be 2000 characters or fewer." });
+    expect(validateCommentBody("a".repeat(2000))).toEqual({ body: "a".repeat(2000) });
+  });
+
+  it("accepts a valid body and returns it trimmed", () => {
+    expect(validateCommentBody("  hello world \n")).toEqual({ body: "hello world" });
+  });
+
+  it("measures length after trimming, not before (BR-26 is about content)", () => {
+    expect(validateCommentBody(`${" ".repeat(50)}${"a".repeat(2000)}${" ".repeat(50)}`)).toEqual({ body: "a".repeat(2000) });
+  });
+});
+
 describe("Comments, Notes, and mark-resolved", () => {
   const requesterEmail = "comments-requester-fixture@toktickit.test";
   const otherRequesterEmail = "comments-other-requester-fixture@toktickit.test";
@@ -107,11 +130,14 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await adminAgent
         .post(`/api/tickets/${ticketId}/comments`)
         .set("Origin", CLIENT_ORIGIN)
+        // API-56 (BR-39) — an Administrator posting a comment is 403; see the notes route for the same on notes
+    //
         .send({ body: "Administrators can't post comments." })
         .expect(403);
       expect(response.body.error).toBeDefined();
     });
 
+    // API-16 (BR-25) — comments; the notes route repeats it below
     it("rejects an empty/whitespace-only body (BR-25)", async () => {
       const response = await requesterAgent
         .post(`/api/tickets/${ticketId}/comments`)
@@ -121,6 +147,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       expect(response.body.errors.body).toBeDefined();
     });
 
+    // API-17 (BR-26) — comments; the notes route repeats it below
     it("rejects a 2001-character body (BR-26)", async () => {
       const response = await requesterAgent
         .post(`/api/tickets/${ticketId}/comments`)
@@ -412,6 +439,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       expect(second.body.currentStatus).toBe("NEW");
     });
 
+    // API-52 / AC-29 (BR-40)
     it("rejects marking resolved once the ticket is in a terminal status (409, BR-40)", async () => {
       const prisma = getPrisma();
       const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });

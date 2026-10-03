@@ -559,6 +559,7 @@ describe("TicketDetail", () => {
   });
 
   // Lab 3 (ui-spec.md §5.1) — Public Comments thread.
+  // UI-05 (ui-spec.md §5.1) — Requester Public Comments states
   describe("Comments", () => {
     async function openDetail() {
       await openMyTicketsWithOneTicket();
@@ -664,6 +665,7 @@ describe("TicketDetail", () => {
   });
 
   // Lab 3 (ui-spec.md §5.2) — "Problem Appears Resolved".
+  // UI-06 (ui-spec.md §5.2) — "Problem Appears Resolved" states
   describe("Problem Appears Resolved", () => {
     async function openDetail(ticket: api.Ticket = listedTicket) {
       await openMyTicketsWithOneTicket();

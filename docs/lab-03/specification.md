@@ -587,27 +587,46 @@ and needs `/logout` to work from that screen too. Every protected endpoint retur
 
 ## 10. Definition of Done
 
-- [ ] `docs/lab-03/specification.md`, `api-spec.md`, `ui-spec.md`, `tests.md` merged to
-      `lab3-staging` before any other Lab 3 branch's code merges (this branch — GitHub
-      issue #34, branch `feature/1-lab3-engineering-contract` after the 1–8 renumbering, see
-      the branch/issue mapping table below — is that gate).
-- [ ] Every FR/BR/AC above is implemented and covered by at least one automated test listed
-      in `tests.md`'s traceability matrix.
-- [ ] `server/tests/lab-03/*` and `client/.../lab-03/*` all pass on `lab3-staging`.
-- [ ] Lab 2's full existing test suite (`server/tests/lab-01`, `lab-02`;
-      `client/tests/lab-01`, `lab-02`; `e2e/lab-01`, `lab-02`) still passes, **with the
-      specific test-file updates documented in `tests.md`'s "Required Lab 2 test updates"
-      section applied** — zero *behavior* regressions, not zero test-file diffs (see AC-10).
-- [ ] Migration verified: `Ticket`/`Attachment`/`Category`/`RelatedSystem` row counts and
-      every `Ticket.requesterId` match before/after, on a copy of the Lab 2 database.
-- [ ] `e2e/lab-03/*` passes against a seeded local environment.
-- [ ] Screenshots captured at desktop/tablet/mobile for every Lab 3 screen, stored under
-      `artifacts/lab-03/screenshots/`.
-- [ ] No plaintext password or real secret committed anywhere in the repository.
-- [ ] `docs/lab-03/reviewer.md` and `docs/lab-03/ai-use.md` reflect the actual PRs and
-      prompts used, finalized in the Release Integration issue (issue #41, branch
-      `feature/8-release-integration`).
-- [ ] `lab3-staging` merged to `main` only after every item above is checked.
+Checked at Release Integration (issue #41) against the release run recorded in
+`tests.md` §12. `[x]` = done and evidenced; `[~]` = done in part, with the gap stated.
+Nothing below is ticked on the strength of an intention.
+
+- [x] `docs/lab-03/specification.md`, `api-spec.md`, `ui-spec.md`, `tests.md` merged to
+      `lab3-staging` before any other Lab 3 branch's code merged (issue #34, branch
+      `feature/1-lab3-engineering-contract` — PR #43 — was that gate).
+- [~] Every FR/BR/AC above is implemented and covered by at least one automated test listed
+      in `tests.md`'s traceability matrix. Every AC and BR row points at a test that exists
+      and passes, with three stated exceptions (`tests.md` §13): UNIT-04 has no standalone
+      helper (the comparison is a database index, tested through the API), STY-01's per-role
+      badge colour mapping was not built, and A11Y-01/02 cover the Login screen only.
+- [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 366/366 (17 files),
+      client 117/117 (12 files), run on the release branch (= `lab3-staging` plus Feature 8).
+- [x] Lab 2's existing suite (`server/tests/lab-01`, `lab-02`; `client/tests/lab-01`,
+      `lab-02`; `e2e/lab-02` — Lab 1 has no e2e specs) still passes, **with the specific
+      test-file updates documented in `tests.md`'s "Required Lab 2 test updates" section
+      applied** — zero *behavior* regressions, not zero test-file diffs (see AC-10). Two
+      Lab 2 evidence-only Playwright scripts are excluded as stale (`playwright.config.ts`).
+- [x] Migration verified: `migration.api.test.ts` replays the real migration files in a
+      throwaway schema seeded with a Lab 2 fixture and compares before/after
+      (`Ticket`/`Attachment`/`Category`/`RelatedSystem` counts and every
+      `Ticket.requesterId`), then rolls back; `npx prisma migrate status` reports 8 migrations
+      applied and no drift.
+- [x] `e2e/lab-03/*` passes against a seeded local environment: Playwright 26/26.
+- [~] Screenshots captured at desktop/tablet/mobile for every Lab 3 screen, stored under
+      `artifacts/lab-03/screenshots/`: Login, Change Password, Staff Queue, Staff Ticket
+      Detail and User Management are covered (opened and inspected, not just generated).
+      The Requester Ticket Detail screen, which gained comments and "Problem Appears
+      Resolved" in Lab 3, has no Lab 3 screenshot set.
+- [x] No plaintext password or real secret committed anywhere in the repository. The only
+      password literals in tracked files are local-development defaults that are
+      documented as such (`ChangeMe123!` in `server/.env.example`, the seed, the README and
+      API examples; fixed fixture passwords for the e2e-only `*@toktickit.test` accounts).
+      `server/.env` is git-ignored. Stored passwords are bcrypt hashes (cost 12).
+- [x] `docs/lab-03/reviewer.md` and `docs/lab-03/ai-use.md` reflect the actual PRs and
+      prompts used. `reviewer.md` was generated from the GitHub PR data, not retyped;
+      `ai-use.md`'s reflection is the author's to review and edit before submission.
+- [ ] `lab3-staging` merged to `main` only after every item above is checked **and** the
+      release PR has been reviewed — this is the gate, and it is not self-merged.
 
 ### 10.1 Branch / issue numbering
 

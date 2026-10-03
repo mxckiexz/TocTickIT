@@ -5,16 +5,14 @@ per the handout's requirement that the test plan not be reconstructed after the 
 covers unit, API/integration, UI component, UI style, responsive, security/authorization,
 migration/regression, and end-to-end coverage, per handout §10.
 
-**Status of this document**: written on branch `feature/1-lab3-engineering-contract` (GitHub
-issue #34; see `specification.md` §10.1 for the full branch/issue number mapping), which is
-**specification only — no Lab 3 implementation code exists yet**. Every row's **Final**
-column below is therefore `Planned`, not `Pass` — marking anything `Pass` before the code
-and test file exist would be a false record. Each subsequent branch (issues #35–#40) is
-responsible for turning its rows to `Pass` as it lands, and Release Integration (issue #41)
-re-verifies the whole table and Lab 2's existing suite together before merging
-`lab3-staging` → `main`. §12 below documents what *has* been actually run on this branch: a
-regression check that Lab 2's own suite is untouched. §2.9 lists the specific Lab 2 test
-changes required once Feature 3 lands (not "unmodified" — see AC-10's reworded text).
+**Status of this document**: written first, on `feature/1-lab3-engineering-contract` (issue
+#34; see `specification.md` §10.1 for the branch/issue mapping) before any implementation,
+as the handout requires of a Test DD. Every row started as `Planned`; each feature branch
+(issues #35–#40) made its rows real, and Release Integration (issue #41) re-verified the
+whole table and brought the **Final** column up to date in one pass. A `Pass` below means a
+named test exists in the repository and passed in the release run recorded in §12. Rows that
+are only partly covered say `Partial` or `N/A` and state exactly what is missing — they are
+not rounded up. §2.9 lists the Lab 2 test changes Lab 3 required (not "unmodified" — see AC-10).
 
 **Test ID scheme** (new for Lab 3 — Lab 2 used `B#`/`F#`/`E2E-##`; Lab 3 splits by the
 handout's required coverage categories for clearer traceability at this larger scope):
@@ -45,11 +43,11 @@ handout's structure block is treated as illustrative naming, not a literal path.
 
 | Test ID | Requirement | What it tests | Expected result | File | Final |
 |---|---|---|---|---|---|
-| UNIT-01 | BR-06 | Password hashing helper produces a bcrypt hash, never the plaintext | Hash verifies against the original password; hash ≠ plaintext | `server/tests/lab-03/auth.api.test.ts` (helper import) | Planned |
-| UNIT-02 | BR-08 | New-password validator | Rejects < 8 chars; rejects value equal to current password; accepts a valid distinct password | `server/tests/lab-03/auth.api.test.ts` | Planned |
+| UNIT-01 | BR-06 | Password hashing helper produces a bcrypt hash, never the plaintext | Hash verifies against the original password; hash ≠ plaintext | `server/tests/lab-03/auth.api.test.ts` (helper import) | Pass |
+| UNIT-02 | BR-08 | New-password validator | Rejects < 8 chars; rejects value equal to current password; accepts a valid distinct password | `server/tests/lab-03/auth.api.test.ts` | Pass |
 | UNIT-03 | BR-22, §7.3 matrix | Status transition lookup, given (from, to) | Returns allowed for every ✅ cell, rejected for every other cell, including self-transitions | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass (Feature 5, issue #38) — as `isLegalStatusTransition()` in `server/src/ticketStatus.ts`, imported directly by the test (no HTTP), same pattern as `auth.ts`'s `hashPassword`/`validateNewPassword` |
-| UNIT-04 | BR-34 | Email-uniqueness comparison | Two emails differing only by case are treated as equal | `server/tests/lab-03/users-admin.api.test.ts` | Planned |
-| UNIT-05 | BR-25, BR-26 | Comment/note body validator | Rejects empty/whitespace-only; rejects > 2000 chars; accepts a valid body | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (as inline `POST .../comments` and `.../notes` body-validation assertions, not a standalone exported helper — see §12) |
+| UNIT-04 | BR-34 | Email-uniqueness comparison | Two emails differing only by case are treated as equal | `server/tests/lab-03/users-admin.api.test.ts` (API-42 and the email race tests) | N/A as a standalone unit — there is no email-comparison helper. Case-insensitive uniqueness is enforced by the `User_email_lower_key` expression index on `LOWER(email)` (migration `20261002080000_lab3_admin_email_case_insensitive_unique`), so the comparison happens in the database, not in code. It is exercised through the real index by API-42 and by the concurrent create/edit race tests in `users-admin.api.test.ts` |
+| UNIT-05 | BR-25, BR-26 | Comment/note body validator | Rejects empty/whitespace-only; rejects > 2000 chars; accepts a valid body | `server/tests/lab-03/comments-notes.api.test.ts` | Pass — `validateCommentBody()` is now an exported helper in `server/src/app.ts`, tested directly (empty/whitespace/non-string, 2001 rejected, 2000 accepted, trimming, length measured after trim) in addition to the inline `POST` assertions |
 
 ## 2. API / integration tests
 
@@ -57,29 +55,29 @@ handout's structure block is treated as illustrative naming, not a literal path.
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| API-01 | AC-01 | `POST /api/auth/login` with valid credentials | `200`, session cookie set, body has `id`/`name`/`email`/`role`/`mustChangePassword` | Planned |
-| API-02 | AC-05, BR-01, BR-07 | Login with unknown email, wrong password, and inactive-but-correct-password account | All three return identical `401` + identical body | Planned |
-| API-03 | — | Login with missing email/password | `400` with per-field errors | Planned |
-| API-04 | AC-06, BR-10 | Logout, then replay old cookie on a protected route | Logout `200`; replayed request `401` | Planned |
-| API-05 | AC-07 | `GET /api/auth/me` with no cookie | `401`, no user data | Planned |
-| API-06 | BR-12 | `GET /api/auth/me` with a valid session | `200` with current identity, never an empty/guest body | Planned |
-| API-07 | AC-08 | `POST /api/auth/change-password` with wrong current password | `401`; `mustChangePassword` unchanged | Planned |
-| API-08 | AC-09, BR-09 | Successful password change | `200`, `mustChangePassword: false`; next request no longer blocked | Planned |
-| API-09 | BR-08 | Change password to a value equal to current, and to a 7-char value | Both `400` | Planned |
-| API-10 | — | Any authenticated route called with `mustChangePassword: true` (other than change-password itself) | `403` with `code: "PASSWORD_CHANGE_REQUIRED"` | Planned |
-| API-11 | BR-11 | Session older than 8 hours (test clock manipulation) | Treated as `401`, not a distinct "expired" error | Planned |
+| API-01 | AC-01 | `POST /api/auth/login` with valid credentials | `200`, session cookie set, body has `id`/`name`/`email`/`role`/`mustChangePassword` | Pass |
+| API-02 | AC-05, BR-01, BR-07 | Login with unknown email, wrong password, and inactive-but-correct-password account | All three return identical `401` + identical body | Pass |
+| API-03 | — | Login with missing email/password | `400` with per-field errors | Pass |
+| API-04 | AC-06, BR-10 | Logout, then replay old cookie on a protected route | Logout `200`; replayed request `401` | Pass |
+| API-05 | AC-07 | `GET /api/auth/me` with no cookie | `401`, no user data | Pass |
+| API-06 | BR-12 | `GET /api/auth/me` with a valid session | `200` with current identity, never an empty/guest body | Pass |
+| API-07 | AC-08 | `POST /api/auth/change-password` with wrong current password | `401`; `mustChangePassword` unchanged | Pass |
+| API-08 | AC-09, BR-09 | Successful password change | `200`, `mustChangePassword: false`; next request no longer blocked | Pass |
+| API-09 | BR-08 | Change password to a value equal to current, and to a 7-char value | Both `400` | Pass |
+| API-10 | — | Any authenticated route called with `mustChangePassword: true` (other than change-password itself) | `403` with `code: "PASSWORD_CHANGE_REQUIRED"` | Pass |
+| API-11 | BR-11 | Session older than 8 hours (test clock manipulation) | Treated as `401`, not a distinct "expired" error | Pass |
 
 ### 2.2 Authorization / cross-role (`server/tests/lab-03/authorization.api.test.ts`)
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| SEC-01 | AC-27 | Every `/api/admin/*` route called by Requester and IT Staff sessions | All `403` | Planned |
-| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Partial (Feature 4, issue #37) — covers `GET /api/staff/tickets` (the only `/api/staff/*` route that exists so far); the claim/assign/priority/status/assignable-users routes are Feature 5 |
-| SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Pass — `server/tests/lab-02/create-ticket.api.test.ts` ("ignores a requesterId in the body") and `my-tickets.api.test.ts` ("ignores a requesterId query param"), not a separate `authorization.api.test.ts` file (see §12) |
-| SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Pass — one "returns 404 (not 403)" test per route in `server/tests/lab-02/ticket-detail.api.test.ts`, `attachments.api.test.ts`, `inspect-attachments.api.test.ts`, `remove-attachment.api.test.ts`, plus `server/tests/lab-03/comments-notes.api.test.ts` for `.../comments` and `.../mark-resolved` |
-| SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Pass — `server/tests/lab-03/comments-notes.api.test.ts` (API-21) |
-| SEC-06 | BR-16 | A session for a user deactivated mid-session makes a request | `401` on the very next request after deactivation | Planned (covered by Feature 2's `auth.api.test.ts` for login; a mid-session-deactivation-specific re-check on a Lab 2 route is not yet a dedicated test) |
-| SEC-07 | — | Missing/mismatched `Origin` header on a `POST`/`PATCH`/`DELETE`, including one that would otherwise be unauthenticated too | `403` from the Origin gate, before the request ever reaches BR-13's ladder (so this is `403`, not `401`, even with no session at all) | Pass (Feature 2, `server/tests/lab-03/auth.api.test.ts` — the gate is now mounted globally per Feature 3, still covered by the same test since every state-changing Lab 2 route re-run in this branch also carries the required `Origin` header) |
+| SEC-01 | AC-27 | Every `/api/admin/*` route called by Requester and IT Staff sessions | All `403` | Pass — `authorization.api.test.ts` sweeps every `/api/admin/*` route as Requester and IT Staff |
+| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Pass — `authorization.api.test.ts` sweeps all `/api/staff/*` routes (queue, detail, claim, assign, priority, status, assignable-users) as Requester; the 24-route role × route matrix is generated from one table |
+| SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Pass — `authorization.api.test.ts` (spoofed `requesterId`, body and query) plus the Lab 2 tests `create-ticket.api.test.ts` ("ignores a requesterId in the body") and `my-tickets.api.test.ts` |
+| SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Pass — `authorization.api.test.ts` (cross-requester `404` across detail/attachments/comments) plus one "returns 404 (not 403)" test per route in the Lab 2 files and `comments-notes.api.test.ts` |
+| SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Pass — `authorization.api.test.ts` and `comments-notes.api.test.ts` (API-21): `403`, and the response body is checked to contain no note text |
+| SEC-06 | BR-16 | A session for a user deactivated mid-session makes a request | `401` on the very next request after deactivation | Pass — `authorization.api.test.ts`: a session is created, the user is deactivated through the database, and the very next request on a Lab 2 route is `401` |
+| SEC-07 | — | Missing/mismatched `Origin` header on a `POST`/`PATCH`/`DELETE`, including one that would otherwise be unauthenticated too | `403` from the Origin gate, before the request ever reaches BR-13's ladder (so this is `403`, not `401`, even with no session at all) | Pass — `authorization.api.test.ts` sweeps every state-changing route with no Origin and forged origins (including anonymous callers → `403`, and a forged claim leaves the ticket unassigned); GET is unaffected. `auth.api.test.ts` and `users-admin.api.test.ts` cover the same gate on their routes |
 
 ### 2.3 Requester ticket/attachment regression (`server/tests/lab-02/*` re-run) + carryover shape
 
@@ -136,17 +134,17 @@ handout's structure block is treated as illustrative naming, not a literal path.
 
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
-| API-39 | — | `GET /api/admin/users` with `search` and `role` filters | Correct filtering; `passwordHash` never present in any row | Planned |
-| API-40 | AC-22, BR-32 | Create user with 0 roles, 2 roles, and an invalid role string | All `400` | Planned |
-| API-41 | — | Create user, valid input | `201`, `mustChangePassword: true` regardless of `isActive` given | Planned |
-| API-42 | AC-23, BR-34 | Create/edit with an email already in use, differing only by case | Both `409` | Planned |
-| API-43 | AC-24, BR-36 | Administrator sets `isActive: false` on their own id | `409`, account remains active | Planned |
-| API-44 | AC-25, BR-37 | Deactivate, and separately role-change away from Administrator, the last active Administrator | Both `409`; at least one active Administrator always remains | Planned |
-| API-45 | — | Deactivate/role-change an Administrator when ≥ 2 active Administrators exist | `200`, succeeds | Planned |
-| API-46 | AC-26, BR-35 | `POST .../reset-password` | `200`, `mustChangePassword: true`; user's next login is forced to Change Password (cross-checked with API-10) | Planned |
-| API-47 | — | `PATCH /api/admin/users/:id` attempting to include a password field | Field ignored (no route accepts it) — password only changes via reset-password | Planned |
-| API-48 | — | `PATCH`/`reset-password` on a nonexistent `:id` | `404` | Planned |
-| API-51 | BR-38 | `DELETE /api/admin/users/:id` | No such route exists (`404`/`405` from Express's own routing, not an app-level check) — confirms there really is no delete-user endpoint, not just that the UI hides one | Planned |
+| API-39 | — | `GET /api/admin/users` with `search` and `role` filters | Correct filtering; `passwordHash` never present in any row | Pass |
+| API-40 | AC-22, BR-32 | Create user with 0 roles, 2 roles, and an invalid role string | All `400` | Pass |
+| API-41 | — | Create user, valid input | `201`, `mustChangePassword: true` regardless of `isActive` given | Pass |
+| API-42 | AC-23, BR-34 | Create/edit with an email already in use, differing only by case | Both `409` | Pass |
+| API-43 | AC-24, BR-36 | Administrator sets `isActive: false` on their own id | `409`, account remains active | Pass |
+| API-44 | AC-25, BR-37 | Deactivate, and separately role-change away from Administrator, the last active Administrator | Both `409`; at least one active Administrator always remains | Pass |
+| API-45 | — | Deactivate/role-change an Administrator when ≥ 2 active Administrators exist | `200`, succeeds | Pass |
+| API-46 | AC-26, BR-35 | `POST .../reset-password` | `200`, `mustChangePassword: true`; user's next login is forced to Change Password (cross-checked with API-10) | Pass |
+| API-47 | — | `PATCH /api/admin/users/:id` attempting to include a password field | Field ignored (no route accepts it) — password only changes via reset-password | Pass |
+| API-48 | — | `PATCH`/`reset-password` on a nonexistent `:id` | `404` | Pass |
+| API-51 | BR-38 | `DELETE /api/admin/users/:id` | No such route exists (`404`/`405` from Express's own routing, not an app-level check) — confirms there really is no delete-user endpoint, not just that the UI hides one | Pass |
 
 ### 2.8 Cross-cutting checks (added during review)
 
@@ -159,12 +157,12 @@ idempotency.
 | API-49 | BR-19 | Attempt to submit a `requestedPriority` field on any route other than `POST /api/tickets` (e.g. as part of `PATCH .../priority`, or a second `POST /api/tickets/:id`-style call — no such update route exists) | No route accepts a `requestedPriority` change after creation; the field is immutable by construction, not by a runtime check | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass (Feature 5, issue #38) — `PATCH .../priority` sent with a stray `requestedPriority` field ignores it |
 | API-50 | BR-23 | An IT Staff caller who is **not** the ticket's current owner performs a status transition | `200` — succeeds, transition rights aren't owner-restricted (distinct from API-34, which doesn't specifically vary the caller's owner-vs-not relationship) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
 | API-52 | AC-29, BR-40 | `POST /api/tickets/:id/mark-resolved` on a ticket whose `currentStatus` is each of `RESOLVED`, `CLOSED`, `CANCELLED` | All `409`; `requesterMarkedResolvedAt` unchanged from before the call | `server/tests/lab-03/comments-notes.api.test.ts` | Pass (sampled with `CLOSED`; `RESOLVED`/`CANCELLED` share the same `RESOLVE_BLOCKED_STATUSES` check in `app.ts`, not a separate code path per status) |
-| API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-queue.api.test.ts` | Pass (Feature 5, issue #38) — moved to `server/tests/lab-03/staff-ticket-detail.api.test.ts`, alongside the claim/assign control it populates |
-| API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/authorization.api.test.ts` | Pass — `GET /api/staff/tickets` covered in `staff-queue.api.test.ts` (Feature 4); `GET /api/staff/tickets/:id` covered in `staff-ticket-detail.api.test.ts` (Feature 5), not a separate `authorization.api.test.ts` file |
-| API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/authorization.api.test.ts` | Pass — `server/tests/lab-03/staff-ticket-detail.api.test.ts`, one test per route, not a separate `authorization.api.test.ts` file |
+| API-53 | AC-30, BR-41, FR-28 | `GET /api/staff/assignable-users` as IT Staff, as Requester, as Administrator | IT Staff: `200`, active `IT_STAFF` users only (no Administrator, no Requester, no inactive); Requester and Administrator: `403` | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass — in `staff-ticket-detail.api.test.ts`, alongside the claim/assign control it populates |
+| API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/staff-queue.api.test.ts`, `staff-ticket-detail.api.test.ts` | Pass — `GET /api/staff/tickets` in `staff-queue.api.test.ts`, `GET /api/staff/tickets/:id` in `staff-ticket-detail.api.test.ts`; the role × route sweep in `authorization.api.test.ts` also asserts the Administrator is allowed (not `401`/`403`) on both |
+| API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass — `staff-ticket-detail.api.test.ts`, one test per route, plus the `authorization.api.test.ts` sweep (Administrator `403` on every write) |
 | API-56 | BR-39 | `POST /api/tickets/:id/comments` and `POST /api/tickets/:id/notes` as Administrator | Both `403` (Administrator never posts, even though it can read both) | `server/tests/lab-03/comments-notes.api.test.ts` (not a separate `authorization.api.test.ts` — see §12) | Pass |
-| SEC-08 | BR-13 | A request that is simultaneously unauthenticated (no session) **and** has an invalid body (e.g. a malformed `POST /api/auth/login`) | `401`, not `400` — proves the ladder's stated order (auth before validation) rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Planned |
-| SEED-01 | §7.5 | Run `npm run prisma:seed` twice in a row | Second run makes no changes (same row counts, no unique-constraint errors) — confirms the seed script's `upsert` pattern is actually idempotent, not just documented as such | `server/tests/lab-03/migration.api.test.ts` | Planned |
+| SEC-08 | BR-13 | A request that is simultaneously unauthenticated (no session) **and** has an invalid body (e.g. a malformed `POST /api/auth/login`) | `401`, not `400` — proves the ladder's stated order (auth before validation) rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Pass |
+| SEED-01 | §7.5 | Run `npm run prisma:seed` twice in a row | Second run makes no changes (same row counts, no unique-constraint errors) — confirms the seed script's `upsert` pattern is actually idempotent, not just documented as such | `server/tests/lab-03/seed.api.test.ts` | Pass — `seed.api.test.ts` runs `npx tsx prisma/seed.ts` twice and compares User/Ticket/Comment/Note/Category/RelatedSystem counts (identical); it also checks the documented account mix and the demo-ticket coverage (all 8 statuses, 3 priorities, assigned + unassigned, ≥ 4 requesters) |
 
 ### 2.9 Required Lab 2 test updates (not "unmodified" — see AC-10)
 
@@ -211,41 +209,41 @@ with `RequesterBanner.tsx`).
 
 | Test ID | Screen | What it tests | Expected result | File | Final |
 |---|---|---|---|---|---|
-| UI-01 | Login | Empty-field validation, loading state, `401` message rendering | Matches `ui-spec.md` §2's states table | `client/tests/lab-03/Login.test.tsx` | Planned |
-| UI-02 | Login | Successful login redirects onward | Navigates to app shell or Change Password per `mustChangePassword` | `client/tests/lab-03/Login.test.tsx` | Planned |
-| UI-03 | Change Password | Validation (short, mismatch, same-as-current), wrong-current-password message | Matches `ui-spec.md` §4 | `client/tests/lab-03/ChangePassword.test.tsx` | Planned |
-| UI-04 | App Shell | Nav renders only the current role's destinations (3 cases: each role) | Matches `ui-spec.md` §3 table | `client/tests/lab-03/AppShell.test.tsx` (new — kept out of `client/tests/lab-01/App.test.tsx` so Lab 1's own test file doesn't grow Lab 3 concerns) | Partial — the Requester nav path (New Ticket/My Tickets, no other destination rendered) is exercised throughout `client/tests/lab-02/*.test.tsx`; IT Staff/Administrator only get a placeholder panel each (their real screens are Feature 4/5), so there's no dedicated `AppShell.test.tsx` asserting all three role cases yet |
-| UI-05 | Requester Ticket Detail | Public Comments: empty/loaded/posting/validation/error states | Matches `ui-spec.md` §5.1 | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Comments", ...)` block inside `client/tests/lab-02/ticket-detail.test.tsx` (extended rather than a separate Lab 3 file, since it's the same component/screen) |
-| UI-06 | Requester Ticket Detail | "Problem Appears Resolved": available/confirming/saving/success | Matches `ui-spec.md` §5.2; status badge unaffected | `client/tests/lab-03/TicketDetail.test.tsx` | Pass — as a `describe("Problem Appears Resolved", ...)` block in the same file as UI-05 |
+| UI-01 | Login | Empty-field validation, loading state, `401` message rendering | Matches `ui-spec.md` §2's states table | `client/tests/lab-03/Login.test.tsx` | Pass |
+| UI-02 | Login | Successful login redirects onward | Navigates to app shell or Change Password per `mustChangePassword` | `client/tests/lab-03/Login.test.tsx` | Pass |
+| UI-03 | Change Password | Validation (short, mismatch, same-as-current), wrong-current-password message | Matches `ui-spec.md` §4 | `client/tests/lab-03/ChangePassword.test.tsx` | Pass |
+| UI-04 | App Shell | Nav renders only the current role's destinations (3 cases: each role) | Matches `ui-spec.md` §3 table | `client/tests/lab-03/AppShell.test.tsx` (new — kept out of `client/tests/lab-01/App.test.tsx` so Lab 1's own test file doesn't grow Lab 3 concerns) | Pass — `AppShell.test.tsx` (9 tests): loading, logged-out → Login, `mustChangePassword` gate, navigation for each of the three roles, name + role in the header, logout, and the Requester (640px) vs staff/admin (1140px) shell widths |
+| UI-05 | Requester Ticket Detail | Public Comments: empty/loaded/posting/validation/error states | Matches `ui-spec.md` §5.1 | `client/tests/lab-02/ticket-detail.test.tsx` | Pass — as a `describe("Comments", ...)` block inside `ticket-detail.test.tsx` (extended rather than a separate Lab 3 file, since it is the same component/screen) |
+| UI-06 | Requester Ticket Detail | "Problem Appears Resolved": available/confirming/saving/success | Matches `ui-spec.md` §5.2; status badge unaffected | `client/tests/lab-02/ticket-detail.test.tsx` | Pass — as a `describe("Problem Appears Resolved", ...)` block in the same file as UI-05 |
 | UI-07 | Staff Ticket Queue | Loading/empty/no-results/forbidden/error states; search+filter+sort inputs fire the right query params | Matches `ui-spec.md` §6 | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass (Feature 4, issue #37) — the Owner filter is "All owners"/"Unassigned only" only (no per-staff-member picker yet; that needs Feature 5's assignable-users endpoint) |
 | UI-08 | Staff Ticket Detail | Claim/reassign control, IT Priority selector next to read-only Requested Priority, status `<select>` limited to legal next states | Matches `ui-spec.md` §7 | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 5, issue #38) |
 | UI-09 | Staff Ticket Detail | Internal Notes panel visually distinct from Public Comments (asserts distinct class/label, not just presence) | Matches `ui-spec.md` §7's "Internal — IT Staff only" label | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass |
-| UI-10 | User Management | List loading/empty/no-results; search + role filter | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
-| UI-11 | User Management | Create form validation, including duplicate-email `409` surfaced under Email field | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
-| UI-12 | User Management | Edit form: self-suspend guard message, last-admin guard message, both rendered at the correct control | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
-| UI-13 | User Management | Reset-password action success message | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Planned |
+| UI-10 | User Management | List loading/empty/no-results; search + role filter | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Pass |
+| UI-11 | User Management | Create form validation, including duplicate-email `409` surfaced under Email field | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Pass |
+| UI-12 | User Management | Edit form: self-suspend guard message, last-admin guard message, both rendered at the correct control | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Pass |
+| UI-13 | User Management | Reset-password action success message | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Pass |
 | UI-14 | Staff Ticket Detail | Selecting `Resolved`/`Closed`/`Reopened`/`Cancelled` opens the confirm/cancel step and sends `confirm: true` only on confirm; selecting any other target sends the request immediately, no confirm step shown; cancelling reverts the `<select>` and sends nothing | Matches `ui-spec.md` §7's status-control bullet (BR-42) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 5, issue #38) |
 
 ## 4. UI style conformance
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| STY-01 | Role/priority/status badges use only the tokens/classes in `ui-spec.md` §1 | No inline hex colors outside `theme.css`; badge classes match the mapping table | Planned |
-| STY-02 | Editable vs. read-only field styling on Staff Ticket Detail (IT Priority vs. Requested Priority) | Read-only field carries `--zg-readonly-bg` styling, editable does not | Planned |
+| STY-01 | Role/priority/status badges use only the tokens/classes in `ui-spec.md` §1 | No inline hex colors outside `theme.css`; badge classes match the mapping table | Partial — `styleConformance.test.tsx` proves what is built: every badge uses an allowed semantic class (`text-bg-success|warning|danger|secondary|info`) with a text label, priority maps HIGH → danger / MEDIUM → warning / LOW → secondary, and no inline hex/rgb in any Lab 3 screen (the single colour literal is a `var(--zg-pale-green, #eef7ee)` fallback). The spec's per-role badge colour mapping was **not** built; role/status badges use plain Bootstrap semantic classes |
+| STY-02 | Editable vs. read-only field styling on Staff Ticket Detail (IT Priority vs. Requested Priority) | Read-only field carries `--zg-readonly-bg` styling, editable does not | Pass — component half in `styleConformance.test.tsx` (IT Priority is an enabled `<select>`, Requested Priority a read-only badge); stylesheet half in `e2e/lab-03/style.spec.ts` against the real loaded CSS (a disabled field computes to the gray-green token, an active one to the normal surface). The stylesheet half is Playwright because Vitest stubs CSS |
 
 ## 5. Responsive tests
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| RSP-01 | Staff Ticket Queue at 1280px/768px/375px | Full table → reduced-column table → stacked cards, per `ui-spec.md` §6; no horizontal overflow | Planned |
-| RSP-02 | User Management at the same three widths | Table → card layout per `ui-spec.md` §8; Create/Edit forms remain usable single-column throughout | Planned |
+| RSP-01 | Staff Ticket Queue at 1280px/768px/375px | Full table → reduced-column table → stacked cards, per `ui-spec.md` §6; no horizontal overflow | Pass |
+| RSP-02 | User Management at the same three widths | Table → card layout per `ui-spec.md` §8; Create/Edit forms remain usable single-column throughout | Pass |
 
 ## 6. Accessibility tests
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| A11Y-01 | Login, Change Password, and every Forbidden panel are operable by keyboard alone (tab order reaches every control; submit works via Enter) | Passes; matches `ui-spec.md` §9 | Planned |
-| A11Y-02 | Focus-visible ring present on every new interactive control (badges excluded, they're not interactive) at default browser zoom | Matches the existing secondary-green focus token, never removed | Planned |
+| A11Y-01 | Login, Change Password, and every Forbidden panel are operable by keyboard alone (tab order reaches every control; submit works via Enter) | Passes; matches `ui-spec.md` §9 | Partial — `accessibility.spec.ts` covers Login only (Tab order Email → Password → Log in, Enter on the button and Enter in the password field both submit). Change Password and the Forbidden panels have no keyboard-only test |
+| A11Y-02 | Focus-visible ring present on every new interactive control (badges excluded, they're not interactive) at default browser zoom | Matches the existing secondary-green focus token, never removed | Partial — `accessibility.spec.ts` asserts a visible focus ring (outline or box-shadow) on the three Login controls only; the other Lab 3 controls are not covered |
 
 ## 7. Migration tests
 
@@ -253,27 +251,27 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| MIG-01 | Row counts before/after migration | `Ticket`, `Attachment`, `Category`, `RelatedSystem` counts identical (§7.4 step 5) | Planned |
-| MIG-02 | Every `Requester` row has a matching `User` row | Same `id`, `name`, `email`, `isActive`; `role: REQUESTER`; `mustChangePassword: true` | Planned |
-| MIG-03 | Every pre-migration `Ticket.requesterId` still resolves to the same person post-migration | FK now points at `User`, value unchanged, no ticket re-owned | Planned |
+| MIG-01 | Row counts before/after migration | `Ticket`, `Attachment`, `Category`, `RelatedSystem` counts identical (§7.4 step 5) | Pass |
+| MIG-02 | Every `Requester` row has a matching `User` row | Same `id`, `name`, `email`, `isActive`; `role: REQUESTER`; `mustChangePassword: true` | Pass |
+| MIG-03 | Every pre-migration `Ticket.requesterId` still resolves to the same person post-migration | FK now points at `User`, value unchanged, no ticket re-owned | Pass |
 | MIG-04 | Every pre-migration `Ticket.currentStatus` (`"New"`) becomes `TicketStatus.NEW`; `itPriority` equals `requestedPriority` for every migrated row | Backfill correct for 100% of existing rows | Pass (Feature 3, issue #36) — `server/tests/lab-03/migration.api.test.ts`'s "Feature 2 -> Feature 3 migration" block replays every migration through `20260927120000_lab3_authorization_requester_regression`, exactly like MIG-01–03 do for the auth migration; also confirms existing Ticket/Attachment rows are preserved without drift and the new `ownerId`/`requesterMarkedResolvedAt(ById)` columns stay `null` for pre-existing tickets |
 
 ## 8. Regression tests
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-01`, `lab-02` (the e2e specs were missing from this row in an earlier draft) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — see §12 (Feature 3, issue #36). `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario) updated and passing; the two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are marked stale in-file rather than reworked, since they're explicitly not part of the graded suite and their evidence was already captured for Lab 2's own submission |
+| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 366/366, client 117/117) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 26-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
 
 ## 9. E2E tests
 
 | Test ID | AC | What it tests | Expected result | File | Final |
 |---|---|---|---|---|---|
-| E2E-01 | AC-01, AC-05 | Valid login → app shell; invalid login → error message; inactive account → same error message | Matches `auth.api.test.ts` behavior end-to-end | `e2e/lab-03/authentication.spec.ts` | Planned |
-| E2E-02 | AC-02 | Log in with a default/forced password → Change Password screen → save new password → normal app shell appears | Matches the handout's own example row (§9.1) | `e2e/lab-03/authentication.spec.ts` | Planned |
-| E2E-03 | AC-06 | Logout → attempt to navigate back to an authenticated page directly | Redirected to Login, not the cached page | `e2e/lab-03/authentication.spec.ts` | Planned |
-| E2E-04 | AC-14–AC-20 | IT Staff: search the queue → open a ticket → claim it → set IT Priority → transition status → post a Public Comment → add an Internal Note | Each step's UI state matches `ui-spec.md` §6/§7; Internal Note never shown to a Requester session opened in a second browser context | `e2e/lab-03/staff-ticket-flow.spec.ts` | Planned |
-| E2E-05 | AC-12, AC-13 | Requester: open own ticket → post Public Comment → mark "Problem Appears Resolved" | Comment appears; status badge unchanged; confirmation note shown | `e2e/lab-03/staff-ticket-flow.spec.ts` | Planned |
-| E2E-06 | AC-22–AC-26 | Administrator: create user → search/filter finds them → edit role/status → reset password → attempt self-suspend (blocked) → attempt to demote the last Administrator (blocked) | Each step's message matches `ui-spec.md` §8 | `e2e/lab-03/user-administration.spec.ts` | Planned |
+| E2E-01 | AC-01, AC-05 | Valid login → app shell; invalid login → error message; inactive account → same error message | Matches `auth.api.test.ts` behavior end-to-end | `e2e/lab-03/authentication.spec.ts` | Pass |
+| E2E-02 | AC-02 | Log in with a default/forced password → Change Password screen → save new password → normal app shell appears | Matches the handout's own example row (§9.1) | `e2e/lab-03/authentication.spec.ts` | Pass |
+| E2E-03 | AC-06 | Logout → attempt to navigate back to an authenticated page directly | Redirected to Login, not the cached page | `e2e/lab-03/authentication.spec.ts` | Pass |
+| E2E-04 | AC-14–AC-20 | IT Staff: search the queue → open a ticket → claim it → set IT Priority → transition status → post a Public Comment → add an Internal Note | Each step's UI state matches `ui-spec.md` §6/§7; Internal Note never shown to a Requester session opened in a second browser context | `e2e/lab-03/staff-ticket-flow.spec.ts` | Pass |
+| E2E-05 | AC-12, AC-13 | Requester: open own ticket → post Public Comment → mark "Problem Appears Resolved" | Comment appears; status badge unchanged; confirmation note shown | `e2e/lab-03/staff-ticket-flow.spec.ts` | Pass |
+| E2E-06 | AC-22–AC-26 | Administrator: create user → search/filter finds them → edit role/status → reset password → attempt self-suspend (blocked) → attempt to demote the last Administrator (blocked) | Each step's message matches `ui-spec.md` §8 | `e2e/lab-03/user-administration.spec.ts` | Pass |
 
 ## 10. Acceptance Criteria → Test traceability matrix
 
@@ -497,11 +495,64 @@ in by this point) — a clean base, unlike Features 3/4's forced sibling-branch 
 - Not built on this branch: the Administrator User Management screen (Feature 6, issue #39)
   — the App Shell still shows its placeholder for `ADMINISTRATOR` sessions.
 
-## 13. Known gaps to close before Release Integration (issue #41)
+**On `feature/6-admin-user-management` and `feature/7-e2e-visual-responsive-evidence`**
+(issues #39, #40) — Administrator User Management and the end-to-end/visual evidence.
+Feature 6 added `/api/admin/users` (list, create, edit, reset password), the self-suspend
+and last-Administrator guards, a case-insensitive unique email index
+(`20261002080000_lab3_admin_email_case_insensitive_unique`, raw-SQL index on `LOWER(email)`,
+`P2002` → `409`), and a transaction-scoped advisory lock around the BR-37 check-then-update.
+Review rounds on PR #50 found three real gaps, each now covered by a test that was first
+confirmed to fail with the fix removed: an Origin/CSRF sweep (SEC-07), two concurrent
+requests creating the same email (API-42), and two Administrators racing to remove the last
+one — including the mutual-deactivation shape (API-44). Server test files now run serially
+(`fileParallelism: false`) because BR-37 is a global invariant and parallel files interfered
+with each other. Feature 7 added the Playwright specs (E2E-01–06, A11Y, RSP, screenshots),
+a repeatable fixture (`server/scripts/e2e-fixture.ts`: one managed `[e2e]` ticket prefix, full
+cleanup including attachment files) and an Administrator-isolation helper for the last-admin
+scenario. Two UI defects (clipped table columns; truncated filter labels) were found only by
+opening the screenshots, not by assertions, and are now guarded by tests.
 
-- `SEC-04`'s exact list of "every route" to sweep should be finalized as a literal list once
-  the route file exists, so the test can assert exhaustively rather than by sampling.
-- §2.9's Lab 2 test-update list was written from reading the current Lab 2 test files: if
-  Feature 3 (issue #36) finds additional `403`-expecting assertions not enumerated there
-  (e.g. inside a nested `describe` this document's author missed), add them to §2.9 rather
-  than silently fixing them with no record.
+**Release run on `feature/8-release-integration`** (issue #41) — recorded 2026-10-03 against
+the local development database, everything run sequentially (never two suites at once, since
+the server suites and Playwright share one database):
+
+| Check | Result |
+|---|---|
+| Server `npx vitest run` | **366/366** passed, 17 files (~70 s) |
+| Client `npx vitest run` | **117/117** passed, 12 files — 7 clean runs after the one flaky run; see the flake note below |
+| Playwright `npx playwright test` | **26/26** passed (~60 s), fixtures reset per run |
+| `npx tsc --noEmit` + build | clean on `server` and `client` |
+| `npx prisma migrate status` | 8 migrations, "Database schema is up to date" |
+| Seed idempotency (SEED-01) | counts identical after two runs; 12 demo tickets, 8 comments, 3 notes |
+| Screenshots | Staff Queue, Staff Ticket Detail and User Management (tablet) regenerated with the seed data present and opened one by one — all 8 statuses and 3 priorities render, no clipped columns or truncated labels |
+
+Added during this release pass to close gaps an audit against the lab sheet found:
+`authorization.api.test.ts` (SEC-01–08; a role × route matrix of 24 routes), `seed.api.test.ts`
+(SEED-01), `AppShell.test.tsx` (UI-04), `styleConformance.test.tsx` and `style.spec.ts`
+(STY-01/02), an exported `validateCommentBody()` with direct tests (UNIT-05), and demo tickets
+in `prisma/seed.ts`. A mutation check (temporarily breaking the code to confirm the tests fail) was run on the
+authorization matrix.
+
+**Flake disclosed.** The first client run after the 70 s server suite failed 4 tests, all
+`findBy*` lookups hitting Testing Library's 1 s default while the machine was under heavy load
+(load average ~17). The same suite then passed 7 times in a row. `client/tests/setup.ts` now
+sets `asyncUtilTimeout: 4000`; this only gives a genuinely missing element longer to appear
+and does not weaken any assertion. A separate pre-existing Lab 2 server test
+(`remove-attachment`) has been seen to fail intermittently because the route unlinks the file
+fire-and-forget; it did not fail in the release run. It is not hidden or skipped.
+
+## 13. Known gaps (disclosed, not fixed)
+
+- **STY-01** — the specification's per-role badge colour mapping was not built; role and
+  status badges use plain Bootstrap semantic classes. Priority colours and "no hard-coded
+  colours" are tested.
+- **A11Y-01 / A11Y-02** — keyboard and focus-ring tests cover the Login screen only. Change
+  Password, the Forbidden panels and the staff/admin controls are not covered by an automated
+  accessibility test.
+- **UNIT-04** — no standalone helper exists; the case-insensitive comparison is a database
+  index, tested through the API (see the row).
+- The two stale Lab 2 evidence-only Playwright scripts are excluded rather than reworked.
+- The intermittent Lab 2 `remove-attachment` test described in §12 is a pre-existing
+  fire-and-forget file unlink, not a Lab 3 defect, and is still open.
+- The e2e suite and the local seed both write to the developer's own Postgres database; there
+  is no separate test database, which is why the suites must run one at a time.

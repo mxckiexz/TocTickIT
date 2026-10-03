@@ -864,7 +864,7 @@ app.delete("/api/tickets/:id/attachments/:attachmentId", requireAuth, requireRol
 // ---------------------------------------------------------------------------
 const COMMENT_BODY_MAX_LENGTH = 2000;
 
-function validateCommentBody(rawBody: unknown): { body: string; error?: undefined } | { error: string } {
+export function validateCommentBody(rawBody: unknown): { body: string; error?: undefined } | { error: string } {
   const body = typeof rawBody === "string" ? rawBody.trim() : "";
   if (!body) return { error: "Body is required." };
   if (body.length > COMMENT_BODY_MAX_LENGTH) {

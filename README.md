@@ -287,6 +287,61 @@ server/.env
 
 ---
 
+# 🔑 Lab 3 — Authentication, Roles และ Seed Data
+
+Lab 3 เปลี่ยนจาก dev-selector ของ Lab 2 เป็นระบบ Login จริง (session cookie แบบ HttpOnly) และมี 3 บทบาท:
+
+| Role | ทำอะไรได้ |
+|---|---|
+| **Requester** | สร้าง/ดู ticket ของตัวเอง, คอมเมนต์, กด "Problem Appears Resolved" |
+| **IT Staff** | ดู Ticket Queue, claim/assign, ตั้ง IT Priority, เปลี่ยนสถานะ, คอมเมนต์ และเขียน Internal Note |
+| **Administrator** | จัดการผู้ใช้ (สร้าง/แก้ไข/ระงับ/รีเซ็ตรหัสผ่าน), **ดู** ticket ได้อย่างเดียว (read-only) |
+
+### บัญชีสำหรับทดลอง (Seed accounts)
+
+> ⚠️ **ใช้สำหรับ local development เท่านั้น** — เป็นข้อมูลทดสอบ ไม่ใช่รหัสผ่านจริง
+> ทุกบัญชีใช้รหัสผ่านเริ่มต้นเดียวกันคือ `ChangeMe123!` (ตั้งค่าได้ด้วย `SEED_DEFAULT_PASSWORD` ใน `server/.env`)
+> และถูกบังคับให้เปลี่ยนรหัสผ่านทันทีที่ Login ครั้งแรก
+
+| Role | อีเมล | สถานะ |
+|---|---|---|
+| Administrator | `grace.thompson@toktickit.test` | Active |
+| IT Staff | `priya.nair@toktickit.test` | Active |
+| IT Staff | `marcus.chen@toktickit.test` | Active |
+| IT Staff | `olivia.martinez@toktickit.test` | Active |
+| IT Staff | `daniel.kim@toktickit.test` | Suspended (ใช้ทดสอบ Login ไม่ผ่าน) |
+| Requester | `jennifer.anderson@toktickit.test` | Active |
+| Requester | `michael.brown@toktickit.test` | Active |
+| Requester | `sarah.johnson@toktickit.test` | Active |
+| Requester | `david.lee@toktickit.test` | Active |
+| Requester | `emily.carter@toktickit.test` | Suspended |
+
+ถ้าเคยเปลี่ยนรหัสผ่านของบัญชีไปแล้ว การรัน seed ซ้ำ **จะไม่รีเซ็ตรหัสผ่านกลับ** (seed ใช้ `upsert`) — ให้ใช้หน้า User Management ของ Administrator รีเซ็ตแทน
+
+### สร้างข้อมูลเริ่มต้น
+
+```bash
+cd server
+npm run prisma:migrate   # สร้าง/อัปเดตตารางทั้งหมด (รวม migration ของ Lab 3)
+npm run prisma:seed      # Category, Related System, ผู้ใช้ตัวอย่าง และ ticket ตัวอย่าง TKT-SEED-001..012
+```
+
+รันซ้ำได้อย่างปลอดภัย (idempotent) — จำนวนแถวไม่เพิ่ม ตรวจสอบโดย `server/tests/lab-03/seed.api.test.ts`
+
+### รันเทสต์ Lab 3
+
+รันทีละชุด **ห้ามรันพร้อมกัน** เพราะทุกชุดใช้ฐานข้อมูล PostgreSQL ตัวเดียวกัน:
+
+```bash
+cd server && npm test         # Vitest + Supertest (API / authorization / migration / seed)
+cd client && npm test         # Vitest + React Testing Library (UI / style)
+npm run test:e2e              # Playwright (รันจากโฟลเดอร์ root; เปิด server + client ให้เอง)
+```
+
+เอกสาร Lab 3 อยู่ที่ `docs/lab-03/` (`specification.md`, `api-spec.md`, `ui-spec.md`, `tests.md`, `reviewer.md`, `ai-use.md`) และ screenshot responsive อยู่ที่ `artifacts/lab-03/screenshots/`
+
+---
+
 # 🌿 Git & Branching
 
 โปรเจกต์ใช้ Branch แยกตาม Issue / Feature
@@ -339,6 +394,7 @@ git checkout -b feature/2-health-check
 * `.env.example`
 * `.gitignore`
 * Frontend และ Backend แยกโฟลเดอร์เรียบร้อย
+* Lab 3: Login จริง, 3 บทบาท (Requester / IT Staff / Administrator), Ticket Queue และ Workflow ของ IT Staff, User Management ของ Administrator — ดูหัวข้อ "Lab 3" ด้านบน
 
 ---
 

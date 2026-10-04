@@ -298,6 +298,7 @@ artifacts/lab-03/screenshots/
                                                   change-password-voluntary-*)
   staff-queue/{desktop,tablet,mobile}.png
   staff-ticket-detail/{desktop,tablet,mobile}.png
+  requester-ticket-detail/{desktop,tablet,mobile}.png   (+ confirm-resolved-*)
   user-management/{desktop,tablet,mobile}.png
 ```
 

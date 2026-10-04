@@ -34,6 +34,12 @@ export const E2E_PWCHANGE_EMAIL = "e2e-pwchange@toktickit.test";
 // Staff detail screen has one to open (E2E-07) and its screenshots show one.
 export const E2E_ATTACHMENT_FILENAME = "e2e-evidence.txt";
 export const E2E_ATTACHMENT_BODY = "e2e attachment fixture: opened by IT Staff";
+// A short, realistic thread on the Requester-resolve ticket so the Requester
+// Ticket Detail screenshots show Public Comments from both roles — and an
+// Internal Note that the Requester must never see (asserted in the spec).
+export const E2E_THREAD_STAFF_COMMENT = "Thanks for reporting this. Which laptop does it happen on?";
+export const E2E_THREAD_REQUESTER_COMMENT = "It is the one in room B204, started on Monday.";
+export const E2E_THREAD_INTERNAL_NOTE = "Possible driver issue, check the B204 imaging batch first.";
 // Every user the admin spec creates through the UI uses this prefix, so they
 // can be swept before the next run.
 export const E2E_CREATED_EMAIL_PREFIX = "e2e-created-";
@@ -158,6 +164,18 @@ async function main() {
     ],
   });
 
+  const staff = await prisma.user.findUniqueOrThrow({ where: { email: E2E_STAFF_EMAIL } });
+  const resolveTicket = await prisma.ticket.findUniqueOrThrow({ where: { ticketNumber: "TKT-E2E-000002" } });
+  await prisma.publicComment.create({
+    data: { ticketId: resolveTicket.id, authorId: staff.id, body: E2E_THREAD_STAFF_COMMENT, createdAt: new Date(Date.now() - 2 * 60_000) },
+  });
+  await prisma.publicComment.create({
+    data: { ticketId: resolveTicket.id, authorId: requester.id, body: E2E_THREAD_REQUESTER_COMMENT, createdAt: new Date(Date.now() - 60_000) },
+  });
+  await prisma.internalNote.create({
+    data: { ticketId: resolveTicket.id, authorId: staff.id, body: E2E_THREAD_INTERNAL_NOTE },
+  });
+
   const staffFlowTicket = await prisma.ticket.findUniqueOrThrow({ where: { ticketNumber: "TKT-E2E-000001" } });
   const storedFilename = `e2e-fixture-${Date.now()}.txt`;
   await mkdir(UPLOAD_DIR, { recursive: true });
@@ -172,7 +190,7 @@ async function main() {
     },
   });
 
-  console.log(`e2e fixtures ready (accounts: ${FIXTURE_ACCOUNTS.length}, tickets: 2, attachments: 1)`);
+  console.log(`e2e fixtures ready (accounts: ${FIXTURE_ACCOUNTS.length}, tickets: 2, attachments: 1, comments: 2, notes: 1)`);
 }
 
 main()

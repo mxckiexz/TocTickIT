@@ -580,13 +580,17 @@ removed attachments, and restoring the old non-link filename each make the new t
 |---|---|
 | Server `npx vitest run` | **382/382** passed, 17 files |
 | Client `npx vitest run` | **129/129** passed, 12 files |
-| Playwright `npx playwright test` | **35/35** passed (fixtures reset per run) |
+| Playwright `npx playwright test` | **38/38** passed, twice in a row with identical database row counts (fixtures reset per run) |
 | `npx tsc --noEmit` + build | clean on `server` and `client` |
 | `npx prisma migrate status` | up to date (no schema change in this feature) |
 
 Screenshots regenerated and opened: Staff Queue, Staff Ticket Detail (now with Category,
-Related System and an attachment link), User Management, and the new voluntary Change Password
-screen, at desktop/tablet/mobile.
+Related System and an attachment link), User Management, the new voluntary Change Password
+screen, and — new, closing a gap Feature 8 disclosed — the Requester Ticket Detail
+(`requester-ticket-detail/`: a staff and a Requester Public Comment, the Internal Note
+asserted absent, and the "Problem Appears Resolved" confirming state), at
+desktop/tablet/mobile. The e2e fixture gained that comment thread; two consecutive full runs
+left identical row counts (18 tickets, 12 comments, 5 notes, 3 attachments, 18 users).
 
 ## 13. Known gaps (disclosed, not fixed)
 
@@ -596,6 +600,11 @@ screen, at desktop/tablet/mobile.
 - **A11Y-01 / A11Y-02** — keyboard and focus-ring tests cover the Login screen only. Change
   Password, the Forbidden panels and the staff/admin controls are not covered by an automated
   accessibility test.
+- **Requester screens show raw status/priority text.** The Requester Ticket Detail prints the
+  status as `IN_PROGRESS` and the Requested Priority as plain `LOW`, where the staff screens use
+  badges ("In Progress", a coloured priority). Sheet §7 asks for consistent badges for status
+  and priority. Noticed while inspecting the new Requester screenshots; not fixed here because
+  it changes Lab 2's screen and its tests.
 - **UNIT-04** — no standalone helper exists; the case-insensitive comparison is a database
   index, tested through the API (see the row).
 - The two stale Lab 2 evidence-only Playwright scripts are excluded rather than reworked.

@@ -639,7 +639,7 @@ Nothing below is ticked on the strength of an intention.
       helper (the comparison is a database index, tested through the API), STY-01's per-role
       badge colour mapping was not built, and A11Y-01/02 cover the Login screen only.
 - [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 382/382 (17 files),
-      client 129/129 (12 files), Playwright 35/35, run on the Feature 9 branch (= `lab3-staging`
+      client 129/129 (12 files), Playwright 38/38, run on the Feature 9 branch (= `lab3-staging`
       plus the lab-sheet gap closure, issue #53; the Feature 8 release run was 370/117/26).
 - [x] Lab 2's existing suite (`server/tests/lab-01`, `lab-02`; `client/tests/lab-01`,
       `lab-02`; `e2e/lab-02` — Lab 1 has no e2e specs) still passes, **with the specific
@@ -651,12 +651,12 @@ Nothing below is ticked on the strength of an intention.
       (`Ticket`/`Attachment`/`Category`/`RelatedSystem` counts and every
       `Ticket.requesterId`), then rolls back; `npx prisma migrate status` reports 8 migrations
       applied and no drift.
-- [x] `e2e/lab-03/*` passes against a seeded local environment: Playwright 35/35.
-- [~] Screenshots captured at desktop/tablet/mobile for every Lab 3 screen, stored under
-      `artifacts/lab-03/screenshots/`: Login, Change Password, Staff Queue, Staff Ticket
-      Detail and User Management are covered (opened and inspected, not just generated).
-      The Requester Ticket Detail screen, which gained comments and "Problem Appears
-      Resolved" in Lab 3, has no Lab 3 screenshot set.
+- [x] `e2e/lab-03/*` passes against a seeded local environment: Playwright 38/38.
+- [x] Screenshots captured at desktop/tablet/mobile for every Lab 3 screen, stored under
+      `artifacts/lab-03/screenshots/`: Login (+ error), forced and voluntary Change Password,
+      Staff Queue, Staff Ticket Detail, User Management (+ create user), and the Requester
+      Ticket Detail (Public Comments from both roles, no Internal Note, and the "Problem
+      Appears Resolved" confirming state) — each opened and inspected, not just generated.
 - [x] No plaintext password or real secret committed anywhere in the repository. The only
       password literals in tracked files are local-development defaults that are
       documented as such (`ChangeMe123!` in `server/.env.example`, the seed, the README and

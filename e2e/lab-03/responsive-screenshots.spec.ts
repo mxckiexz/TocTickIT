@@ -1,7 +1,22 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
-import { ADMIN, ATTACHMENT_FILENAME, CHANGEPW_SHOTS, STAFF, STAFF_FLOW_TICKET, VIEWPORTS, login, logout, runAdminIsolation } from "../helpers/accounts";
+import {
+  ADMIN,
+  ATTACHMENT_FILENAME,
+  CHANGEPW_SHOTS,
+  REQUESTER,
+  REQUESTER_RESOLVE_TICKET,
+  STAFF,
+  STAFF_FLOW_TICKET,
+  THREAD_INTERNAL_NOTE,
+  THREAD_REQUESTER_COMMENT,
+  THREAD_STAFF_COMMENT,
+  VIEWPORTS,
+  login,
+  logout,
+  runAdminIsolation,
+} from "../helpers/accounts";
 
 // docs/lab-03/ui-spec.md §10 + tests.md RSP-01/RSP-02: desktop/tablet/mobile
 // evidence for every new Lab 3 screen, saved under
@@ -90,6 +105,34 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
       await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await shot(page, "authentication", `change-password-voluntary-${viewportName}`);
+    });
+
+    test("Requester Ticket Detail: Public Comments from both roles, no Internal Note, Problem Appears Resolved", async ({ page }) => {
+      await login(page, REQUESTER);
+      await page.getByRole("button", { name: "My Tickets" }).click();
+      await page.locator('[aria-label="Search tickets"]:visible').fill("TKT-E2E-000002");
+      await page.getByRole("button", { name: "TKT-E2E-000002" }).click();
+      await expect(page.getByText(REQUESTER_RESOLVE_TICKET)).toBeVisible();
+
+      // Both roles' Public Comments are shown...
+      await expect(page.getByText(THREAD_STAFF_COMMENT)).toBeVisible();
+      await expect(page.getByText(THREAD_REQUESTER_COMMENT)).toBeVisible();
+      // ...and the staff-only Internal Note never reaches a Requester's page.
+      await expect(page.getByText(THREAD_INTERNAL_NOTE)).toHaveCount(0);
+      await expect(page.getByText(/Internal/)).toHaveCount(0);
+      await expect(page.getByLabel("Add a comment")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Problem Appears Resolved" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await shot(page, "requester-ticket-detail", viewportName);
+
+      // The confirming state (BR-05: a one-way signal, asked for first). Cancelled,
+      // so the fixture is left untouched for E2E-05.
+      await page.getByRole("button", { name: "Problem Appears Resolved" }).click();
+      await expect(page.getByRole("button", { name: "Yes, mark resolved" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await shot(page, "requester-ticket-detail", `confirm-resolved-${viewportName}`);
+      await page.getByRole("button", { name: /^(Cancel|No)/ }).click();
+      await expect(page.getByRole("button", { name: "Problem Appears Resolved" })).toBeVisible();
     });
 
     test("IT Staff Ticket Queue: table on desktop/tablet, stacked cards on mobile (RSP-01)", async ({ page }) => {

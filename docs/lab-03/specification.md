@@ -599,7 +599,7 @@ Nothing below is ticked on the strength of an intention.
       and passes, with three stated exceptions (`tests.md` §13): UNIT-04 has no standalone
       helper (the comparison is a database index, tested through the API), STY-01's per-role
       badge colour mapping was not built, and A11Y-01/02 cover the Login screen only.
-- [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 366/366 (17 files),
+- [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 370/370 (17 files),
       client 117/117 (12 files), run on the release branch (= `lab3-staging` plus Feature 8).
 - [x] Lab 2's existing suite (`server/tests/lab-01`, `lab-02`; `client/tests/lab-01`,
       `lab-02`; `e2e/lab-02` — Lab 1 has no e2e specs) still passes, **with the specific

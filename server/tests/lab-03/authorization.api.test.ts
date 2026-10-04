@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
@@ -23,11 +26,17 @@ const E = {
 type Role = "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
 type Method = "get" | "post" | "patch" | "delete";
 
+// Same directory the download route serves from (server/uploads).
+const UPLOAD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads");
+const ATTACHMENT_BODY = "authorization sweep attachment fixture";
+
 describe("Authorization sweeps (SEC-01..SEC-08)", () => {
   let agents: Record<Role, request.Agent>;
   let requesterBAgent: request.Agent;
   let ticketAId: number; // owned by requester A
   let ticketBId: number; // owned by requester B
+  let attachmentAId: number; // a real, downloadable attachment on ticket A
+  let attachmentFilename: string;
   let requesterAId: number;
   let requesterBId: number;
   let staffId: number;
@@ -69,6 +78,23 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
       if (label === "A") ticketAId = ticket.id;
       else ticketBId = ticket.id;
     }
+
+    // A real attachment (row + file on disk) on requester A's ticket, so the
+    // download route's "owner passes the gate" case is a genuine 200 rather
+    // than a 404 for an id that doesn't exist.
+    attachmentFilename = `authz-sweep-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`;
+    mkdirSync(UPLOAD_DIR, { recursive: true });
+    writeFileSync(path.join(UPLOAD_DIR, attachmentFilename), ATTACHMENT_BODY);
+    const attachment = await prisma.attachment.create({
+      data: {
+        ticketId: ticketAId,
+        originalFilename: "authz-sweep.txt",
+        storedFilename: attachmentFilename,
+        mimeType: "text/plain",
+        sizeBytes: ATTACHMENT_BODY.length,
+      },
+    });
+    attachmentAId = attachment.id;
   });
 
   afterAll(async () => {
@@ -76,6 +102,7 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
     await prisma.internalNote.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
+    rmSync(path.join(UPLOAD_DIR, attachmentFilename), { force: true });
     await prisma.ticket.deleteMany({ where: { id: { in: createdTicketIds } } });
     for (const email of Object.values(E)) await deleteFixtureUser(email);
   });
@@ -92,6 +119,7 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
       { label: "GET /api/tickets", method: "get", url: "/api/tickets", allowed: ["REQUESTER"] },
       { label: "GET /api/tickets/:id", method: "get", url: `/api/tickets/${t}`, allowed: ["REQUESTER"] },
       { label: "GET /api/tickets/:id/attachments", method: "get", url: `/api/tickets/${t}/attachments`, allowed: ["REQUESTER"] },
+      { label: "GET /api/tickets/:id/attachments/:aid", method: "get", url: `/api/tickets/${t}/attachments/${attachmentAId}`, allowed: ["REQUESTER"] },
       { label: "POST /api/tickets/:id/attachments", method: "post", url: `/api/tickets/${t}/attachments`, allowed: ["REQUESTER"] },
       { label: "DELETE /api/tickets/:id/attachments/:aid", method: "delete", url: `/api/tickets/${t}/attachments/999999`, allowed: ["REQUESTER"] },
       { label: "POST /api/tickets/:id/mark-resolved", method: "post", url: `/api/tickets/${t}/mark-resolved`, allowed: ["REQUESTER"] },
@@ -217,6 +245,35 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
     const detail = await agents.REQUESTER.get(`/api/tickets/${ticketAId}`).expect(200);
     expect(JSON.stringify(comments.body)).not.toContain(secret);
     expect(JSON.stringify(detail.body)).not.toContain(secret);
+  });
+
+  // SEC-01/02 for the download route specifically, with a real attachment so
+  // the owner's answer is a real 200 (the matrix only proves "not 401/403").
+  describe("GET /api/tickets/:id/attachments/:attachmentId (SEC-01, SEC-02, SEC-04)", () => {
+    const download = () => `/api/tickets/${ticketAId}/attachments/${attachmentAId}`;
+
+    it("no session -> 401", async () => {
+      await request.agent(app).get(download()).expect(401);
+    });
+
+    it("the owning Requester gets the file (passes authentication and the role gate)", async () => {
+      const response = await agents.REQUESTER.get(download()).expect(200);
+      expect(response.headers["content-type"]).toMatch(/text\/plain/);
+      expect(response.text).toBe(ATTACHMENT_BODY);
+    });
+
+    it("IT Staff -> 403 and Administrator -> 403, with no file content in the body", async () => {
+      for (const role of ["IT_STAFF", "ADMINISTRATOR"] as Role[]) {
+        const response = await agents[role].get(download()).expect(403);
+        expect(JSON.stringify(response.body)).not.toContain(ATTACHMENT_BODY);
+        expect(response.text).not.toContain(ATTACHMENT_BODY);
+      }
+    });
+
+    it("another Requester -> 404, never the file (BR-14)", async () => {
+      const response = await requesterBAgent.get(download()).expect(404);
+      expect(response.text).not.toContain(ATTACHMENT_BODY);
+    });
   });
 
   // SEC-06 / BR-16

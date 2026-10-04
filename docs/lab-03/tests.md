@@ -72,7 +72,7 @@ handout's structure block is treated as illustrative naming, not a literal path.
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
 | SEC-01 | AC-27 | Every `/api/admin/*` route called by Requester and IT Staff sessions | All `403` | Pass — `authorization.api.test.ts` sweeps every `/api/admin/*` route as Requester and IT Staff |
-| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Pass — `authorization.api.test.ts` sweeps all `/api/staff/*` routes (queue, detail, claim, assign, priority, status, assignable-users) as Requester; the 24-route role × route matrix is generated from one table |
+| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Pass — `authorization.api.test.ts` sweeps all `/api/staff/*` routes (queue, detail, claim, assign, priority, status, assignable-users) as Requester; the 25-route role × route matrix is generated from one table |
 | SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Pass — `authorization.api.test.ts` (spoofed `requesterId`, body and query) plus the Lab 2 tests `create-ticket.api.test.ts` ("ignores a requesterId in the body") and `my-tickets.api.test.ts` |
 | SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Pass — `authorization.api.test.ts` (cross-requester `404` across detail/attachments/comments) plus one "returns 404 (not 403)" test per route in the Lab 2 files and `comments-notes.api.test.ts` |
 | SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Pass — `authorization.api.test.ts` and `comments-notes.api.test.ts` (API-21): `403`, and the response body is checked to contain no note text |
@@ -161,7 +161,7 @@ idempotency.
 | API-54 | AC-28a, BR-39 | `GET /api/staff/tickets` and `GET /api/staff/tickets/:id` as Administrator | Both `200` — read-only access works | `server/tests/lab-03/staff-queue.api.test.ts`, `staff-ticket-detail.api.test.ts` | Pass — `GET /api/staff/tickets` in `staff-queue.api.test.ts`, `GET /api/staff/tickets/:id` in `staff-ticket-detail.api.test.ts`; the role × route sweep in `authorization.api.test.ts` also asserts the Administrator is allowed (not `401`/`403`) on both |
 | API-55 | AC-28b, BR-39 | `POST .../claim`, `POST .../assign`, `PATCH .../priority`, `PATCH .../status` as Administrator | All `403` — read-only means no writes | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass — `staff-ticket-detail.api.test.ts`, one test per route, plus the `authorization.api.test.ts` sweep (Administrator `403` on every write) |
 | API-56 | BR-39 | `POST /api/tickets/:id/comments` and `POST /api/tickets/:id/notes` as Administrator | Both `403` (Administrator never posts, even though it can read both) | `server/tests/lab-03/comments-notes.api.test.ts` (not a separate `authorization.api.test.ts` — see §12) | Pass |
-| SEC-08 | BR-13 | A request that is simultaneously unauthenticated (no session) **and** has an invalid body (e.g. a malformed `POST /api/auth/login`) | `401`, not `400` — proves the ladder's stated order (auth before validation) rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Pass |
+| SEC-08 | BR-13 | A request that fails at two rungs of the ladder at once, using protected routes (login is deliberately public, so a malformed login is a plain `400` and says nothing about the ladder): no session + invalid body on `POST /api/tickets` and `POST /api/admin/users`; wrong role + invalid body; wrong role + nonexistent resource; right role + invalid body + nonexistent ticket; right role + valid status change + nonexistent ticket (which would otherwise be judged for a transition conflict) | The earlier rung always wins: `401` over `400`, `403` over `400`, `403` over `404`, `400` over `404`, `404` over `409` — proves the ladder's stated order rather than assuming it | `server/tests/lab-03/authorization.api.test.ts` | Pass |
 | SEED-01 | §7.5 | Run `npm run prisma:seed` twice in a row | Second run makes no changes (same row counts, no unique-constraint errors) — confirms the seed script's `upsert` pattern is actually idempotent, not just documented as such | `server/tests/lab-03/seed.api.test.ts` | Pass — `seed.api.test.ts` runs `npx tsx prisma/seed.ts` twice and compares User/Ticket/Comment/Note/Category/RelatedSystem counts (identical); it also checks the documented account mix and the demo-ticket coverage (all 8 statuses, 3 priorities, assigned + unassigned, ≥ 4 requesters) |
 
 ### 2.9 Required Lab 2 test updates (not "unmodified" — see AC-10)
@@ -260,7 +260,7 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 366/366, client 117/117) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 26-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
+| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 370/370, client 117/117) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 26-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
 
 ## 9. E2E tests
 
@@ -518,7 +518,7 @@ the server suites and Playwright share one database):
 
 | Check | Result |
 |---|---|
-| Server `npx vitest run` | **366/366** passed, 17 files (~70 s) |
+| Server `npx vitest run` | **370/370** passed, 17 files (~70 s) — re-run after the PR #52 review added the attachment-download route to the authorization matrix (was 366/366) |
 | Client `npx vitest run` | **117/117** passed, 12 files — 7 clean runs after the one flaky run; see the flake note below |
 | Playwright `npx playwright test` | **26/26** passed (~60 s), fixtures reset per run |
 | `npx tsc --noEmit` + build | clean on `server` and `client` |
@@ -527,7 +527,7 @@ the server suites and Playwright share one database):
 | Screenshots | Staff Queue, Staff Ticket Detail and User Management (tablet) regenerated with the seed data present and opened one by one — all 8 statuses and 3 priorities render, no clipped columns or truncated labels |
 
 Added during this release pass to close gaps an audit against the lab sheet found:
-`authorization.api.test.ts` (SEC-01–08; a role × route matrix of 24 routes), `seed.api.test.ts`
+`authorization.api.test.ts` (SEC-01–08; a role × route matrix of 25 routes), `seed.api.test.ts`
 (SEED-01), `AppShell.test.tsx` (UI-04), `styleConformance.test.tsx` and `style.spec.ts`
 (STY-01/02), an exported `validateCommentBody()` with direct tests (UNIT-05), and demo tickets
 in `prisma/seed.ts`. A mutation check (temporarily breaking the code to confirm the tests fail) was run on the

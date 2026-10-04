@@ -17,7 +17,14 @@ export default defineConfig({
   // its own header) and are explicitly "not part of the graded automated
   // suite" — leaving them in the default run just makes it permanently red.
   // Lab 2's graded flow (requester-ticket-flow.spec.ts) still runs.
-  testIgnore: ["**/lab-02/pdf-evidence.spec.ts", "**/lab-02/responsive-screenshots.spec.ts"],
+  testIgnore: [
+    "**/lab-02/pdf-evidence.spec.ts",
+    "**/lab-02/responsive-screenshots.spec.ts",
+    // Lab 3's submission-evidence generator changes fixture data on purpose
+    // (passwords, resolved tickets, created users); it runs only on request:
+    //   LAB3_EVIDENCE=1 npx playwright test e2e/evidence
+    ...(process.env.LAB3_EVIDENCE ? [] : ["**/evidence/**"]),
+  ],
   fullyParallel: false,
   // One worker: every spec shares one real Postgres database and one set of
   // fixture accounts/tickets, and the last-Administrator spec temporarily

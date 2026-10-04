@@ -1,0 +1,21 @@
+Administrator API is forbidden to everyone else
+
+No session lists users
+    GET /api/admin/users
+    -> 401  {"error":"Authentication required."}
+
+A Requester lists users
+    GET /api/admin/users
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+IT Staff list users
+    GET /api/admin/users
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+IT Staff create a user
+    POST /api/admin/users  {"name":"x","email":"x@toktickit.test","role":"ADMINISTRATOR","password":"abcdefgh1"}
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+IT Staff reset someone's password
+    POST /api/admin/users/1/reset-password  {"password":"abcdefgh1"}
+    -> 403  {"error":"You do not have permission to perform this action."}

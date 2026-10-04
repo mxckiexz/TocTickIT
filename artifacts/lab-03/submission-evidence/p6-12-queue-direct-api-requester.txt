@@ -1,0 +1,5 @@
+Direct API access to the queue
+
+A Requester calls the staff queue directly
+    GET /api/staff/tickets
+    -> 403  {"error":"You do not have permission to perform this action."}

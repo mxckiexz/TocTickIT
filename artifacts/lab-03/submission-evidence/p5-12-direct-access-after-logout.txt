@@ -1,0 +1,13 @@
+Direct API access after Logout (the page above is Login again; every protected call is 401)
+
+After logout, the same browser session asks who it is
+    GET /api/auth/me
+    -> 401  {"error":"Authentication required."}
+
+After logout, the same session lists tickets
+    GET /api/tickets
+    -> 401  {"error":"Authentication required."}
+
+After logout, the same session opens the staff queue
+    GET /api/staff/tickets
+    -> 401  {"error":"Authentication required."}

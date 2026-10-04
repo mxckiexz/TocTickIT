@@ -3,7 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "evidence:lab3": "LAB3_EVIDENCE=1 playwright test e2e/evidence && node scripts/build-lab3-submission-pdf.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0",

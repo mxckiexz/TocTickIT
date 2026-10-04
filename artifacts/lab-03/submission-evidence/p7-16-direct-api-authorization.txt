@@ -1,0 +1,62 @@
+Direct API authorization evidence (the server enforces roles and ownership, not the UI)
+Status codes follow the ladder 401 -> 403 -> 400 -> 404 -> 409.
+
+1. No session opens a staff ticket
+    GET /api/staff/tickets/4753
+    -> 401  {"error":"Authentication required."}
+
+2. A Requester opens a staff ticket
+    GET /api/staff/tickets/4753
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+3. A Requester claims a ticket
+    POST /api/staff/tickets/4753/claim
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+4. A Requester reads Internal Notes of their own ticket (no note content returned)
+    GET /api/tickets/4753/notes
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+5. A Requester writes an Internal Note
+    POST /api/tickets/4753/notes  {"body":"x"}
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+6. An Administrator may READ a staff ticket (read-only)
+    GET /api/staff/tickets/4753
+    -> 200  {"ticket":{"id":4753,"ticketNumber":"TKT-E2E-000001","requesterId":307,"categoryId":1,"relatedSystemId":1,"summary":"[e2e] Staff flow ticket…
+
+7. An Administrator claims a ticket
+    POST /api/staff/tickets/4753/claim
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+8. An Administrator changes a status
+    PATCH /api/staff/tickets/4753/status  {"currentStatus":"CLOSED","confirm":true}
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+9. An Administrator writes an Internal Note
+    POST /api/tickets/4753/notes  {"body":"x"}
+    -> 403  {"error":"You do not have permission to perform this action."}
+
+10. IT Staff change status without the required confirmation (validation, 400)
+    PATCH /api/staff/tickets/4753/status  {"currentStatus":"CLOSED"}
+    -> 400  {"errors":{"confirm":"Confirmation is required to set this status."}}
+
+11. IT Staff make a status change the workflow does not allow (conflict, 409)
+    PATCH /api/staff/tickets/4753/status  {"currentStatus":"OPEN"}
+    -> 409  {"error":"Cannot transition from RESOLVED to OPEN."}
+
+12. IT Staff claim a ticket that already has an owner (conflict, 409)
+    POST /api/staff/tickets/4753/claim
+    -> 409  {"error":"Ticket is already assigned. Use assign to change its owner."}
+
+13. IT Staff ask for a ticket that does not exist (404)
+    GET /api/staff/tickets/999999
+    -> 404  {"error":"Ticket not found."}
+
+14. A forged Origin on a state-changing call is refused (403)
+    PATCH /api/staff/tickets/4753/priority  {"itPriority":"LOW"}
+    -> 403  {"error":"Request origin not allowed."}
+
+15. A Requester opens ANOTHER Requester's ticket: 404, not 403 (no existence leak)
+    GET /api/tickets/3502
+    -> 404  {"error":"Ticket not found."}

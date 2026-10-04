@@ -29,7 +29,15 @@ const SHOTS = path.join(process.cwd(), "artifacts", "lab-03", "screenshots");
 async function shot(page: Page, screen: string, name: string) {
   const dir = path.join(SHOTS, screen);
   fs.mkdirSync(dir, { recursive: true });
-  await page.screenshot({ path: path.join(dir, `${name}.png`), fullPage: true });
+  // Cropped to the app's real content height (plus a margin): a short screen such
+  // as Login would otherwise be a mostly empty viewport-sized picture.
+  const height = await page.evaluate(() => {
+    const root = document.querySelector("#root > *");
+    const bottom = root ? root.getBoundingClientRect().bottom + window.scrollY : document.documentElement.scrollHeight;
+    return Math.min(Math.ceil(bottom + 40), document.documentElement.scrollHeight);
+  });
+  const width = page.viewportSize()?.width ?? 1280;
+  await page.screenshot({ path: path.join(dir, `${name}.png`), fullPage: true, clip: { x: 0, y: 0, width, height } });
 }
 
 // Visual-checklist item: "No clipping, overlap, or horizontal scroll".

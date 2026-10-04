@@ -19,8 +19,8 @@ Every review round and author response below is quoted verbatim from the pull re
 | 5 — IT Staff Ticket Detail & Workflow (issue #38) | [#49](https://github.com/mxckiexz/TocTickIT/pull/49) | 1 changes-requested → approved | Merged | Thanwarat1303 |
 | 6 — Administrator User Management (issue #39) | [#50](https://github.com/mxckiexz/TocTickIT/pull/50) | 3 changes-requested → approved | Merged | Thanwarat1303 |
 | 7 — E2E, Visual & Responsive Evidence (issue #40) | [#51](https://github.com/mxckiexz/TocTickIT/pull/51) | 1 changes-requested → approved | Merged | Thanwarat1303 |
-| Feature 8 — Release Integration (issue #41) | [#52](https://github.com/mxckiexz/TocTickIT/pull/52) | 1 changes-requested → approved | Merged | Thanwarat1303 |
-| Feature 9 — Lab 3 gap closure (issue #53) | [#54](https://github.com/mxckiexz/TocTickIT/pull/54) | 1 changes-requested → approved | Merged | Thanwarat1303 |
+| 8 — Release Integration (issue #41) | [#52](https://github.com/mxckiexz/TocTickIT/pull/52) | 1 changes-requested → approved | Merged | Thanwarat1303 |
+| 9 — Lab 3 gap closure (issue #53) | [#54](https://github.com/mxckiexz/TocTickIT/pull/54) | 1 changes-requested → approved | Merged | Thanwarat1303 |
 
 **The final `lab3-staging` → `main` merge** is not a row above: by the author's explicit decision it was
 opened and merged without a separate review round. It carries no change beyond the pull requests above

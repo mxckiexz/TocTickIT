@@ -21,3 +21,7 @@ server/uploads/
 # submission build output (regenerate with scripts/build-submission-pdf.mjs)
 /TokTickIT_Lab2_Submission.pdf
 /_submission.html
+
+# Lab 3 submission build output (regenerate with scripts/build-lab3-submission-pdf.mjs)
+/TokTickIT_Lab3_Submission.pdf
+/_submission-lab3.html

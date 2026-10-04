@@ -103,6 +103,16 @@ a:focus {
   color: #fff !important;
 }
 
+/* On phones the Requester's My Tickets table keeps its four essential columns
+   (number, summary, priority, status) and, at normal size, was ~19px wider than
+   its card — pushing the status badge off the edge. Slightly smaller text
+   fits it without a sideways scroll. */
+@media (max-width: 575.98px) {
+  .zg-table-phone-compact {
+    font-size: 0.875rem;
+  }
+}
+
 .zg-surface {
   background-color: #fff;
   border: 1px solid #dfe7e2;

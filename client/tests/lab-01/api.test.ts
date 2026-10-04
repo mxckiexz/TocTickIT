@@ -33,7 +33,12 @@ describe("checkSystem", () => {
     const result = await checkSystem();
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/health"));
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/categories"));
+    // Lab 3: fetchCategories() now sends the session cookie (credentials:
+    // "include") — a second argument that wasn't there in Lab 2.
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/categories"),
+      expect.objectContaining({ credentials: "include" })
+    );
     expect(result).toEqual({ online: true, categories });
   });
 

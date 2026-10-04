@@ -4,22 +4,17 @@ import {
   Pagination,
   Priority,
   RelatedSystem,
-  Requester,
   Ticket,
+  TicketStatus,
   fetchCategories,
   fetchRelatedSystems,
   fetchTickets,
 } from "./api.js";
-import RequesterBanner from "./RequesterBanner.js";
 import TicketDetail from "./TicketDetail.js";
+import { PriorityBadge, STATUS_OPTIONS, StatusBadge } from "./ticketBadges.js";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
-
-interface MyTicketsProps {
-  requester: Requester;
-  onSwitchRequester: () => void;
-}
 
 type LookupState = "loading" | "ready" | "error";
 type ListState = "loading" | "ready" | "error";
@@ -31,7 +26,13 @@ const SORT_OPTIONS = [
   { value: "summary-desc", label: "Summary (Z–A)", sortBy: "summary", sortDir: "desc" },
 ] as const;
 
-export default function MyTickets({ requester, onSwitchRequester }: MyTicketsProps) {
+// Lab 3: currentStatus is a proper TicketStatus enum (not Lab 2's free text);
+// labels, options and badges come from ./ticketBadges.tsx, shared with the
+// staff screens.
+
+// Lab 3: identity comes from the logged-in session (FR-08/BR-03) — always
+// scoped to the caller's own tickets, no Requester prop needed anymore.
+export default function MyTickets() {
   const [lookupState, setLookupState] = useState<LookupState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
   const [relatedSystems, setRelatedSystems] = useState<RelatedSystem[]>([]);
@@ -94,12 +95,11 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
     const sortOption = SORT_OPTIONS.find((option) => option.value === sortValue) ?? SORT_OPTIONS[0];
 
     fetchTickets({
-      requesterId: requester.id,
       search: search || undefined,
       categoryId: categoryId ? Number(categoryId) : undefined,
       relatedSystemId: relatedSystemId ? Number(relatedSystemId) : undefined,
       requestedPriority: (requestedPriority as Priority) || undefined,
-      currentStatus: currentStatus || undefined,
+      currentStatus: (currentStatus as TicketStatus) || undefined,
       sortBy: sortOption.sortBy,
       sortDir: sortOption.sortDir,
       page,
@@ -120,7 +120,6 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
       cancelled = true;
     };
   }, [
-    requester.id,
     search,
     categoryId,
     relatedSystemId,
@@ -155,19 +154,15 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
     return (
       <TicketDetail
         ticketId={selectedTicketId}
-        requester={requester}
         categories={categories}
         relatedSystems={relatedSystems}
         onBack={() => setSelectedTicketId(null)}
-        onSwitchRequester={onSwitchRequester}
       />
     );
   }
 
   return (
     <div className="mt-4">
-      <RequesterBanner requester={requester} onSwitchRequester={onSwitchRequester} label="Viewing as" />
-
       <h2 className="h5">My Tickets</h2>
 
       <div className="row g-2 mb-3">
@@ -181,7 +176,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
             onChange={(event) => setSearchInput(event.target.value)}
           />
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by category"
@@ -196,7 +191,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
             ))}
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by related system"
@@ -211,7 +206,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
             ))}
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by priority"
@@ -224,7 +219,7 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
             <option value="HIGH">High</option>
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by status"
@@ -232,10 +227,14 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
             onChange={(event) => setCurrentStatus(event.target.value)}
           >
             <option value="">All statuses</option>
-            <option value="New">New</option>
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Sort by"
@@ -266,16 +265,16 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
       {listState === "ready" && tickets.length > 0 && (
         <>
           <div className="table-responsive">
-            <table className="table table-sm align-middle">
+            <table className="table table-sm align-middle zg-table-phone-compact">
               <thead>
                 <tr>
                   <th scope="col">Ticket Number</th>
                   <th scope="col">Summary</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Related System</th>
+                  <th scope="col" className="d-none d-md-table-cell">Category</th>
+                  <th scope="col" className="d-none d-md-table-cell">Related System</th>
                   <th scope="col">Priority</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Created</th>
+                  <th scope="col" className="d-none d-md-table-cell">Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -290,12 +289,16 @@ export default function MyTickets({ requester, onSwitchRequester }: MyTicketsPro
                         {ticket.ticketNumber}
                       </button>
                     </td>
-                    <td>{ticket.summary}</td>
-                    <td>{categoryName(ticket.categoryId)}</td>
-                    <td>{relatedSystemName(ticket.relatedSystemId)}</td>
-                    <td>{ticket.requestedPriority}</td>
-                    <td>{ticket.currentStatus}</td>
-                    <td>{new Date(ticket.createdAt).toLocaleString()}</td>
+                    <td className="text-break">{ticket.summary}</td>
+                    <td className="d-none d-md-table-cell">{categoryName(ticket.categoryId)}</td>
+                    <td className="d-none d-md-table-cell">{relatedSystemName(ticket.relatedSystemId)}</td>
+                    <td>
+                      <PriorityBadge priority={ticket.requestedPriority} />
+                    </td>
+                    <td>
+                      <StatusBadge status={ticket.currentStatus} />
+                    </td>
+                    <td className="d-none d-md-table-cell">{new Date(ticket.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

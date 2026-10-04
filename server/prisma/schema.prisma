@@ -26,15 +26,57 @@ model RelatedSystem {
   tickets   Ticket[]
 }
 
-// Lab 2 stands in for real authentication (arrives in Lab 3): the client picks
-// one active Requester from this table to act as the current "logged-in" user.
-model Requester {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  isActive  Boolean  @default(true)
+// Lab 3 — replaces Lab 2's dev-selector "Requester" table (see the
+// 20260919_lab3_auth_foundation migration for how existing Requester rows
+// became User rows with role REQUESTER, same id/name/email/isActive).
+enum Role {
+  REQUESTER
+  IT_STAFF
+  ADMINISTRATOR
+}
+
+model User {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  // @unique below is case-sensitive (a plain btree index) — BR-34's
+  // case-insensitive uniqueness is additionally enforced by a separate
+  // "User_email_lower_key" unique index on LOWER(email), added via raw SQL
+  // in migration 20261002080000_lab3_admin_email_case_insensitive_unique
+  // since Prisma's schema DSL has no expression-index syntax to declare it
+  // here directly.
+  email              String   @unique
+  passwordHash       String
+  role               Role
+  isActive           Boolean  @default(true)
+  // BR-02/FR-04: true until the user saves a new password — set on every
+  // seeded/migrated/admin-created/admin-reset account; cleared only by a
+  // successful POST /api/auth/change-password.
+  mustChangePassword Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tickets                 Ticket[]        @relation("TicketRequester")
+  ownedTickets            Ticket[]        @relation("TicketOwner")
+  requesterResolvedMarks  Ticket[]        @relation("TicketRequesterMarkedResolvedBy")
+  sessions                Session[]
+  publicComments          PublicComment[]
+  internalNotes           InternalNote[]
+}
+
+// Server-side session store backing the toktickit_session cookie (BR-10,
+// BR-11): deleting a row invalidates that session immediately, independent
+// of the cookie's own expiry — logout and account suspension both rely on
+// that immediacy.
+model Session {
+  id        String   @id @default(uuid())
+  userId    Int
+  expiresAt DateTime
   createdAt DateTime @default(now())
-  tickets   Ticket[]
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 enum Priority {
@@ -43,28 +85,87 @@ enum Priority {
   HIGH
 }
 
+// Lab 3 §7.3 / handout §4.5 — the 8 required statuses and their transition
+// matrix (enforced in app.ts, not by the enum itself).
+enum TicketStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
 model Ticket {
-  id                Int      @id @default(autoincrement())
-  ticketNumber      String   @unique
+  id                Int          @id @default(autoincrement())
+  ticketNumber      String       @unique
   requesterId       Int
   categoryId        Int
   relatedSystemId   Int
   summary           String
   description       String
   requestedPriority Priority
-  currentStatus     String   @default("New")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  currentStatus     TicketStatus @default(NEW)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  requester     Requester     @relation(fields: [requesterId], references: [id])
-  category      Category      @relation(fields: [categoryId], references: [id])
-  relatedSystem RelatedSystem @relation(fields: [relatedSystemId], references: [id])
-  attachments   Attachment[]
+  // Lab 3 §7.2 additions —
+  // ownerId: the Ticket Owner (BR-17), null = unassigned, must be an active
+  // IT_STAFF user (checked in app.ts; the FK alone can't express "which role").
+  ownerId Int?
+  // itPriority: copied from requestedPriority at creation (BR-20), then
+  // independently editable by IT Staff only.
+  itPriority Priority
+  // requesterMarkedResolvedAt/ById: set by FR-14/BR-24, never cleared once
+  // set (a later Reopened ticket keeps the historical timestamp) and never
+  // itself changes currentStatus.
+  requesterMarkedResolvedAt   DateTime?
+  requesterMarkedResolvedById Int?
+
+  requester              User            @relation("TicketRequester", fields: [requesterId], references: [id])
+  owner                  User?           @relation("TicketOwner", fields: [ownerId], references: [id])
+  requesterMarkedResolvedBy User?        @relation("TicketRequesterMarkedResolvedBy", fields: [requesterMarkedResolvedById], references: [id])
+  category               Category        @relation(fields: [categoryId], references: [id])
+  relatedSystem          RelatedSystem   @relation(fields: [relatedSystemId], references: [id])
+  attachments            Attachment[]
+  publicComments         PublicComment[]
+  internalNotes          InternalNote[]
 
   @@index([requesterId])
   @@index([categoryId])
   @@index([relatedSystemId])
   @@index([createdAt])
+  @@index([ownerId])
+  @@index([currentStatus])
+}
+
+// Append-only (BR-28: no edit/delete route exists for either model).
+model PublicComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+}
+
+model InternalNote {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
 }
 
 model Attachment {

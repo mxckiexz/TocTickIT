@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
+import { CLIENT_ORIGIN } from "../../src/auth.js";
+import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/auth-fixtures.js";
 
 // Mirrors server/src/app.ts's own UPLOAD_DIR computation, one directory
 // level deeper (tests/lab-02 instead of src).
@@ -26,9 +28,15 @@ async function deleteUploadedFiles(ticketIds: number[]) {
   }
 }
 
+// Lab 3 (tests.md §2.3, API-12): re-run against session auth. BR-14
+// tightens the cross-Requester rejection from Lab 2's 403 to 404 (§2.9,
+// category 1).
 describe("GET /api/tickets/:id/attachments (list)", () => {
+  const ownerEmail = "inspect-list-owner-fixture@toktickit.test";
+  const otherEmail = "inspect-list-other-fixture@toktickit.test";
+  let ownerAgent: request.Agent;
+  let otherAgent: request.Agent;
   let ownerRequesterId: number;
-  let otherRequesterId: number;
   let ticketWithAttachmentsId: number;
   let ticketWithNoAttachmentsId: number;
   const createdTicketIds: number[] = [];
@@ -36,15 +44,14 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const owner = await prisma.requester.findFirstOrThrow({ where: { isActive: true } });
-    const other = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: owner.id } },
-    });
+    const { user: owner } = await createFixtureUser(ownerEmail);
+    await createFixtureUser(otherEmail);
+    ownerAgent = await loginAgent(ownerEmail);
+    otherAgent = await loginAgent(otherEmail);
+    ownerRequesterId = owner.id;
+
     const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });
     const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({ where: { isActive: true } });
-
-    ownerRequesterId = owner.id;
-    otherRequesterId = other.id;
 
     async function createTicket(summary: string) {
       const ticket = await prisma.ticket.create({
@@ -56,6 +63,7 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
           summary,
           description: "Inspect-attachments list test fixture.",
           requestedPriority: "LOW",
+          itPriority: "LOW",
         },
       });
       createdTicketIds.push(ticket.id);
@@ -65,17 +73,17 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
     ticketWithAttachmentsId = await createTicket("Ticket with attachments");
     ticketWithNoAttachmentsId = await createTicket("Ticket with no attachments");
 
-    await request(app)
+    await ownerAgent
       .post(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .field("requesterId", String(ownerRequesterId))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from("fake image bytes 1"), {
         filename: "one.png",
         contentType: "image/png",
       })
       .expect(201);
-    await request(app)
+    await ownerAgent
       .post(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .field("requesterId", String(ownerRequesterId))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from("fake pdf bytes"), {
         filename: "two.pdf",
         contentType: "application/pdf",
@@ -88,13 +96,17 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
     await deleteUploadedFiles(createdTicketIds);
     await prisma.attachment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.ticket.deleteMany({ where: { id: { in: createdTicketIds } } });
+    await deleteFixtureUser(ownerEmail);
+    await deleteFixtureUser(otherEmail);
+  });
+
+  it("rejects an unauthenticated request", async () => {
+    const response = await request(app).get(`/api/tickets/${ticketWithAttachmentsId}/attachments`).expect(401);
+    expect(response.body.error).toBeDefined();
   });
 
   it("returns the ticket's attachments to its owning Requester", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const response = await ownerAgent.get(`/api/tickets/${ticketWithAttachmentsId}/attachments`).expect(200);
 
     expect(response.body).toHaveLength(2);
     const filenames = response.body.map((a: { originalFilename: string }) => a.originalFilename);
@@ -105,10 +117,7 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
   });
 
   it("returns only public attachment metadata, not the internal storedFilename", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const response = await ownerAgent.get(`/api/tickets/${ticketWithAttachmentsId}/attachments`).expect(200);
 
     for (const attachment of response.body) {
       expect(attachment).not.toHaveProperty("storedFilename");
@@ -143,6 +152,7 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
         summary: "Tie-break attachments ticket",
         description: "Two attachments with the exact same createdAt, on purpose.",
         requestedPriority: "LOW",
+        itPriority: "LOW",
       },
     });
     createdTicketIds.push(tieTicket.id);
@@ -169,71 +179,43 @@ describe("GET /api/tickets/:id/attachments (list)", () => {
       },
     });
 
-    const response = await request(app)
-      .get(`/api/tickets/${tieTicket.id}/attachments`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const response = await ownerAgent.get(`/api/tickets/${tieTicket.id}/attachments`).expect(200);
 
     expect(response.body.map((a: { id: number }) => a.id)).toEqual([first.id, second.id]);
   });
 
   it("returns an empty array for a ticket with no attachments", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketWithNoAttachmentsId}/attachments`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const response = await ownerAgent.get(`/api/tickets/${ticketWithNoAttachmentsId}/attachments`).expect(200);
 
     expect(response.body).toEqual([]);
   });
 
-  it("rejects a Requester who does not own the ticket", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .query({ requesterId: otherRequesterId })
-      .expect(403);
+  // BR-14 / AC-11
+  it("returns 404 (not 403) for a Requester who does not own the ticket", async () => {
+    const response = await otherAgent.get(`/api/tickets/${ticketWithAttachmentsId}/attachments`).expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a ticket id that does not exist", async () => {
-    const response = await request(app)
-      .get("/api/tickets/999999/attachments")
-      .query({ requesterId: ownerRequesterId })
-      .expect(404);
+    const response = await ownerAgent.get("/api/tickets/999999/attachments").expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a non-numeric ticket id", async () => {
-    const response = await request(app)
-      .get("/api/tickets/not-a-number/attachments")
-      .query({ requesterId: ownerRequesterId })
-      .expect(400);
-
-    expect(response.body.error).toBeDefined();
-  });
-
-  it("rejects a missing requesterId", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .expect(400);
-
-    expect(response.body.error).toBeDefined();
-  });
-
-  it("rejects a non-numeric requesterId", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketWithAttachmentsId}/attachments`)
-      .query({ requesterId: "abc" })
-      .expect(400);
+    const response = await ownerAgent.get("/api/tickets/not-a-number/attachments").expect(400);
 
     expect(response.body.error).toBeDefined();
   });
 });
 
 describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () => {
+  const ownerEmail = "inspect-download-owner-fixture@toktickit.test";
+  const otherEmail = "inspect-download-other-fixture@toktickit.test";
+  let ownerAgent: request.Agent;
+  let otherAgent: request.Agent;
   let ownerRequesterId: number;
-  let otherRequesterId: number;
   let ticketId: number;
   let otherTicketId: number;
   let attachmentId: number;
@@ -244,15 +226,14 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
   beforeAll(async () => {
     const prisma = getPrisma();
 
-    const owner = await prisma.requester.findFirstOrThrow({ where: { isActive: true } });
-    const other = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: owner.id } },
-    });
+    const { user: owner } = await createFixtureUser(ownerEmail);
+    const { user: other } = await createFixtureUser(otherEmail);
+    ownerAgent = await loginAgent(ownerEmail);
+    otherAgent = await loginAgent(otherEmail);
+    ownerRequesterId = owner.id;
+
     const category = await prisma.category.findFirstOrThrow({ where: { isActive: true } });
     const relatedSystem = await prisma.relatedSystem.findFirstOrThrow({ where: { isActive: true } });
-
-    ownerRequesterId = owner.id;
-    otherRequesterId = other.id;
 
     const ticket = await prisma.ticket.create({
       data: {
@@ -263,14 +244,15 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
         summary: "Download test ticket",
         description: "Inspect-attachments download test fixture.",
         requestedPriority: "LOW",
+        itPriority: "LOW",
       },
     });
     ticketId = ticket.id;
     createdTicketIds.push(ticket.id);
 
-    const upload = await request(app)
+    const upload = await ownerAgent
       .post(`/api/tickets/${ticketId}/attachments`)
-      .field("requesterId", String(ownerRequesterId))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from(fileContents), {
         filename: "download-me.png",
         contentType: "image/png",
@@ -278,28 +260,27 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
       .expect(201);
     attachmentId = upload.body.id;
 
-    // A second ticket + attachment, to prove an attachment id that exists
-    // but belongs to a *different* ticket is rejected as not-found here.
-    const anotherOwner = await prisma.requester.findFirstOrThrow({
-      where: { isActive: true, NOT: { id: ownerRequesterId } },
-    });
+    // A second ticket + attachment, owned by "other", to prove an
+    // attachment id that exists but belongs to a *different* ticket is
+    // rejected as not-found here.
     const otherTicket = await prisma.ticket.create({
       data: {
         ticketNumber: `TEST-DOWNLOAD-OTHER-${Date.now()}`,
-        requesterId: anotherOwner.id,
+        requesterId: other.id,
         categoryId: category.id,
         relatedSystemId: relatedSystem.id,
         summary: "Other ticket for cross-ticket attachment test",
         description: "Fixture.",
         requestedPriority: "LOW",
+        itPriority: "LOW",
       },
     });
     otherTicketId = otherTicket.id;
     createdTicketIds.push(otherTicket.id);
 
-    const otherUpload = await request(app)
+    const otherUpload = await otherAgent
       .post(`/api/tickets/${otherTicketId}/attachments`)
-      .field("requesterId", String(anotherOwner.id))
+      .set("Origin", CLIENT_ORIGIN)
       .attach("file", Buffer.from("belongs to another ticket"), {
         filename: "not-yours.png",
         contentType: "image/png",
@@ -313,13 +294,17 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
     await deleteUploadedFiles(createdTicketIds);
     await prisma.attachment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.ticket.deleteMany({ where: { id: { in: createdTicketIds } } });
+    await deleteFixtureUser(ownerEmail);
+    await deleteFixtureUser(otherEmail);
+  });
+
+  it("rejects an unauthenticated request", async () => {
+    const response = await request(app).get(`/api/tickets/${ticketId}/attachments/${attachmentId}`).expect(401);
+    expect(response.body.error).toBeDefined();
   });
 
   it("returns the file to its owning Requester", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/${attachmentId}`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const response = await ownerAgent.get(`/api/tickets/${ticketId}/attachments/${attachmentId}`).expect(200);
 
     expect(response.headers["content-type"]).toContain("image/png");
     expect(Buffer.isBuffer(response.body) ? response.body : Buffer.from(response.text)).toEqual(
@@ -338,10 +323,7 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
       data: { originalFilename: "café photo.png" },
     });
 
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/${attachmentId}`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(200);
+    const response = await ownerAgent.get(`/api/tickets/${ticketId}/attachments/${attachmentId}`).expect(200);
 
     // The plain `filename=` fallback must not be percent-encoded (that would
     // display literally, e.g. "caf%C3%A9%20photo.png"); the real name is
@@ -358,55 +340,35 @@ describe("GET /api/tickets/:id/attachments/:attachmentId (view/download)", () =>
     });
   });
 
-  it("rejects a Requester who does not own the ticket", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/${attachmentId}`)
-      .query({ requesterId: otherRequesterId })
-      .expect(403);
+  // BR-14 / AC-11
+  it("returns 404 (not 403) for a Requester who does not own the ticket", async () => {
+    const response = await otherAgent.get(`/api/tickets/${ticketId}/attachments/${attachmentId}`).expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a ticket id that does not exist", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/999999/attachments/${attachmentId}`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(404);
+    const response = await ownerAgent.get(`/api/tickets/999999/attachments/${attachmentId}`).expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects an attachment id that belongs to a different ticket", async () => {
-    const response = await request(app)
+    const response = await ownerAgent
       .get(`/api/tickets/${ticketId}/attachments/${otherTicketAttachmentId}`)
-      .query({ requesterId: ownerRequesterId })
       .expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects an attachment id that does not exist", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/999999`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(404);
+    const response = await ownerAgent.get(`/api/tickets/${ticketId}/attachments/999999`).expect(404);
 
     expect(response.body.error).toBeDefined();
   });
 
   it("rejects a non-numeric attachment id", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/not-a-number`)
-      .query({ requesterId: ownerRequesterId })
-      .expect(400);
-
-    expect(response.body.error).toBeDefined();
-  });
-
-  it("rejects a missing requesterId", async () => {
-    const response = await request(app)
-      .get(`/api/tickets/${ticketId}/attachments/${attachmentId}`)
-      .expect(400);
+    const response = await ownerAgent.get(`/api/tickets/${ticketId}/attachments/not-a-number`).expect(400);
 
     expect(response.body.error).toBeDefined();
   });

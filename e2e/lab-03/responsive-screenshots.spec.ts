@@ -111,8 +111,33 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
       await login(page, REQUESTER);
       await page.getByRole("button", { name: "My Tickets" }).click();
       await page.locator('[aria-label="Search tickets"]:visible').fill("TKT-E2E-000002");
+      // My Tickets: status and priority are badges with text labels, not raw enum text.
+      const listRow = page.getByRole("row", { name: /TKT-E2E-000002/ });
+      await expect(listRow.locator(".badge", { hasText: /^In Progress$/ })).toBeVisible();
+      await expect(listRow.locator(".badge", { hasText: /^LOW$/ })).toBeVisible();
+      await expect(listRow.getByText("IN_PROGRESS")).toHaveCount(0);
+      // The badged columns must actually be on screen: not clipped inside the
+      // table's scroll wrapper, and no filter label truncated.
+      const badgeBox = await listRow.locator(".badge", { hasText: /^In Progress$/ }).boundingBox();
+      const viewportWidth = page.viewportSize()!.width;
+      expect(badgeBox!.x, "status badge starts on screen").toBeGreaterThanOrEqual(0);
+      expect(badgeBox!.x + badgeBox!.width, "status badge ends before the right edge").toBeLessThanOrEqual(viewportWidth);
+      await expectTableFitsItsWrapper(page);
+      await expectSelectLabelsNotTruncated(page);
+      await expectNoHorizontalOverflow(page);
+      // Only now let the debounced search settle, so the screenshot shows the
+      // filtered list. (The measurements above deliberately ran first: in a full
+      // run an earlier spec's ticket with a long unbroken word in its summary is
+      // still in the list, which is what once pushed this table past its card.)
+      await expect(page.getByRole("row", { name: /TKT-E2E-000001/ })).toHaveCount(0);
+      await shot(page, "requester-my-tickets", viewportName);
+
       await page.getByRole("button", { name: "TKT-E2E-000002" }).click();
       await expect(page.getByText(REQUESTER_RESOLVE_TICKET)).toBeVisible();
+      // Ticket Detail: the same badges, labelled "In Progress" rather than `IN_PROGRESS`.
+      await expect(page.locator("dd .badge", { hasText: /^In Progress$/ })).toBeVisible();
+      await expect(page.locator("dd .badge", { hasText: /^LOW$/ })).toBeVisible();
+      await expect(page.getByText("IN_PROGRESS", { exact: true })).toHaveCount(0);
 
       // Both roles' Public Comments are shown...
       await expect(page.getByText(THREAD_STAFF_COMMENT)).toBeVisible();

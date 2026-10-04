@@ -11,6 +11,7 @@ import {
   fetchTickets,
 } from "./api.js";
 import TicketDetail from "./TicketDetail.js";
+import { PriorityBadge, STATUS_OPTIONS, StatusBadge } from "./ticketBadges.js";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -25,18 +26,9 @@ const SORT_OPTIONS = [
   { value: "summary-desc", label: "Summary (Z–A)", sortBy: "summary", sortDir: "desc" },
 ] as const;
 
-// Lab 3: currentStatus moved from Lab 2's free-text ("New") to a proper
-// TicketStatus enum.
-const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
-  { value: "NEW", label: "New" },
-  { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "WAITING_FOR_REQUESTER", label: "Waiting for Requester" },
-  { value: "RESOLVED", label: "Resolved" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "REOPENED", label: "Reopened" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
+// Lab 3: currentStatus is a proper TicketStatus enum (not Lab 2's free text);
+// labels, options and badges come from ./ticketBadges.tsx, shared with the
+// staff screens.
 
 // Lab 3: identity comes from the logged-in session (FR-08/BR-03) — always
 // scoped to the caller's own tickets, no Requester prop needed anymore.
@@ -184,7 +176,7 @@ export default function MyTickets() {
             onChange={(event) => setSearchInput(event.target.value)}
           />
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by category"
@@ -199,7 +191,7 @@ export default function MyTickets() {
             ))}
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by related system"
@@ -214,7 +206,7 @@ export default function MyTickets() {
             ))}
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by priority"
@@ -227,7 +219,7 @@ export default function MyTickets() {
             <option value="HIGH">High</option>
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Filter by status"
@@ -242,7 +234,7 @@ export default function MyTickets() {
             ))}
           </select>
         </div>
-        <div className="col-6 col-md-2">
+        <div className="col-12 col-sm-6">
           <select
             className="form-select"
             aria-label="Sort by"
@@ -273,16 +265,16 @@ export default function MyTickets() {
       {listState === "ready" && tickets.length > 0 && (
         <>
           <div className="table-responsive">
-            <table className="table table-sm align-middle">
+            <table className="table table-sm align-middle zg-table-phone-compact">
               <thead>
                 <tr>
                   <th scope="col">Ticket Number</th>
                   <th scope="col">Summary</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Related System</th>
+                  <th scope="col" className="d-none d-md-table-cell">Category</th>
+                  <th scope="col" className="d-none d-md-table-cell">Related System</th>
                   <th scope="col">Priority</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Created</th>
+                  <th scope="col" className="d-none d-md-table-cell">Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,12 +289,16 @@ export default function MyTickets() {
                         {ticket.ticketNumber}
                       </button>
                     </td>
-                    <td>{ticket.summary}</td>
-                    <td>{categoryName(ticket.categoryId)}</td>
-                    <td>{relatedSystemName(ticket.relatedSystemId)}</td>
-                    <td>{ticket.requestedPriority}</td>
-                    <td>{ticket.currentStatus}</td>
-                    <td>{new Date(ticket.createdAt).toLocaleString()}</td>
+                    <td className="text-break">{ticket.summary}</td>
+                    <td className="d-none d-md-table-cell">{categoryName(ticket.categoryId)}</td>
+                    <td className="d-none d-md-table-cell">{relatedSystemName(ticket.relatedSystemId)}</td>
+                    <td>
+                      <PriorityBadge priority={ticket.requestedPriority} />
+                    </td>
+                    <td>
+                      <StatusBadge status={ticket.currentStatus} />
+                    </td>
+                    <td className="d-none d-md-table-cell">{new Date(ticket.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

@@ -15,6 +15,7 @@ import {
   ticketAttachmentUrl,
   uploadAttachment,
 } from "./api.js";
+import { PriorityBadge, StatusBadge } from "./ticketBadges.js";
 
 // Mirrors server/src/app.ts's MAX_ACTIVE_ATTACHMENTS_PER_TICKET — a client-
 // side hint only (disables the upload control at the limit); the server is
@@ -308,10 +309,14 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
             <dd className="col-sm-9">{relatedSystemName(ticket.relatedSystemId)}</dd>
 
             <dt className="col-sm-3">Requested Priority</dt>
-            <dd className="col-sm-9">{ticket.requestedPriority}</dd>
+            <dd className="col-sm-9">
+              <PriorityBadge priority={ticket.requestedPriority} />
+            </dd>
 
             <dt className="col-sm-3">Status</dt>
-            <dd className="col-sm-9">{ticket.currentStatus}</dd>
+            <dd className="col-sm-9">
+              <StatusBadge status={ticket.currentStatus} />
+            </dd>
 
             <dt className="col-sm-3">Created</dt>
             <dd className="col-sm-9">{new Date(ticket.createdAt).toLocaleString()}</dd>

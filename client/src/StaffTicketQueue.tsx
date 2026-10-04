@@ -12,6 +12,7 @@ import {
   fetchStaffTickets,
 } from "./api.js";
 import StaffTicketDetail from "./StaffTicketDetail.js";
+import { PriorityBadge, STATUS_OPTIONS, StatusBadge } from "./ticketBadges.js";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -19,16 +20,6 @@ const SEARCH_DEBOUNCE_MS = 300;
 type LookupState = "loading" | "ready" | "error";
 type ListState = "loading" | "ready" | "error" | "forbidden";
 
-const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
-  { value: "NEW", label: "New" },
-  { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "WAITING_FOR_REQUESTER", label: "Waiting for Requester" },
-  { value: "RESOLVED", label: "Resolved" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "REOPENED", label: "Reopened" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
 
 // Only these four are sortable server-side (docs/lab-03/api-spec.md
 // "GET /api/staff/tickets") — the rest of the table's columns are display
@@ -39,41 +30,6 @@ const SORT_COLUMNS: { field: StaffTicketSortField; label: string }[] = [
   { field: "currentStatus", label: "Status" },
   { field: "updatedAt", label: "Last Updated" },
 ];
-
-function priorityBadgeClass(priority: Priority) {
-  switch (priority) {
-    case "HIGH":
-      return "badge text-bg-danger";
-    case "MEDIUM":
-      return "badge text-bg-warning";
-    case "LOW":
-    default:
-      return "badge text-bg-secondary";
-  }
-}
-
-function statusBadgeClass(status: TicketStatus) {
-  switch (status) {
-    case "RESOLVED":
-    case "CLOSED":
-      return "badge text-bg-success";
-    case "CANCELLED":
-      return "badge text-bg-secondary";
-    case "REOPENED":
-    case "WAITING_FOR_REQUESTER":
-      return "badge text-bg-warning";
-    case "IN_PROGRESS":
-      return "badge text-bg-info";
-    case "OPEN":
-    case "NEW":
-    default:
-      return "badge text-bg-secondary";
-  }
-}
-
-function statusLabel(status: TicketStatus) {
-  return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
-}
 
 function sortIndicator(active: boolean, sortDir: "asc" | "desc") {
   if (!active) return "";
@@ -419,17 +375,13 @@ export default function StaffTicketQueue() {
                     <td>{ticket.summary}</td>
                     <td className="d-none d-lg-table-cell">{categoryName(ticket.categoryId)}</td>
                     <td>
-                      <span className={priorityBadgeClass(ticket.requestedPriority)}>
-                        {ticket.requestedPriority}
-                      </span>
+                      <PriorityBadge priority={ticket.requestedPriority} />
                     </td>
                     <td>
-                      <span className={priorityBadgeClass(ticket.itPriority)}>{ticket.itPriority}</span>
+                      <PriorityBadge priority={ticket.itPriority} />
                     </td>
                     <td>
-                      <span className={statusBadgeClass(ticket.currentStatus)}>
-                        {statusLabel(ticket.currentStatus)}
-                      </span>
+                      <StatusBadge status={ticket.currentStatus} />
                     </td>
                     <td>{ticket.ownerName ?? "Unassigned"}</td>
                     <td className="d-none d-lg-table-cell">
@@ -459,18 +411,12 @@ export default function StaffTicketQueue() {
               >
                 <div className="d-flex justify-content-between align-items-center">
                   <strong>{ticket.ticketNumber}</strong>
-                  <span className={statusBadgeClass(ticket.currentStatus)}>
-                    {statusLabel(ticket.currentStatus)}
-                  </span>
+                  <StatusBadge status={ticket.currentStatus} />
                 </div>
                 <div>{ticket.summary}</div>
                 <div className="d-flex gap-2 mt-1">
-                  <span className={priorityBadgeClass(ticket.requestedPriority)}>
-                    Requested: {ticket.requestedPriority}
-                  </span>
-                  <span className={priorityBadgeClass(ticket.itPriority)}>
-                    IT: {ticket.itPriority}
-                  </span>
+                  <PriorityBadge priority={ticket.requestedPriority} prefix="Requested: " />
+                  <PriorityBadge priority={ticket.itPriority} prefix="IT: " />
                 </div>
                 <div className="text-muted small mt-1">
                   {ticket.ownerName ?? "Unassigned"} · Updated{" "}

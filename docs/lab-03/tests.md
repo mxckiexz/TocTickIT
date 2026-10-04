@@ -228,12 +228,13 @@ with `RequesterBanner.tsx`).
 | UI-15 | Staff Ticket Detail | Category and Related System are shown by name | Matches `ui-spec.md` §7 (FR-31) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 9, issue #53) |
 | UI-16 | Staff Ticket Detail | An active attachment's filename is a link through the staff route, opening in a new tab with `noopener`; a soft-removed attachment is struck through with its reason and is never a link | Matches `ui-spec.md` §7 (FR-29) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 9, issue #53) |
 | UI-17 | App Shell / Change Password | A "Change password" action next to Log out for each role; Cancel returns with nothing changed and no request sent; a wrong current password keeps the form open; success returns with "Password changed."; the forced first-login screen has neither the action nor a Cancel | Matches `ui-spec.md` §3 and §4.1 (FR-30, AC-33) | `client/tests/lab-03/AppShell.test.tsx`, `ChangePassword.test.tsx` | Pass (Feature 9, issue #53) |
+| UI-18 | Requester Ticket Detail, My Tickets, Staff Queue | Status and priority are badges with human-readable labels on every screen that shows them — `In Progress`, never `IN_PROGRESS`; the same value gets the same badge on the Requester list and the Staff Queue; every status has a label and one of the allowed semantic classes | Matches `ui-spec.md` §1 (sheet §7 "consistent badges for Ticket status, Requested Priority, IT Priority") | `client/tests/lab-03/ticketBadges.test.tsx` (the shared `client/src/ticketBadges.tsx` module), plus E2E assertions in `responsive-screenshots.spec.ts` | Pass (Feature 9, issue #53, after review). 12 of the 16 tests were seen failing on the old rendering before the screens were changed |
 
 ## 4. UI style conformance
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| STY-01 | Role/priority/status badges use only the tokens/classes in `ui-spec.md` §1 | No inline hex colors outside `theme.css`; badge classes match the mapping table | Partial — `styleConformance.test.tsx` proves what is built: every badge uses an allowed semantic class (`text-bg-success|warning|danger|secondary|info`) with a text label, priority maps HIGH → danger / MEDIUM → warning / LOW → secondary, and no inline hex/rgb in any Lab 3 screen (the single colour literal is a `var(--zg-pale-green, #eef7ee)` fallback). The spec's per-role badge colour mapping was **not** built; role/status badges use plain Bootstrap semantic classes |
+| STY-01 | Role/priority/status badges use only the tokens/classes in `ui-spec.md` §1 | No inline hex colors outside `theme.css`; badge classes match the mapping table | Partial — `styleConformance.test.tsx` proves what is built: every badge uses an allowed semantic class (`text-bg-success|warning|danger|secondary|info`) with a text label, priority maps HIGH → danger / MEDIUM → warning / LOW → secondary, and no inline hex/rgb in any Lab 3 screen (the single colour literal is a `var(--zg-pale-green, #eef7ee)` fallback). The spec's per-role badge colour mapping was **not** built; role/status badges use plain Bootstrap semantic classes. Since Feature 9 the Requester Ticket Detail and My Tickets use the same shared badges as the staff screens (UI-18) |
 | STY-02 | Editable vs. read-only field styling on Staff Ticket Detail (IT Priority vs. Requested Priority) | Read-only field carries `--zg-readonly-bg` styling, editable does not | Pass — component half in `styleConformance.test.tsx` (IT Priority is an enabled `<select>`, Requested Priority a read-only badge); stylesheet half in `e2e/lab-03/style.spec.ts` against the real loaded CSS (a disabled field computes to the gray-green token, an active one to the normal surface). The stylesheet half is Playwright because Vitest stubs CSS |
 | STY-03 | Every control in the app header (buttons and the role badge), for each role, against the header background; and at 375px no header label wraps | Contrast >= 4.5:1 measured from computed colours in a real browser; one line per label; no horizontal overflow | Pass — `e2e/lab-03/style.spec.ts` (Feature 9, issue #53). Written after finding that the Log out button had been green-on-green (contrast 1:1, invisible) since Feature 3; it failed on the old header (and on a first fix that wrapped labels), and passes now |
 
@@ -266,7 +267,7 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 382/382, client 129/129 after Feature 9) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 35-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
+| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 382/382, client 145/145 after Feature 9) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 35-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
 
 ## 9. E2E tests
 
@@ -573,14 +574,28 @@ defects the passing suites did not:
    the Feature 7 visual inspection did not notice its absence. Fixed, and guarded by STY-03,
    which measures real contrast per role and checks no label wraps at 375px.
 
+Review of PR #54 then added a fifth: the new Requester screenshots showed the **Requester Ticket
+Detail printing the raw enum** (`IN_PROGRESS`, plain `LOW`) where the staff screens use badges
+(sheet §7; first recorded here as a disclosed gap, which the reviewer rightly refused). The
+status/priority formatting is now one shared module, `client/src/ticketBadges.tsx`, used by the
+Requester Ticket Detail and My Tickets and the Staff Queue and Ticket Detail (three copies of
+the status labels and two of the priority colours were deleted). Capturing My Tickets for the
+evidence exposed two more defects on that Lab 2 screen, both found by the measuring checks
+rather than by eye: the filter dropdowns were ~86px wide and truncated ("All ca…", needing
+128–181px), and on a phone the Priority and Status columns were clipped off the card. Fixed
+(filters get half a row, a full row on phones; Category, Related System and Created are hidden on
+phones; compact text on phones). A full run then failed once because an earlier spec's ticket with
+a long unbroken word in its summary pushed the table 33px past its card — a real defect, not a
+flake — so summaries now break long words.
+
 Each fix was test-first and mutation-checked (removing the staff route's role gate, serving
 removed attachments, and restoring the old non-link filename each make the new tests fail).
 
 | Check (run after the last code change, sequentially) | Result |
 |---|---|
 | Server `npx vitest run` | **382/382** passed, 17 files |
-| Client `npx vitest run` | **129/129** passed, 12 files |
-| Playwright `npx playwright test` | **38/38** passed, twice in a row with identical database row counts (fixtures reset per run) |
+| Client `npx vitest run` | **145/145** passed, 13 files |
+| Playwright `npx playwright test` | **38/38** passed on the final run (fixtures reset per run). Two consecutive runs earlier in Feature 9 left identical database row counts (18 tickets, 12 comments, 5 notes, 3 attachments, 18 users); the counts were not re-measured after the badge/layout changes |
 | `npx tsc --noEmit` + build | clean on `server` and `client` |
 | `npx prisma migrate status` | up to date (no schema change in this feature) |
 
@@ -589,7 +604,7 @@ Related System and an attachment link), User Management, the new voluntary Chang
 screen, and — new, closing a gap Feature 8 disclosed — the Requester Ticket Detail
 (`requester-ticket-detail/`: a staff and a Requester Public Comment, the Internal Note
 asserted absent, and the "Problem Appears Resolved" confirming state), at
-desktop/tablet/mobile. The e2e fixture gained that comment thread; two consecutive full runs
+desktop/tablet/mobile, and `requester-my-tickets/` (the list with its badges, filters and phone layout). The e2e fixture gained that comment thread; two consecutive full runs
 left identical row counts (18 tickets, 12 comments, 5 notes, 3 attachments, 18 users).
 
 ## 13. Known gaps (disclosed, not fixed)
@@ -600,11 +615,6 @@ left identical row counts (18 tickets, 12 comments, 5 notes, 3 attachments, 18 u
 - **A11Y-01 / A11Y-02** — keyboard and focus-ring tests cover the Login screen only. Change
   Password, the Forbidden panels and the staff/admin controls are not covered by an automated
   accessibility test.
-- **Requester screens show raw status/priority text.** The Requester Ticket Detail prints the
-  status as `IN_PROGRESS` and the Requested Priority as plain `LOW`, where the staff screens use
-  badges ("In Progress", a coloured priority). Sheet §7 asks for consistent badges for status
-  and priority. Noticed while inspecting the new Requester screenshots; not fixed here because
-  it changes Lab 2's screen and its tests.
 - **UNIT-04** — no standalone helper exists; the case-insensitive comparison is a database
   index, tested through the API (see the row).
 - The two stale Lab 2 evidence-only Playwright scripts are excluded rather than reworked.

@@ -24,8 +24,17 @@ screens never needed):
 | Badge | Token reused | Mapping |
 |---|---|---|
 | Role badge | `.badge` + existing greens | Requester → outline secondary-green; IT Staff → solid secondary-green; Administrator → solid primary-green |
-| Priority badge | Bootstrap semantic classes, not new colors | LOW → `bg-secondary`, MEDIUM → `bg-warning text-dark`, HIGH → `bg-danger` (reuses `--zg-error`'s red family) |
-| Status badge | Bootstrap semantic classes | NEW/OPEN → `bg-secondary`; IN_PROGRESS/WAITING_FOR_REQUESTER → `bg-warning text-dark`; RESOLVED/CLOSED → `bg-success` (pale/primary green pairing); REOPENED → `bg-warning text-dark`; CANCELLED → `bg-secondary` with a strikethrough on the ticket number |
+| Priority badge | Bootstrap semantic classes, not new colors | LOW → `text-bg-secondary`, MEDIUM → `text-bg-warning`, HIGH → `text-bg-danger` |
+| Status badge | Bootstrap semantic classes | NEW/OPEN/CANCELLED → `text-bg-secondary`; IN_PROGRESS → `text-bg-info`; WAITING_FOR_REQUESTER/REOPENED → `text-bg-warning`; RESOLVED/CLOSED → `text-bg-success`. Labels are human-readable (`In Progress`, `Waiting for Requester`), never the raw enum |
+
+**One implementation.** The priority and status mappings and labels live in a single module,
+`client/src/ticketBadges.tsx`, used by the Requester My Tickets and Ticket Detail and by the
+IT Staff Queue and Ticket Detail, so a value looks the same on every screen (UI-18). The
+table above states what is *built*: an earlier draft of this spec listed different status
+colours (IN_PROGRESS as warning) and a strikethrough for CANCELLED that were never implemented;
+the Staff Queue's mapping shipped first and became the standard. Not built: the per-role
+badge mapping (Requester outline / IT Staff solid / Administrator solid-primary) — role
+badges are plain `text-bg-success` or `text-bg-secondary`.
 
 No color alone ever carries meaning — every badge also carries its text label (e.g. "HIGH",
 "In Progress"), matching Lab 2's existing "never color-only" rule.
@@ -299,6 +308,7 @@ artifacts/lab-03/screenshots/
   staff-queue/{desktop,tablet,mobile}.png
   staff-ticket-detail/{desktop,tablet,mobile}.png
   requester-ticket-detail/{desktop,tablet,mobile}.png   (+ confirm-resolved-*)
+  requester-my-tickets/{desktop,tablet,mobile}.png
   user-management/{desktop,tablet,mobile}.png
 ```
 

@@ -639,7 +639,7 @@ Nothing below is ticked on the strength of an intention.
       helper (the comparison is a database index, tested through the API), STY-01's per-role
       badge colour mapping was not built, and A11Y-01/02 cover the Login screen only.
 - [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 382/382 (17 files),
-      client 129/129 (12 files), Playwright 38/38, run on the Feature 9 branch (= `lab3-staging`
+      client 145/145 (13 files), Playwright 38/38, run on the Feature 9 branch (= `lab3-staging`
       plus the lab-sheet gap closure, issue #53; the Feature 8 release run was 370/117/26).
 - [x] Lab 2's existing suite (`server/tests/lab-01`, `lab-02`; `client/tests/lab-01`,
       `lab-02`; `e2e/lab-02` — Lab 1 has no e2e specs) still passes, **with the specific

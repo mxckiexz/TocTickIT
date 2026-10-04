@@ -97,7 +97,7 @@ test("E2E-05: a Requester posts a Public Comment and marks 'Problem Appears Reso
   await page.locator('[aria-label="Search tickets"]:visible').fill(RESOLVE_TICKET_NUMBER);
   await page.getByRole("button", { name: RESOLVE_TICKET_NUMBER }).click();
   await expect(page.getByText(REQUESTER_RESOLVE_TICKET)).toBeVisible();
-  await expect(page.locator("dd", { hasText: /^IN_PROGRESS$/ })).toBeVisible();
+  await expect(page.locator("dd .badge", { hasText: /^In Progress$/ })).toBeVisible();
 
   await page.getByLabel("Add a comment").fill(comment);
   await page.getByRole("button", { name: "Post comment" }).click();
@@ -107,7 +107,7 @@ test("E2E-05: a Requester posts a Public Comment and marks 'Problem Appears Reso
   await page.getByRole("button", { name: "Problem Appears Resolved" }).click();
   await page.getByRole("button", { name: "Yes, mark resolved" }).click();
   await expect(page.getByText(/You marked this as resolved on/)).toBeVisible();
-  await expect(page.locator("dd", { hasText: /^IN_PROGRESS$/ })).toBeVisible();
+  await expect(page.locator("dd .badge", { hasText: /^In Progress$/ })).toBeVisible();
 });
 
 // The IT Staff side of E2E-05: the Requester's signal is visible to staff,

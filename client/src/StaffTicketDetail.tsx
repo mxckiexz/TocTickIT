@@ -16,6 +16,7 @@ import {
   updateTicketItPriority,
   updateTicketStatus,
 } from "./api.js";
+import { PriorityBadge, STATUS_LABELS } from "./ticketBadges.js";
 
 const COMMENT_MAX_LENGTH = 2000;
 
@@ -41,28 +42,6 @@ const CONFIRMATION_REQUIRED_STATUSES = new Set<TicketStatus>([
   "CANCELLED",
 ]);
 
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  NEW: "New",
-  OPEN: "Open",
-  IN_PROGRESS: "In Progress",
-  WAITING_FOR_REQUESTER: "Waiting for Requester",
-  RESOLVED: "Resolved",
-  CLOSED: "Closed",
-  REOPENED: "Reopened",
-  CANCELLED: "Cancelled",
-};
-
-function priorityBadgeClass(priority: Priority) {
-  switch (priority) {
-    case "HIGH":
-      return "badge text-bg-danger";
-    case "MEDIUM":
-      return "badge text-bg-warning";
-    case "LOW":
-    default:
-      return "badge text-bg-secondary";
-  }
-}
 
 interface StaffTicketDetailProps {
   ticketId: number;
@@ -365,7 +344,7 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
 
         <dt className="col-sm-3">Requested Priority</dt>
         <dd className="col-sm-9">
-          <span className={priorityBadgeClass(ticket.requestedPriority)}>{ticket.requestedPriority}</span>
+          <PriorityBadge priority={ticket.requestedPriority} />
         </dd>
 
         <dt className="col-sm-3">IT Priority</dt>

@@ -19,10 +19,13 @@ Every review round and author response below is quoted verbatim from the pull re
 | 5 — IT Staff Ticket Detail & Workflow (issue #38) | [#49](https://github.com/mxckiexz/TocTickIT/pull/49) | 1 changes-requested → approved | Merged | Thanwarat1303 |
 | 6 — Administrator User Management (issue #39) | [#50](https://github.com/mxckiexz/TocTickIT/pull/50) | 3 changes-requested → approved | Merged | Thanwarat1303 |
 | 7 — E2E, Visual & Responsive Evidence (issue #40) | [#51](https://github.com/mxckiexz/TocTickIT/pull/51) | 1 changes-requested → approved | Merged | Thanwarat1303 |
+| Feature 8 — Release Integration (issue #41) | [#52](https://github.com/mxckiexz/TocTickIT/pull/52) | 1 changes-requested → approved | Merged | Thanwarat1303 |
+| Feature 9 — Lab 3 gap closure (issue #53) | [#54](https://github.com/mxckiexz/TocTickIT/pull/54) | 1 changes-requested → approved | Merged | Thanwarat1303 |
 
-**Feature 8 — Release Integration (issue #41):** this PR, and the final `lab3-staging` → `main` PR, are
-not in the table above because they have not been reviewed yet. This log only quotes reviews that
-happened; their rows and review text are added once Thanwarat1303 has reviewed them.
+**The final `lab3-staging` → `main` merge** is not a row above: by the author's explicit decision it was
+opened and merged without a separate review round. It carries no change beyond the pull requests above
+(all already reviewed and approved) and this log, which is why no review is quoted for it — nothing here
+is paraphrased or invented for it.
 
 ## PR #43 — Feature 1 — Sprint 3 Engineering Contract (issue #34)
 
@@ -426,12 +429,121 @@ happened; their rows and review text are added once Thanwarat1303 has reviewed t
 >
 > Approved.
 
+## PR #52 — Feature 8 — Release Integration (issue #41)
+
+[Feature 8: Release Integration (issue #41)](https://github.com/mxckiexz/TocTickIT/pull/52) · branch `feature/8-release-integration` · opened 2026-10-03 14:27:53 UTC · merged 2026-10-04 04:22:42 UTC · +1578/−106 across 24 files
+
+**Reviewer (changes requested)** — Thanwarat1303, 2026-10-04 04:09:55 UTC:
+
+> Changes requested — the release audit is close, but I found two inconsistencies that should be corrected before approval.
+>
+> 1. The authorization sweep is described as covering the whole protected API surface, but `GET /api/tickets/:id/attachments/:attachmentId` is missing from the `routes()` matrix in `authorization.api.test.ts`. The separate SEC-04 test only checks cross-Requester ownership and does not prove the route’s anonymous or wrong-role behavior.
+>
+> Please add the download route to the matrix and verify:
+>
+> - no session → `401`
+> - the owning Requester passes the authentication/role gate
+> - IT Staff → `403`
+> - Administrator → `403`
+>
+> After adding it, please update the stated matrix size from 24 routes to 25 wherever it is mentioned.
+>
+> 2. The SEC-08 row in `docs/lab-03/tests.md` uses a malformed `POST /api/auth/login` as its example and says it should return `401`. Login is intentionally public, and the existing auth test correctly expects `400` for a missing email/password. The implementation in `authorization.api.test.ts` already uses protected routes such as `POST /api/tickets` and `/api/admin/users`, so please update the documentation example to match the actual test and authentication contract.
+>
+> The seed, release documentation, disclosed partial gaps, and the remaining release tests otherwise look consistent from the code review.
+
+**Author's response** — mxckiexz, 2026-10-04 04:16:23 UTC:
+
+> Both points fixed in f00a6b4.
+>
+> **1. Download route missing from the authorization matrix.** `GET /api/tickets/:id/attachments/:attachmentId` is now in `routes()` (25 routes), backed by a real attachment row and file so the owner's case is a genuine `200`, not a `404` for an id that doesn't exist. A dedicated block checks it directly:
+> - no session → `401`
+> - owning Requester → `200`, with the file's content type and body
+> - IT Staff → `403` and Administrator → `403`, with no file content in the response
+> - another Requester → `404`, never the file
+>
+> I mutation-checked it: removing `requireRole("REQUESTER")` from the route makes the sweep and the IT Staff/Administrator test fail (they get `404` instead of `403`); removing `requireAuth` fails the sweep and the no-session, owner and cross-Requester tests. `app.ts` was restored afterwards (no diff). The matrix size is now 25 in `tests.md`. Server suite re-run: 370/370, and the fixture file is removed in `afterAll`.
+>
+> **2. SEC-08 example.** You're right: login is public, so a malformed login is a plain `400` and proves nothing about the ladder. The row now uses the protected routes the test actually uses (`POST /api/tickets` and `/api/admin/users` for no-session + invalid body, plus the wrong-role and nonexistent-resource cases), and I checked each case in the row against the test. While there I also made the 404-over-409 wording precise: the test sends a valid status change to a nonexistent ticket.
+
+**Reviewer (approved)** — Thanwarat1303, 2026-10-04 04:22:31 UTC:
+
+> Approved. I rechecked both review fixes in the updated branch.
+>
+> The attachment-download endpoint is now included in the 25-route authorization matrix and is also covered by a dedicated test using a real database row and physical fixture file. The test verifies the complete access behavior: anonymous requests receive `401`, the owning Requester receives the actual file with `200`, IT Staff and Administrator receive `403`, and another Requester receives `404`. The rejected responses are also checked to ensure that no file content is disclosed, and both the database fixture and physical file are cleaned up afterward.
+>
+> The SEC-08 documentation now correctly uses protected endpoints rather than the public login route, and its examples match the implemented tests for the `401 → 403 → 400 → 404 → 409` precedence rules.
+>
+> Both requested changes are fully addressed. No further blocking issues found.
+
+
+## PR #54 — Feature 9 — Lab 3 gap closure (issue #53)
+
+[Feature 9: Lab 3 gap closure — lab-sheet audit (issue #53)](https://github.com/mxckiexz/TocTickIT/pull/54) · branch `feature/9-lab3-gap-closure` · opened 2026-10-04 04:43:55 UTC · merged 2026-10-04 05:30:41 UTC · +1241/−171 across 52 files
+
+**Author's response** — mxckiexz, 2026-10-04 04:59:07 UTC:
+
+> Added the missing screenshot set (cfcba93): `artifacts/lab-03/screenshots/requester-ticket-detail/` at desktop/tablet/mobile, plus the "Problem Appears Resolved" confirming state. The spec asserts both roles' Public Comments are shown and the Internal Note is never on a Requester's page. Playwright is now 38/38, run twice with identical database row counts. While inspecting it I noticed the Requester detail prints the status as raw `IN_PROGRESS` and the priority as plain text instead of badges (sheet §7); that is recorded in `tests.md` §13 and not fixed here, since it touches a Lab 2 screen and its tests.
+
+**Reviewer (changes requested)** — Thanwarat1303, 2026-10-04 05:07:49 UTC:
+
+> Changes requested — the four primary gap-closure fixes look correct, but the new Requester Ticket Detail screenshots reveal one remaining Lab 3 UI requirement that should be fixed before this goes to `main`.
+>
+> `client/src/TicketDetail.tsx` still renders `requestedPriority` and `currentStatus` as raw text:
+>
+> - `LOW` is plain text rather than a priority badge.
+> - `IN_PROGRESS` is shown as the raw enum value rather than the user-facing “In Progress” label and status badge.
+>
+> This is visible in the newly committed desktop, tablet, and mobile screenshots. Lab sheet §7 requires consistent badges for Ticket status and Requested Priority, and `ui-spec.md` §1 already defines the shared priority/status badge mappings and human-readable status labels.
+>
+> I do not think this should remain only as a disclosed gap. Although `TicketDetail` originated in Lab 2, Lab 3 explicitly extends this same screen with Public Comments and “Problem Appears Resolved,” and Part 9 evaluates visual consistency across the completed application.
+>
+> Please reuse or extract the same priority/status formatting used by the Staff Queue, add a component regression test for the Requester Ticket Detail, regenerate the requester-detail screenshot set, and remove this item from `tests.md` §13.
+>
+> The staff attachment route, shared file-serving helper, Category/Related System names, voluntary password-change flow, header contrast fix, and their associated tests otherwise look correct.
+
+**Author's response** — mxckiexz, 2026-10-04 05:18:11 UTC:
+
+> Fixed in bd1bd78 — you were right that this should not stay a disclosed gap.
+>
+> **The fix.** Status and priority formatting is now one module, `client/src/ticketBadges.tsx` (labels, badge classes, `PriorityBadge`/`StatusBadge`, the status filter options), reused by the Requester Ticket Detail and My Tickets and by the Staff Queue and Ticket Detail. I reused the Staff Queue's mapping and deleted the three copies of the status labels and two of the priority colours. The Requester screens now show `In Progress` and a priority badge instead of `IN_PROGRESS` / plain `LOW`. My Tickets had the same raw text in its table, so I fixed it too.
+>
+> **Tests.** `client/tests/lab-03/ticketBadges.test.tsx` (UI-18, 16 tests): every status has a human label and an allowed class; the Requester Ticket Detail shows badges rather than the enum, for all 8 statuses; My Tickets does too; and the same status/priority gets the same badge class on the Requester list and the Staff Queue. 12 of the 16 failed on the old rendering before I changed the screens. The e2e assertions that matched `IN_PROGRESS` were updated, and the screenshot spec now asserts the badges.
+>
+> **Two things I found because of it, both on the Lab 2 My Tickets screen** (I captured it so the evidence covers the screen I changed):
+> - the filter dropdowns were ~86px wide and truncated ("All ca…", needing 128–181px), and on a phone the Priority and Status columns were clipped off the card. The existing clipping/truncation checks, pointed at this screen, failed with those numbers. Fixed: filters get half a row (a full row on phones); Category, Related System and Created are hidden on phones; compact text on phones.
+> - a full run then failed once (not in isolation): an earlier spec's ticket whose summary has a long unbroken word pushed the table 33px past its card. A real defect rather than a flake, so summaries now break long words.
+>
+> **Docs.** The `tests.md` §13 item is removed; UI-18 added; STY-01 and §12 updated; `ui-spec.md` §1 now describes the mapping that is actually built (it had listed different status colours and a CANCELLED strikethrough that were never implemented; the per-role badge mapping is still not built and is stated as such). The requester-detail set is regenerated and there is a new `requester-my-tickets/` set, all opened and inspected.
+>
+> Regression after the last change: server 382/382, client 145/145, Playwright 38/38, tsc and build clean.
+
+**Reviewer (approved)** — Thanwarat1303, 2026-10-04 05:28:02 UTC:
+
+> Approved — the requested badge and responsive-layout fixes are correctly implemented.
+>
+> I verified that:
+>
+> - Status and priority presentation is centralized in `ticketBadges.tsx` and reused across Requester Ticket Detail, My Tickets, Staff Queue, and Staff Ticket Detail.
+> - Requester screens now show human-readable status labels and semantic badges (`In Progress`, not `IN_PROGRESS`) with consistent classes across roles.
+> - UI-18 covers all eight statuses, priority mappings, Requester rendering, and cross-screen consistency.
+> - My Tickets keeps Priority and Status visible on mobile, gives filters sufficient width, and safely wraps long unbroken summaries.
+> - The regenerated desktop/tablet/mobile screenshots confirm that the important content is visible without clipping.
+> - `tests.md` and `ui-spec.md` accurately document the implementation and the remaining non-blocking gaps.
+>
+> I also independently ran the client suite: 145/145 tests passed, and both TypeScript checking and the production build completed successfully.
+>
+> No blocking findings from this review.
+
+
 ## Overall reflection
 
-Across the nine pull requests in this log (seven feature PRs, the revert #46, and the re-merge #48), the reviewer requested changes 11 times and approved 8 times. Reading the rounds back, the findings fall into three groups, and they changed how the rest of the sprint was built:
+Across the eleven pull requests in this log (nine feature PRs, the revert #46, and the re-merge #48), the reviewer requested changes 13 times and approved 10 times. Reading the rounds back, the findings fall into four groups, and they changed how the rest of the sprint was built:
 
 1. **The contract disagreed with itself (PR #43).** The first two rounds were not about code at all: Administrator ticket access was "none" in some sections and "full" in others, the required authorization matrix and the confirmation requirement on status transitions were missing, and the docs claimed Lab 2's tests would pass "unmodified" when they could not. Fixing the spec before any code existed was cheaper than finding the same contradictions in four branches' implementations — and every later feature was built against a contract the reviewer had already signed off.
 2. **Check-then-act races, three times (PRs #49 and #50).** The ticket `claim` read then wrote (two staff could both "win"), the case-insensitive email check read then wrote (two requests could both pass), and the last-active-Administrator count read then wrote (two admins could demote themselves at once and leave zero). Each was found by the reviewer, not by the author's own tests, because a sequential test cannot see a race. The pattern is the lesson: an invariant that matters must be enforced by the database or serialized (an atomic conditional update, a `LOWER(email)` unique index, an advisory lock) and proved by a test that runs the two requests concurrently — each fix above ships with exactly such a regression test, verified to fail without the fix.
 3. **Process and test hygiene (PRs #45, #50, #51).** PR #45 was merged by the author while the reviewer's changes-requested review was still the latest on it; it had to be reverted and re-merged through an approved PR (#46, #48). The review gate only works if nobody merges around it, including the author. Separately, the reviewer caught test-suite problems the author had not: race tests that deactivated administrators other test files depend on (fixed by running files serially), and an end-to-end suite that was not repeatable because it left tickets behind (fixed with one managed fixture prefix and a full sweep).
 
-What I would do differently: write the concurrent regression test at the same time as the first implementation of any rule phrased "at most one" / "at least one" / "unique", rather than after the reviewer asks; and treat "changes requested" as a hard stop on merging, not a state to resolve later.
+4. **Green tests that did not prove the requirement (PRs #52 and #54).** The release PR was reviewed for consistency between the tests and the documents (a route missing from the authorization matrix; a wrong example in a test-plan row). Then the author audited the built system against the lab sheet itself rather than against our own specification, and found requirements that were simply not met although every suite passed: IT Staff could not open attachments, there was no way to change one's own password after first login, the staff detail omitted Category and Related System, and the Log out button was invisible (green on green, contrast 1:1). The reviewer's last round then caught the Requester screens printing raw `IN_PROGRESS` where the staff screens used badges — and refused to leave it as a disclosed gap. The lesson: tests prove what someone thought to test; each of these needed a different kind of check (the lab sheet, a screenshot read with the right question, a measured contrast ratio), and each now has one.
+
+What I would do differently: write the concurrent regression test at the same time as the first implementation of any rule phrased "at most one" / "at least one" / "unique", rather than after the reviewer asks; audit against the lab sheet *before* the release PR instead of after it; and treat "changes requested" as a hard stop on merging, not a state to resolve later.

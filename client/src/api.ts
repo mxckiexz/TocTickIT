@@ -383,11 +383,19 @@ export async function fetchStaffTickets(params: FetchStaffTicketsParams): Promis
 // (docs/lab-03/api-spec.md "GET /api/staff/tickets/:id" onward)
 // ---------------------------------------------------------------------------
 export type StaffTicket = Ticket & {
+  categoryName: string;
+  relatedSystemName: string;
   requesterName: string;
   requesterEmail: string;
   ownerName: string | null;
   ownerEmail: string | null;
 };
+
+// Not a fetch — the URL IT Staff / Administrator open an attachment from (the
+// read-only staff route; the Requester route above stays Requester-only).
+export function staffTicketAttachmentUrl(ticketId: number, attachmentId: number): string {
+  return `${API_URL}/api/staff/tickets/${ticketId}/attachments/${attachmentId}`;
+}
 
 export interface StaffTicketDetailResponse {
   ticket: StaffTicket;

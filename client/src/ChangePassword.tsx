@@ -5,12 +5,17 @@ type SubmitState = "idle" | "submitting";
 
 interface ChangePasswordProps {
   onChanged: (user: AuthUser) => void;
+  // Present only when the user opened this screen themselves from the app
+  // shell (ui-spec.md §4.1). The forced first-login screen passes none, so it
+  // has no way out other than saving a new password (AC-02).
+  onCancel?: () => void;
 }
 
-// ui-spec.md §4 — the forced Change Password screen. Rendered in place of
-// the app shell whenever the current user's mustChangePassword is true; no
-// navigation surrounds it (AC-02).
-export default function ChangePassword({ onChanged }: ChangePasswordProps) {
+// ui-spec.md §4 — the Change Password screen. Forced mode is rendered in place
+// of the app shell whenever the current user's mustChangePassword is true; no
+// navigation surrounds it (AC-02). Voluntary mode (onCancel given) is the same
+// form, reached from the shell's "Change password" action.
+export default function ChangePassword({ onChanged, onCancel }: ChangePasswordProps) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -52,9 +57,11 @@ export default function ChangePassword({ onChanged }: ChangePasswordProps) {
       </div>
       <div className="zg-surface">
         <h2 className="h5">Change your password</h2>
-        <p className="text-muted small">
-          Your account still has a default password. Choose a new one before continuing.
-        </p>
+        {!onCancel && (
+          <p className="text-muted small">
+            Your account still has a default password. Choose a new one before continuing.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="mb-3">
@@ -118,6 +125,16 @@ export default function ChangePassword({ onChanged }: ChangePasswordProps) {
           <button type="submit" className="btn btn-success w-100" disabled={!canSubmit}>
             {submitState === "submitting" ? "Saving…" : "Save password"}
           </button>
+          {onCancel && (
+            <button
+              type="button"
+              className="btn btn-outline-success w-100 mt-2"
+              onClick={onCancel}
+              disabled={submitState === "submitting"}
+            >
+              Cancel
+            </button>
+          )}
         </form>
       </div>
     </div>

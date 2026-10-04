@@ -24,8 +24,17 @@ screens never needed):
 | Badge | Token reused | Mapping |
 |---|---|---|
 | Role badge | `.badge` + existing greens | Requester → outline secondary-green; IT Staff → solid secondary-green; Administrator → solid primary-green |
-| Priority badge | Bootstrap semantic classes, not new colors | LOW → `bg-secondary`, MEDIUM → `bg-warning text-dark`, HIGH → `bg-danger` (reuses `--zg-error`'s red family) |
-| Status badge | Bootstrap semantic classes | NEW/OPEN → `bg-secondary`; IN_PROGRESS/WAITING_FOR_REQUESTER → `bg-warning text-dark`; RESOLVED/CLOSED → `bg-success` (pale/primary green pairing); REOPENED → `bg-warning text-dark`; CANCELLED → `bg-secondary` with a strikethrough on the ticket number |
+| Priority badge | Bootstrap semantic classes, not new colors | LOW → `text-bg-secondary`, MEDIUM → `text-bg-warning`, HIGH → `text-bg-danger` |
+| Status badge | Bootstrap semantic classes | NEW/OPEN/CANCELLED → `text-bg-secondary`; IN_PROGRESS → `text-bg-info`; WAITING_FOR_REQUESTER/REOPENED → `text-bg-warning`; RESOLVED/CLOSED → `text-bg-success`. Labels are human-readable (`In Progress`, `Waiting for Requester`), never the raw enum |
+
+**One implementation.** The priority and status mappings and labels live in a single module,
+`client/src/ticketBadges.tsx`, used by the Requester My Tickets and Ticket Detail and by the
+IT Staff Queue and Ticket Detail, so a value looks the same on every screen (UI-18). The
+table above states what is *built*: an earlier draft of this spec listed different status
+colours (IN_PROGRESS as warning) and a strikethrough for CANCELLED that were never implemented;
+the Staff Queue's mapping shipped first and became the standard. Not built: the per-role
+badge mapping (Requester outline / IT Staff solid / Administrator solid-primary) — role
+badges are plain `text-bg-success` or `text-bg-secondary`.
 
 No color alone ever carries meaning — every badge also carries its text label (e.g. "HIGH",
 "In Progress"), matching Lab 2's existing "never color-only" rule.
@@ -54,7 +63,7 @@ below the button.
 ## 3. App Shell (replaces `RequesterBanner` / `DevRequesterPicker`)
 
 `App.tsx`'s `.zg-app-header` now shows the authenticated user's name and role badge instead
-of the ticket-flow title bar, plus a "Log out" action. Below it, role-scoped navigation
+of the ticket-flow title bar, plus a "Change password" action (§4.1) and a "Log out" action. Below it, role-scoped navigation
 replaces the old unconditional "New Ticket / My Tickets" button group:
 
 | Role | Navigation shown |
@@ -79,7 +88,7 @@ route directly still gets `403` regardless.
 there is no "switch requester" affordance anywhere in Lab 3; identity comes only from the
 session.
 
-## 4. Change Password (forced) (new — Feature: Authentication)
+## 4. Change Password (forced and voluntary) (new — Feature: Authentication)
 
 Shown in place of the app shell whenever the current user's `mustChangePassword` is true —
 whether that's a freshly-migrated Lab 2 Requester, a newly created user, or someone whose
@@ -99,6 +108,15 @@ button. No navigation is rendered around it — this screen blocks everything el
 | Validation error | Inline per-field messages (too short, mismatch with confirm, same as current) |
 | `401` (wrong current password) | "Current password is incorrect." above the form |
 | Success | Proceeds into the normal role-scoped app shell (AC-09) |
+
+### 4.1 Voluntary change (Feature 9, FR-30)
+
+The same screen is also reached from the app shell's **Change password** action (every role,
+next to Log out). Differences from the forced mode: the "your account still has a default
+password" sentence is not shown, and a **Cancel** button returns to the shell with nothing
+changed. On success it returns to the shell and shows a "Password changed." confirmation
+above the content. The forced first-login screen has no Cancel and no such action in the
+header (AC-02) — it can only be left by saving a new password.
 
 ## 5. Requester Ticket Detail — additions (extends Lab 2's `TicketDetail`)
 
@@ -171,6 +189,12 @@ muted text. Filters collapse into a single "Filters" disclosure button above the
 
 Same base layout as §5 (ticket fields grouped, attachments), plus:
 
+- **Category and Related System**: shown by name in the ticket fields (FR-31), as on the Lab 2
+  screen this one extends.
+- **Attachments**: each active attachment's filename is a link that opens the file in a new tab
+  through the read-only staff route (FR-29); a soft-removed attachment stays visible,
+  struck through with its removal reason, and is never a link. IT Staff cannot add or remove
+  attachments here.
 - **Ownership control**: "Claim this ticket" button when unassigned; when assigned, shows
   the current owner's name with a "Reassign" action opening a dropdown of active IT Staff
   users (sourced from `GET /api/staff/assignable-users` — never Administrator, who cannot
@@ -279,9 +303,12 @@ at desktop/tablet/mobile widths and stored under:
 
 ```
 artifacts/lab-03/screenshots/
-  authentication/{desktop,tablet,mobile}.png
+  authentication/{desktop,tablet,mobile}.png   (+ login-error-*, change-password-* forced,
+                                                  change-password-voluntary-*)
   staff-queue/{desktop,tablet,mobile}.png
   staff-ticket-detail/{desktop,tablet,mobile}.png
+  requester-ticket-detail/{desktop,tablet,mobile}.png   (+ confirm-resolved-*)
+  requester-my-tickets/{desktop,tablet,mobile}.png
   user-management/{desktop,tablet,mobile}.png
 ```
 
@@ -323,6 +350,16 @@ part, with what remains stated. Reference widths used: 1280 / 800 / 375px (Playw
       above the filters, and the filters share the row equally (the first attempt still
       clipped "All related systems" by ~12px; a measured-text check on every visible
       dropdown now guards it, and was confirmed to fail on the old layout).
+- [x] The app header's actions ("Change password", "Log out") are visible and keep their
+      labels on one line at every width. **A defect the Feature 7 inspection missed:** from
+      Feature 3 until Feature 9 the Log out button was `btn-outline-success` — green text and
+      border on the green header, contrast exactly 1:1 — so it did not appear in any
+      screenshot, although it existed and every functional test could click it. Found in
+      Feature 9 by looking at the screenshots again with a different question ("where is
+      Log out?"). Fixed with `btn-outline-light`; STY-03 now measures real contrast
+      (>= 4.5:1) for every header control for each role, and checks that no label wraps at
+      375px (a first fix was visible but wrapped "Change password" onto two lines; that
+      check was written first and failed on it).
 - [x] Internal Notes are visually unmistakable from Public Comments on the IT Staff Ticket
       Detail screen (§7): tinted, bordered panel with an "Internal — IT Staff only" label,
       at all three widths.

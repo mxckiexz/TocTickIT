@@ -378,8 +378,10 @@ established for `GET /api/tickets`.
 
 Returns any ticket (no ownership restriction, since every IT Staff/Administrator may see
 every ticket) with its full detail: ticket fields, requester's name/email, owner's
-name/email (nullable), attachment list, Public Comments, and Internal Notes all in one
-response, to back the Ticket Detail screen in one call.
+name/email (nullable), the Category and Related System **names**
+(`categoryName`, `relatedSystemName` — the ids stay too; an inactive Category or Related
+System still names the ticket it was filed under), attachment list, Public Comments, and
+Internal Notes all in one response, to back the Ticket Detail screen in one call.
 
 ### Responses
 
@@ -388,6 +390,20 @@ response, to back the Ticket Detail screen in one call.
 | `200 OK` | Ticket exists | `{ ticket, attachments, comments, notes }` |
 | `401 / 403` | As above | Standard shapes |
 | `404 Not Found` | Ticket doesn't exist | `{ "error": "Ticket not found." }` |
+
+## `GET /api/staff/tickets/:id/attachments/:attachmentId`
+
+Added by Feature 9 (FR-29, BR-43). Opens one attachment of any ticket, inline — the staff
+counterpart of the Requester's download route, with the same headers (`Content-Type` from the
+stored MIME type, `Content-Disposition: inline` with an RFC 5987 filename). Read-only; no
+ownership scope. Role required: `IT_STAFF` or `ADMINISTRATOR`.
+
+| Status | When | Body |
+|---|---|---|
+| `200 OK` | Ticket and an active attachment of that ticket exist | The file |
+| `400 Bad Request` | Non-numeric ticket id or attachment id | `{ "error": "Invalid ticket id." }` / `{ "error": "Invalid attachment id." }` |
+| `401` / `403` | No session / a Requester | Standard shapes, no file content |
+| `404 Not Found` | Ticket missing, attachment missing, attachment belongs to another ticket, or soft-removed | `{ "error": "Ticket not found." }` / `{ "error": "Attachment not found." }` |
 
 ## `POST /api/staff/tickets/:id/claim`
 

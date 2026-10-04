@@ -22,6 +22,42 @@ function fillForm(current: string, next: string, confirm: string) {
   fireEvent.change(screen.getByLabelText(/Confirm new password/i), { target: { value: confirm } });
 }
 
+// UI-17 (sheet section 7: "permitted profile/password actions") — the same
+// screen, opened voluntarily from the app shell, can be cancelled; the forced
+// first-login screen cannot.
+describe("ChangePassword — voluntary mode (UI-17)", () => {
+  it("offers Cancel when opened voluntarily, and Cancel changes nothing", () => {
+    const changePassword = vi.spyOn(api, "changePassword");
+    const onCancel = vi.fn();
+    render(<ChangePassword onChanged={vi.fn()} onCancel={onCancel} />);
+
+    expect(screen.getByRole("heading", { name: "Change your password" })).toBeInTheDocument();
+    expect(screen.queryByText(/still has a default password/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(changePassword).not.toHaveBeenCalled();
+  });
+
+  it("offers no Cancel on the forced first-login screen (AC-02)", () => {
+    render(<ChangePassword onChanged={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.getByText(/still has a default password/i)).toBeInTheDocument();
+  });
+
+  it("a wrong current password shows the error and keeps the form open", async () => {
+    vi.spyOn(api, "changePassword").mockRejectedValue(new ApiError("Unauthorized", 401));
+    const onChanged = vi.fn();
+    render(<ChangePassword onChanged={onChanged} onCancel={vi.fn()} />);
+
+    fillForm("WrongPass1", "NewPassword1", "NewPassword1");
+    fireEvent.click(screen.getByRole("button", { name: /Save password/i }));
+
+    expect(await screen.findByText("Current password is incorrect.")).toBeInTheDocument();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
 // UI-03
 describe("ChangePassword", () => {
   it("shows field-level validation errors returned by the API (400)", async () => {

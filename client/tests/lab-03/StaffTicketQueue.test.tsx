@@ -272,6 +272,8 @@ describe("StaffTicketQueue", () => {
     vi.spyOn(api, "fetchStaffTicketDetail").mockResolvedValue({
       ticket: {
         ...staffTicket(),
+        categoryName: "Hardware",
+        relatedSystemName: "Corporate Laptop",
         requesterEmail: "jennifer.anderson@toktickit.test",
         ownerEmail: null,
       },

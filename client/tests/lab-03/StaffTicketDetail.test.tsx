@@ -15,7 +15,9 @@ function staffTicket(overrides: Partial<api.StaffTicket> = {}): api.StaffTicket 
     ownerName: null,
     ownerEmail: null,
     categoryId: 1,
+    categoryName: "Hardware",
     relatedSystemId: 1,
+    relatedSystemName: "Corporate Laptop",
     summary: "Laptop battery drains quickly",
     description: "Battery drains much faster than usual.",
     requestedPriority: "MEDIUM",
@@ -55,6 +57,52 @@ describe("StaffTicketDetail", () => {
     expect(screen.getByText(/jennifer.anderson@toktickit.test/)).toBeInTheDocument();
     expect(screen.getByText("Laptop battery drains quickly")).toBeInTheDocument();
     expect(screen.getByText("MEDIUM")).toBeInTheDocument();
+  });
+
+  // UI-15 (sheet 8.4: extends the Lab 2 ticket screen, which names both)
+  it("shows the Category and Related System by name, not by id (UI-15)", async () => {
+    mockDetail(staffTicket({ categoryName: "Network", relatedSystemName: "Campus Wi-Fi" }));
+    render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
+
+    await screen.findByRole("heading", { name: "TKT-2026-000001" });
+    const category = screen.getByText("Category").nextElementSibling;
+    const relatedSystem = screen.getByText("Related System").nextElementSibling;
+    expect(category).toHaveTextContent("Network");
+    expect(relatedSystem).toHaveTextContent("Campus Wi-Fi");
+  });
+
+  describe("Attachments (UI-16)", () => {
+    const active = {
+      id: 7,
+      ticketId: 1,
+      originalFilename: "screenshot.png",
+      mimeType: "image/png",
+      sizeBytes: 2048,
+      createdAt: "2026-09-01T10:00:00.000Z",
+      removedAt: null,
+      removalReason: null,
+    };
+
+    it("opens an active attachment through the staff route, in a new tab", async () => {
+      mockDetail(staffTicket(), { attachments: [active] });
+      render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
+
+      const link = await screen.findByRole("link", { name: "screenshot.png" });
+      expect(link.getAttribute("href")).toMatch(/\/api\/staff\/tickets\/1\/attachments\/7$/);
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link.getAttribute("rel")).toMatch(/noopener/);
+    });
+
+    it("never links a soft-removed attachment (it is struck through, with its reason)", async () => {
+      mockDetail(staffTicket(), {
+        attachments: [{ ...active, removedAt: "2026-09-02T10:00:00.000Z", removalReason: "Wrong file" }],
+      });
+      render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
+
+      expect(await screen.findByText("screenshot.png")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "screenshot.png" })).not.toBeInTheDocument();
+      expect(screen.getByText(/Wrong file/)).toBeInTheDocument();
+    });
   });
 
   it("shows a 'Ticket not found.' error for a 404", async () => {

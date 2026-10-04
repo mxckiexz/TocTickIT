@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import request from "supertest";
 import type { TicketStatus } from "@prisma/client";
 import { app } from "../../src/app.js";
@@ -10,6 +13,9 @@ import {
   isLegalStatusTransition,
   statusRequiresConfirmation,
 } from "../../src/ticketStatus.js";
+
+// Same directory the download routes serve from (server/uploads).
+const UPLOAD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads");
 
 const ALL_STATUSES: TicketStatus[] = [
   "NEW",
@@ -76,6 +82,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
   let categoryId: number;
   let relatedSystemId: number;
   const createdTicketIds: number[] = [];
+  const createdUploadFiles: string[] = [];
 
   beforeAll(async () => {
     const prisma = getPrisma();
@@ -109,6 +116,8 @@ describe("IT Staff Ticket Detail & Workflow", () => {
     const prisma = getPrisma();
     await prisma.internalNote.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
+    await prisma.attachment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
+    for (const file of createdUploadFiles) rmSync(path.join(UPLOAD_DIR, file), { force: true });
     await prisma.ticket.deleteMany({ where: { id: { in: createdTicketIds } } });
     await deleteFixtureUser(requesterEmail);
     await deleteFixtureUser(staffAEmail);
@@ -136,7 +145,51 @@ describe("IT Staff Ticket Detail & Workflow", () => {
     return ticket;
   }
 
+  // A real attachment (row + file on disk) on the given ticket.
+  async function createAttachment(ticketId: number, body: string, overrides: Record<string, unknown> = {}) {
+    const storedFilename = `staffdetail-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`;
+    mkdirSync(UPLOAD_DIR, { recursive: true });
+    writeFileSync(path.join(UPLOAD_DIR, storedFilename), body);
+    createdUploadFiles.push(storedFilename);
+    return getPrisma().attachment.create({
+      data: {
+        ticketId,
+        originalFilename: "evidence.txt",
+        storedFilename,
+        mimeType: "text/plain",
+        sizeBytes: body.length,
+        ...overrides,
+      },
+    });
+  }
+
   describe("GET /api/staff/tickets/:id", () => {
+    // API-62 (sheet 8.4: the staff screen extends Lab 2's Ticket screen, which
+    // shows Category and Related System — names, not bare ids)
+    it("returns the Category and Related System names, not just their ids", async () => {
+      const prisma = getPrisma();
+      const category = await prisma.category.findUniqueOrThrow({ where: { id: categoryId } });
+      const relatedSystem = await prisma.relatedSystem.findUniqueOrThrow({ where: { id: relatedSystemId } });
+      const ticket = await createTicket();
+
+      const response = await staffAAgent.get(`/api/staff/tickets/${ticket.id}`).expect(200);
+
+      expect(response.body.ticket.categoryName).toBe(category.name);
+      expect(response.body.ticket.relatedSystemName).toBe(relatedSystem.name);
+      expect(response.body.ticket.categoryId).toBe(categoryId);
+      expect(response.body.ticket.relatedSystemId).toBe(relatedSystemId);
+    });
+
+    it("still names the Category of a ticket whose Category was deactivated after it was filed", async () => {
+      const prisma = getPrisma();
+      const archived = await prisma.category.findFirstOrThrow({ where: { isActive: false } });
+      const ticket = await createTicket({ categoryId: archived.id });
+
+      const response = await staffAAgent.get(`/api/staff/tickets/${ticket.id}`).expect(200);
+
+      expect(response.body.ticket.categoryName).toBe(archived.name);
+    });
+
     it("rejects an unauthenticated request", async () => {
       const ticket = await createTicket();
       const response = await request(app).get(`/api/staff/tickets/${ticket.id}`).expect(401);
@@ -199,6 +252,81 @@ describe("IT Staff Ticket Detail & Workflow", () => {
     it("rejects a non-numeric ticket id", async () => {
       const response = await staffAAgent.get("/api/staff/tickets/not-a-number").expect(400);
       expect(response.body.error).toBeDefined();
+    });
+  });
+
+  // API-61 (sheet 8.4 "existing Attachments", Part 7 "Attachment continuity"):
+  // IT Staff and Administrator can OPEN a ticket's attachments through a
+  // read-only staff route; the Requester-only Lab 2 route is unchanged.
+  describe("GET /api/staff/tickets/:id/attachments/:attachmentId (API-61)", () => {
+    const FILE_BODY = "staff attachment download fixture";
+    const url = (ticketId: number, attachmentId: number | string) =>
+      `/api/staff/tickets/${ticketId}/attachments/${attachmentId}`;
+
+    it("rejects an unauthenticated request with 401", async () => {
+      const ticket = await createTicket();
+      const attachment = await createAttachment(ticket.id, FILE_BODY);
+      await request(app).get(url(ticket.id, attachment.id)).expect(401);
+    });
+
+    it("rejects a Requester session with 403 and no file content", async () => {
+      const ticket = await createTicket();
+      const attachment = await createAttachment(ticket.id, FILE_BODY);
+      const response = await requesterAgent.get(url(ticket.id, attachment.id)).expect(403);
+      expect(response.text).not.toContain(FILE_BODY);
+    });
+
+    it("serves the file to IT Staff, on a ticket they do not own", async () => {
+      const ticket = await createTicket({ ownerId: staffBId });
+      const attachment = await createAttachment(ticket.id, FILE_BODY);
+
+      const response = await staffAAgent.get(url(ticket.id, attachment.id)).expect(200);
+
+      expect(response.headers["content-type"]).toMatch(/text\/plain/);
+      expect(response.headers["content-disposition"]).toContain("evidence.txt");
+      expect(response.text).toBe(FILE_BODY);
+    });
+
+    it("serves the file to an Administrator too (read-only access, BR-39)", async () => {
+      const ticket = await createTicket();
+      const attachment = await createAttachment(ticket.id, FILE_BODY);
+      const response = await adminAgent.get(url(ticket.id, attachment.id)).expect(200);
+      expect(response.text).toBe(FILE_BODY);
+    });
+
+    it("404s a ticket that does not exist", async () => {
+      await staffAAgent.get(url(999999, 1)).expect(404);
+    });
+
+    it("404s an attachment id that does not exist", async () => {
+      const ticket = await createTicket();
+      await staffAAgent.get(url(ticket.id, 999999)).expect(404);
+    });
+
+    it("404s an attachment that belongs to a different ticket", async () => {
+      const ticketA = await createTicket();
+      const ticketB = await createTicket();
+      const attachmentOfB = await createAttachment(ticketB.id, FILE_BODY);
+      const response = await staffAAgent.get(url(ticketA.id, attachmentOfB.id)).expect(404);
+      expect(response.text).not.toContain(FILE_BODY);
+    });
+
+    it("404s a soft-removed attachment, the same as the Requester route", async () => {
+      const ticket = await createTicket();
+      const attachment = await createAttachment(ticket.id, FILE_BODY, { removedAt: new Date() });
+      await staffAAgent.get(url(ticket.id, attachment.id)).expect(404);
+    });
+
+    it("400s a non-numeric ticket id or attachment id", async () => {
+      const ticket = await createTicket();
+      await staffAAgent.get(url(ticket.id, "not-a-number")).expect(400);
+      await staffAAgent.get("/api/staff/tickets/not-a-number/attachments/1").expect(400);
+    });
+
+    it("does not widen the Requester route: IT Staff still get 403 there", async () => {
+      const ticket = await createTicket();
+      const attachment = await createAttachment(ticket.id, FILE_BODY);
+      await staffAAgent.get(`/api/tickets/${ticket.id}/attachments/${attachment.id}`).expect(403);
     });
   });
 

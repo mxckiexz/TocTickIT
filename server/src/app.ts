@@ -710,6 +710,37 @@ app.get("/api/tickets/:id/attachments", requireAuth, requireRole("REQUESTER"), r
   }
 });
 
+// Streams one stored attachment back inline. Shared by the Requester's own
+// download route and the IT Staff / Administrator read-only route, so the two
+// can never drift apart on headers or error handling. Callers have already
+// decided WHO may see the file and that the row is active (removedAt: null).
+function sendAttachmentFile(
+  res: Response,
+  attachment: { storedFilename: string; originalFilename: string; mimeType: string }
+) {
+  const filePath = path.join(UPLOAD_DIR, attachment.storedFilename);
+  // RFC 6266/5987: `filename=` is the plain (ASCII) fallback a client that
+  // doesn't understand filename* falls back to — it must NOT be percent-
+  // encoded, or it displays literally (e.g. "photo%20one.png"). `filename*`
+  // carries the real name, percent-encoded with its charset, for clients
+  // that support spaces/non-ASCII (Unicode names, accents, etc.).
+  const asciiFallbackFilename = attachment.originalFilename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  const encodedFilename = encodeURIComponent(attachment.originalFilename);
+  res.setHeader("Content-Type", attachment.mimeType);
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${asciiFallbackFilename}"; filename*=UTF-8''${encodedFilename}`
+  );
+  res.sendFile(filePath, (error) => {
+    if (error) {
+      console.error("Failed to send attachment file:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to retrieve attachment file" });
+      }
+    }
+  });
+}
+
 app.get("/api/tickets/:id/attachments/:attachmentId", requireAuth, requireRole("REQUESTER"), requirePasswordUpToDate, async (req: AuthedRequest, res: Response) => {
   const ticketId = Number(req.params.id);
   const attachmentId = Number(req.params.attachmentId);
@@ -743,27 +774,7 @@ app.get("/api/tickets/:id/attachments/:attachmentId", requireAuth, requireRole("
       return res.status(404).json({ error: "Attachment not found." });
     }
 
-    const filePath = path.join(UPLOAD_DIR, attachment.storedFilename);
-    // RFC 6266/5987: `filename=` is the plain (ASCII) fallback a client that
-    // doesn't understand filename* falls back to — it must NOT be percent-
-    // encoded, or it displays literally (e.g. "photo%20one.png"). `filename*`
-    // carries the real name, percent-encoded with its charset, for clients
-    // that support spaces/non-ASCII (Unicode names, accents, etc.).
-    const asciiFallbackFilename = attachment.originalFilename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
-    const encodedFilename = encodeURIComponent(attachment.originalFilename);
-    res.setHeader("Content-Type", attachment.mimeType);
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${asciiFallbackFilename}"; filename*=UTF-8''${encodedFilename}`
-    );
-    res.sendFile(filePath, (error) => {
-      if (error) {
-        console.error("Failed to send attachment file:", error);
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Failed to retrieve attachment file" });
-        }
-      }
-    });
+    sendAttachmentFile(res, attachment);
   } catch (error) {
     console.error("Failed to retrieve attachment:", error);
 
@@ -1314,6 +1325,10 @@ app.get(
         include: {
           requester: { select: { name: true, email: true } },
           owner: { select: { name: true, email: true } },
+          // Names for display (an inactive Category/Related System still
+          // names the ticket it was filed under).
+          category: { select: { name: true } },
+          relatedSystem: { select: { name: true } },
         },
       });
       if (!ticket) {
@@ -1347,11 +1362,13 @@ app.get(
         }),
       ]);
 
-      const { requester, owner, ...ticketFields } = ticket;
+      const { requester, owner, category, relatedSystem, ...ticketFields } = ticket;
 
       res.status(200).json({
         ticket: {
           ...ticketFields,
+          categoryName: category.name,
+          relatedSystemName: relatedSystem.name,
           requesterName: requester.name,
           requesterEmail: requester.email,
           ownerName: owner?.name ?? null,
@@ -1365,6 +1382,51 @@ app.get(
       console.error("Failed to retrieve staff ticket detail:", error);
 
       res.status(500).json({ error: "Failed to retrieve staff ticket detail" });
+    }
+  }
+);
+
+// Sheet 8.4 / Part 7 ("existing Attachments", "Attachment continuity"): IT Staff
+// and Administrator open a ticket's attachments through this read-only route.
+// The Requester route above stays Requester-only (BR-14 ownership); this one
+// has no ownership scope, like the staff detail it belongs to. A removed
+// attachment 404s here exactly as it does for the Requester (BR-14).
+app.get(
+  "/api/staff/tickets/:id/attachments/:attachmentId",
+  requireAuth,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  requirePasswordUpToDate,
+  async (req: AuthedRequest, res: Response) => {
+    const ticketId = Number(req.params.id);
+    const attachmentId = Number(req.params.attachmentId);
+
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return res.status(400).json({ error: "Invalid ticket id." });
+    }
+    if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+      return res.status(400).json({ error: "Invalid attachment id." });
+    }
+
+    try {
+      const prisma = getPrisma();
+
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found." });
+      }
+
+      const attachment = await prisma.attachment.findFirst({
+        where: { id: attachmentId, ticketId, removedAt: null },
+      });
+      if (!attachment) {
+        return res.status(404).json({ error: "Attachment not found." });
+      }
+
+      sendAttachmentFile(res, attachment);
+    } catch (error) {
+      console.error("Failed to retrieve attachment for staff:", error);
+
+      res.status(500).json({ error: "Failed to retrieve attachment" });
     }
   }
 );

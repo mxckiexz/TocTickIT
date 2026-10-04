@@ -52,6 +52,7 @@ reviewer's, quoted here only to show what I gave the agent.
 | 8 | Pasted a message that was not meant for this repository ("Fixed in 1410ffd … comments/notes routes …") followed by "ผิดๆๆ" ("wrong, wrong") | A deliberate test of verification: the agent did not act on the pasted text, said it did not match the branch it was on, and asked what I meant. |
 | 9 | "ทำฟีเจอร์ต่อไปเลย" ("do the next feature") — twice, for Administrator User Management and E2E/visual evidence | Features 6 and 7. In 7 the agent opened every screenshot rather than trusting passing assertions, and found two real UI defects (clipped table columns, truncated filter labels) the assertions had missed. |
 | 10 | Pasted: "the E2E fixture cleanup is incomplete, so the suite is not fully repeatable yet … regenerate the affected screenshots from the clean fixture state" | One managed `[e2e]` ticket prefix, a sweep that also removes attachment files, two consecutive full runs compared for identical database state, regenerated screenshots. |
+| 11 | Attached the Lab 3 sheet: "ตรวจเช็คในใบแลป 03 ว่าฉันทำครบไหม ทุกฟังก์ชันเลย อาจจะทำ feature แยกว่า เก็บตก" ("check against the lab sheet whether I did everything, every function; maybe do a separate leftovers feature") | The agent re-read all 18 pages and checked each requirement against the code instead of against our own spec. It found three unmet requirements (IT Staff could not open attachments; no way to change one's own password after first login; the staff detail omitted Category and Related System) and, while verifying them, a fourth the audit did not ask about: the Log out button was green-on-green and invisible. Fixed as Feature 9 (issue #53), test-first. |
 
 ## My reflection
 
@@ -72,6 +73,12 @@ database count — instead of the green test line. And three separate times the 
 check-then-act race slipped in (ticket claim, case-insensitive email, last
 Administrator): a sequential test passes on racy code, so only the reviewer's concurrent
 cases found them.
+
+The clearest case came last. After every suite was green and the release PR was reviewed,
+checking the system against the lab sheet — instead of against our own specification — found
+three required behaviours that were simply missing, and a Log out button that had been invisible
+(green on green) since the third feature. Every test could click it; none asked whether a person
+could see it. Passing tests only prove the things somebody thought to test.
 
 The habit I am keeping: ask the agent for evidence, not assurance, and make it prove a
 new test can fail before believing it passes. The agent is thorough once pointed at the

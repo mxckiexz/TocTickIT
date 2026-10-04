@@ -97,6 +97,7 @@ ambiguous (this is the artifact handout §4.3 asks for):
 | View/search/filter own tickets (My Tickets) | ✅ (own only) | ❌ | ❌ |
 | View a Ticket Detail | ✅ (own only, else `404`) | ✅ (any) | ✅ (any, **read-only**) |
 | Add / soft-remove an attachment | ✅ (own ticket only) | ❌ | ❌ |
+| Open / download an attachment | ✅ (own ticket only, else `404`) | ✅ (any ticket, via the staff route) | ✅ (any ticket, **read-only**, via the staff route) |
 | Post a Public Comment | ✅ (own ticket only) | ✅ (any ticket) | ❌ |
 | Read Public Comments | ✅ (own ticket only) | ✅ (any ticket) | ✅ (any ticket, read-only) |
 | Create an Internal Note | ❌ | ✅ (any ticket) | ❌ |
@@ -189,6 +190,20 @@ caller exactly as it would for a Requester (AC-20b, AC-28b).
   account.
 - **FR-27** — The system blocks suspending, or changing the role away from
   `ADMINISTRATOR` of, the last remaining active Administrator account.
+
+**Added by Feature 9 (issue #53) — gaps found by auditing the built system against the
+lab sheet:**
+
+- **FR-29** — IT Staff and Administrator can open (view/download) the existing, non-removed
+  attachments of any ticket from the Staff Ticket Detail screen, through a read-only staff
+  route (sheet §8.4 "existing Attachments", Part 7 "Attachment continuity"). Adding and
+  removing attachments stays Requester-only (FR-12), and the Requester's own download route
+  stays Requester-only (BR-14).
+- **FR-30** — Every authenticated user can change their own password at any time from the
+  app shell, not only when forced (sheet §7 "permitted profile/password actions"; the
+  matrix row "change own password" was already ✅ for every role, but no screen offered it).
+- **FR-31** — The Staff Ticket Detail screen shows the ticket's Category and Related System
+  by name, as the Lab 2 Ticket screen it extends does (sheet §8.4).
 
 ## 5. Business Rules
 
@@ -434,6 +449,16 @@ below always needs it, regardless of which legal source status the transition st
   `currentStatus` unchanged. A transition to any other target status ignores `confirm`
   entirely — sending it or not makes no difference.
 
+- **BR-43** — The staff attachment route is read-only and has no ownership scope (like the
+  staff detail it belongs to): IT Staff and Administrator may open any ticket's attachment.
+  It is scoped to the ticket in the URL (an attachment id belonging to another ticket is
+  `404`), and a soft-removed attachment is `404` there exactly as on the Requester route
+  (BR-14) — the file is gone from disk. A Requester gets `403` on it, and IT Staff and
+  Administrator still get `403` on the Requester route.
+- **BR-44** — Changing one's own password requires the current password (wrong → `401`) and
+  follows the same rules as the forced change (BR-08). It does not need `mustChangePassword`
+  to be set, and a user who cancels the screen changes nothing.
+
 ### 7.4 Migration from Lab 2 (expand → backfill → contract)
 
 1. **Expand**: add `User`, `Session`, `PublicComment`, `InternalNote` tables; add nullable
@@ -585,6 +610,20 @@ and needs `/logout` to work from that screen too. Every protected endpoint retur
   unchanged; the identical transition with `confirm: true` succeeds `200` (BR-42). A
   transition targeting any other status succeeds regardless of whether `confirm` is present.
 
+- **AC-32** — Given an IT Staff or Administrator session and a ticket with an active
+  attachment, when `GET /api/staff/tickets/:id/attachments/:attachmentId` is requested, the
+  file is served `200`; with no session `401`; as a Requester `403` with no file content; for
+  a removed attachment, an attachment of another ticket, or a missing ticket `404`; and the
+  Requester-only route still answers IT Staff and Administrator `403` (FR-29, BR-43).
+- **AC-33** — Given a logged-in user with no pending password change, when they choose
+  "Change password" in the app shell, then they can cancel without any change, a wrong
+  current password is rejected with the form kept open, and a valid change returns them to
+  the app with "Password changed." and makes only the new password work at the next login
+  (FR-30, BR-44).
+- **AC-34** — Given an IT Staff or Administrator opening a ticket, then the response and the
+  screen carry the Category and Related System **names** (including for a Category that was
+  deactivated after the ticket was filed) (FR-31).
+
 ## 10. Definition of Done
 
 Checked at Release Integration (issue #41) against the release run recorded in
@@ -599,8 +638,9 @@ Nothing below is ticked on the strength of an intention.
       and passes, with three stated exceptions (`tests.md` §13): UNIT-04 has no standalone
       helper (the comparison is a database index, tested through the API), STY-01's per-role
       badge colour mapping was not built, and A11Y-01/02 cover the Login screen only.
-- [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 370/370 (17 files),
-      client 117/117 (12 files), run on the release branch (= `lab3-staging` plus Feature 8).
+- [x] `server/tests/lab-03/*` and `client/tests/lab-03/*` all pass: server 382/382 (17 files),
+      client 129/129 (12 files), Playwright 35/35, run on the Feature 9 branch (= `lab3-staging`
+      plus the lab-sheet gap closure, issue #53; the Feature 8 release run was 370/117/26).
 - [x] Lab 2's existing suite (`server/tests/lab-01`, `lab-02`; `client/tests/lab-01`,
       `lab-02`; `e2e/lab-02` — Lab 1 has no e2e specs) still passes, **with the specific
       test-file updates documented in `tests.md`'s "Required Lab 2 test updates" section
@@ -611,7 +651,7 @@ Nothing below is ticked on the strength of an intention.
       (`Ticket`/`Attachment`/`Category`/`RelatedSystem` counts and every
       `Ticket.requesterId`), then rolls back; `npx prisma migrate status` reports 8 migrations
       applied and no drift.
-- [x] `e2e/lab-03/*` passes against a seeded local environment: Playwright 26/26.
+- [x] `e2e/lab-03/*` passes against a seeded local environment: Playwright 35/35.
 - [~] Screenshots captured at desktop/tablet/mobile for every Lab 3 screen, stored under
       `artifacts/lab-03/screenshots/`: Login, Change Password, Staff Queue, Staff Ticket
       Detail and User Management are covered (opened and inspected, not just generated).

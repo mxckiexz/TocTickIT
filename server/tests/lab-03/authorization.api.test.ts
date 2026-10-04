@@ -129,6 +129,7 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
       { label: "POST /api/tickets/:id/notes", method: "post", url: `/api/tickets/${t}/notes`, body: {}, allowed: ["IT_STAFF"] },
       { label: "GET /api/staff/tickets", method: "get", url: "/api/staff/tickets", allowed: ["IT_STAFF", "ADMINISTRATOR"] },
       { label: "GET /api/staff/tickets/:id", method: "get", url: `/api/staff/tickets/${t}`, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
+      { label: "GET /api/staff/tickets/:id/attachments/:aid", method: "get", url: `/api/staff/tickets/${t}/attachments/${attachmentAId}`, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
       { label: "POST /api/staff/tickets/:id/claim", method: "post", url: `/api/staff/tickets/${t}/claim`, allowed: ["IT_STAFF"] },
       { label: "POST /api/staff/tickets/:id/assign", method: "post", url: `/api/staff/tickets/${t}/assign`, body: {}, allowed: ["IT_STAFF"] },
       { label: "PATCH /api/staff/tickets/:id/priority", method: "patch", url: `/api/staff/tickets/${t}/priority`, body: {}, allowed: ["IT_STAFF"] },

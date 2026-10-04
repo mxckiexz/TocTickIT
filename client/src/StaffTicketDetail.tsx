@@ -12,6 +12,7 @@ import {
   fetchStaffTicketDetail,
   postComment,
   postNote,
+  staffTicketAttachmentUrl,
   updateTicketItPriority,
   updateTicketStatus,
 } from "./api.js";
@@ -348,6 +349,12 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
           {ticket.requesterName} ({ticket.requesterEmail})
         </dd>
 
+        <dt className="col-sm-3">Category</dt>
+        <dd className="col-sm-9">{ticket.categoryName}</dd>
+
+        <dt className="col-sm-3">Related System</dt>
+        <dd className="col-sm-9">{ticket.relatedSystemName}</dd>
+
         <dt className="col-sm-3">Summary</dt>
         <dd className="col-sm-9">{ticket.summary}</dd>
 
@@ -505,9 +512,17 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
         <ul className="list-unstyled">
           {attachments.map((attachment) => (
             <li key={attachment.id} className={attachment.removedAt ? "mb-1 text-muted" : "mb-1"}>
-              <span style={attachment.removedAt ? { textDecoration: "line-through" } : undefined}>
-                {attachment.originalFilename}
-              </span>{" "}
+              {attachment.removedAt ? (
+                <span style={{ textDecoration: "line-through" }}>{attachment.originalFilename}</span>
+              ) : (
+                <a
+                  href={staffTicketAttachmentUrl(ticketId, attachment.id)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {attachment.originalFilename}
+                </a>
+              )}{" "}
               <span className="text-muted small">
                 ({formatSize(attachment.sizeBytes)}
                 {attachment.removedAt

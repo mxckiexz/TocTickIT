@@ -1,4 +1,4 @@
-import { unlink } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPrisma } from "../src/prisma.js";
@@ -26,6 +26,14 @@ export const E2E_FIRST_LOGIN_DEFAULT_PASSWORD = "E2E-Default-Pass1";
 // on every run without competing with E2E-02 for the first-login account.
 export const E2E_CHANGEPW_SHOTS_EMAIL = "e2e-changepw-shots@toktickit.test";
 export const E2E_INACTIVE_EMAIL = "e2e-inactive@toktickit.test";
+// The voluntary Change Password spec (E2E-08) really changes this account's
+// password, so it gets its own account, restored to the known password here
+// before every run.
+export const E2E_PWCHANGE_EMAIL = "e2e-pwchange@toktickit.test";
+// A real attachment (row + file on disk) on the staff-flow ticket, so the IT
+// Staff detail screen has one to open (E2E-07) and its screenshots show one.
+export const E2E_ATTACHMENT_FILENAME = "e2e-evidence.txt";
+export const E2E_ATTACHMENT_BODY = "e2e attachment fixture: opened by IT Staff";
 // Every user the admin spec creates through the UI uses this prefix, so they
 // can be swept before the next run.
 export const E2E_CREATED_EMAIL_PREFIX = "e2e-created-";
@@ -43,6 +51,7 @@ const FIXTURE_ACCOUNTS: Array<{
   { email: E2E_ADMIN_EMAIL, name: "E2E Fixture Admin", role: "ADMINISTRATOR", password: E2E_REQUESTER_PASSWORD, isActive: true, mustChangePassword: false },
   { email: E2E_FIRST_LOGIN_EMAIL, name: "E2E First Login", role: "REQUESTER", password: E2E_FIRST_LOGIN_DEFAULT_PASSWORD, isActive: true, mustChangePassword: true },
   { email: E2E_CHANGEPW_SHOTS_EMAIL, name: "E2E Change Password Shots", role: "REQUESTER", password: E2E_FIRST_LOGIN_DEFAULT_PASSWORD, isActive: true, mustChangePassword: true },
+  { email: E2E_PWCHANGE_EMAIL, name: "E2E Password Change", role: "REQUESTER", password: E2E_REQUESTER_PASSWORD, isActive: true, mustChangePassword: false },
   { email: E2E_INACTIVE_EMAIL, name: "E2E Inactive User", role: "REQUESTER", password: E2E_REQUESTER_PASSWORD, isActive: false, mustChangePassword: false },
 ];
 
@@ -149,7 +158,21 @@ async function main() {
     ],
   });
 
-  console.log(`e2e fixtures ready (accounts: ${FIXTURE_ACCOUNTS.length}, tickets: 2)`);
+  const staffFlowTicket = await prisma.ticket.findUniqueOrThrow({ where: { ticketNumber: "TKT-E2E-000001" } });
+  const storedFilename = `e2e-fixture-${Date.now()}.txt`;
+  await mkdir(UPLOAD_DIR, { recursive: true });
+  await writeFile(path.join(UPLOAD_DIR, storedFilename), E2E_ATTACHMENT_BODY);
+  await prisma.attachment.create({
+    data: {
+      ticketId: staffFlowTicket.id,
+      originalFilename: E2E_ATTACHMENT_FILENAME,
+      storedFilename,
+      mimeType: "text/plain",
+      sizeBytes: E2E_ATTACHMENT_BODY.length,
+    },
+  });
+
+  console.log(`e2e fixtures ready (accounts: ${FIXTURE_ACCOUNTS.length}, tickets: 2, attachments: 1)`);
 }
 
 main()

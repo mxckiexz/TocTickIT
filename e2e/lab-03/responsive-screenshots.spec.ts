@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
-import { ADMIN, CHANGEPW_SHOTS, STAFF, STAFF_FLOW_TICKET, VIEWPORTS, login, logout, runAdminIsolation } from "../helpers/accounts";
+import { ADMIN, ATTACHMENT_FILENAME, CHANGEPW_SHOTS, STAFF, STAFF_FLOW_TICKET, VIEWPORTS, login, logout, runAdminIsolation } from "../helpers/accounts";
 
 // docs/lab-03/ui-spec.md §10 + tests.md RSP-01/RSP-02: desktop/tablet/mobile
 // evidence for every new Lab 3 screen, saved under
@@ -78,6 +78,20 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
       await shot(page, "authentication", `change-password-${viewportName}`);
     });
 
+    test("voluntary Change Password, opened from the app shell header (FR-30)", async ({ page }) => {
+      await login(page, STAFF);
+      // The header carries both actions at every width without overflowing.
+      await expect(page.getByRole("button", { name: "Change password" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+
+      await page.getByRole("button", { name: "Change password" }).click();
+      await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await shot(page, "authentication", `change-password-voluntary-${viewportName}`);
+    });
+
     test("IT Staff Ticket Queue: table on desktop/tablet, stacked cards on mobile (RSP-01)", async ({ page }) => {
       await login(page, STAFF);
       await expect(page.getByRole("heading", { name: "Ticket Queue" })).toBeVisible();
@@ -111,6 +125,10 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
       // Requested Priority is a read-only badge; IT Priority is an editable select.
       await expect(page.getByLabel("IT Priority")).toBeEditable();
       await expect(page.getByText("Internal — IT Staff only")).toBeVisible();
+      // Category/Related System by name and an openable attachment (FR-29/31).
+      await expect(page.locator("dt", { hasText: /^Category$/ })).toBeVisible();
+      await expect(page.locator("dt", { hasText: /^Related System$/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: ATTACHMENT_FILENAME })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await shot(page, "staff-ticket-detail", viewportName);
     });

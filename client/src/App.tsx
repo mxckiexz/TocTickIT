@@ -20,6 +20,10 @@ export default function App() {
   const [shellState, setShellState] = useState<ShellState>("loading");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [ticketView, setTicketView] = useState<TicketView>("none");
+  // Voluntary Change Password (ui-spec.md §4.1): opened from the shell header,
+  // as opposed to the forced first-login gate, which is its own ShellState.
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState("");
 
   // Lab 1's "Check System" demo — kept as a small utility inside the
   // authenticated shell (its own API calls now require a session too).
@@ -54,6 +58,10 @@ export default function App() {
   function handlePasswordChanged(user: AuthUser) {
     setCurrentUser(user);
     setShellState("ready");
+    // Only the voluntary flow gets a confirmation; the forced one simply
+    // continues into the app.
+    if (changingPassword) setPasswordNotice("Password changed.");
+    setChangingPassword(false);
   }
 
   async function handleLogout() {
@@ -61,6 +69,8 @@ export default function App() {
     setCurrentUser(null);
     setShellState("loggedOut");
     setTicketView("none");
+    setChangingPassword(false);
+    setPasswordNotice("");
     setCheckState("idle");
     setCategories([]);
   }
@@ -101,6 +111,15 @@ export default function App() {
     return <ChangePassword onChanged={handlePasswordChanged} />;
   }
 
+  if (changingPassword) {
+    return (
+      <ChangePassword
+        onChanged={handlePasswordChanged}
+        onCancel={() => setChangingPassword(false)}
+      />
+    );
+  }
+
   // The Requester screens are narrow forms/lists and read best at 640px; the
   // IT Staff Ticket Queue (9 columns) and Administrator User Management
   // tables don't fit there — at 640px the Status/Owner columns were clipped
@@ -114,16 +133,33 @@ export default function App() {
         <h1 className="h3 mb-0">
           TokTickIT <span className="text-success">IT Service Desk</span>
         </h1>
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center flex-wrap gap-2">
           <span className="small">
             {currentUser.name} <span className="badge text-bg-success">{currentUser.role}</span>
           </span>
-          <button type="button" className="btn btn-outline-success btn-sm" onClick={handleLogout}>
+          {/* Light outline: these sit on the green header, where the old
+              outline-success (green on green) was invisible — STY-03. */}
+          <button
+            type="button"
+            className="btn btn-outline-light btn-sm text-nowrap"
+            onClick={() => {
+              setPasswordNotice("");
+              setChangingPassword(true);
+            }}
+          >
+            Change password
+          </button>
+          <button type="button" className="btn btn-outline-light btn-sm text-nowrap" onClick={handleLogout}>
             Log out
           </button>
         </div>
       </div>
       <div className="zg-surface">
+        {passwordNotice && (
+          <div className="alert alert-success" role="status">
+            {passwordNotice}
+          </div>
+        )}
         <button
           className="btn btn-success"
           onClick={handleCheck}

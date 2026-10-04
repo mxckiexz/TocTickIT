@@ -43,6 +43,67 @@ describe("App Shell", () => {
     expect(screen.queryByRole("button", { name: "Log out" })).not.toBeInTheDocument();
   });
 
+  // UI-17 (sheet section 7: "Logout and permitted profile/password actions")
+  describe("voluntary Change password", () => {
+    const savedUser = (role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR") => ({
+      id: 1,
+      name: "Priya Nair",
+      email: "priya.nair@toktickit.test",
+      role,
+      mustChangePassword: false,
+    });
+
+    it.each(["REQUESTER", "IT_STAFF", "ADMINISTRATOR"] as const)(
+      "%s sees a Change password action next to Log out",
+      async (role) => {
+        mockScreens();
+        mockLoggedInUser({ role });
+        render(<App />);
+
+        expect(await screen.findByRole("button", { name: "Change password" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+      }
+    );
+
+    it("opens the Change Password screen, and Cancel returns to the shell", async () => {
+      mockScreens();
+      mockLoggedInUser({ role: "IT_STAFF" });
+      render(<App />);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Change password" }));
+      expect(await screen.findByRole("heading", { name: "Change your password" })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(await screen.findByRole("heading", { name: "Ticket Queue" })).toBeInTheDocument();
+      expect(screen.queryByText("Password changed.")).not.toBeInTheDocument();
+    });
+
+    it("after a successful change, returns to the shell with a 'Password changed.' confirmation", async () => {
+      mockScreens();
+      mockLoggedInUser({ role: "IT_STAFF" });
+      vi.spyOn(api, "changePassword").mockResolvedValue(savedUser("IT_STAFF"));
+      render(<App />);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Change password" }));
+      fireEvent.change(await screen.findByLabelText(/Current password/i), { target: { value: "OldPassword1" } });
+      fireEvent.change(screen.getByLabelText(/^New password/i), { target: { value: "NewPassword1" } });
+      fireEvent.change(screen.getByLabelText(/Confirm new password/i), { target: { value: "NewPassword1" } });
+      fireEvent.click(screen.getByRole("button", { name: /Save password/i }));
+
+      expect(await screen.findByText("Password changed.")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Ticket Queue" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+    });
+
+    it("is not offered on the forced first-login screen (AC-02)", async () => {
+      mockLoggedInUser({ mustChangePassword: true });
+      render(<App />);
+
+      await screen.findByRole("heading", { name: "Change your password" });
+      expect(screen.queryByRole("button", { name: "Change password" })).not.toBeInTheDocument();
+    });
+  });
+
   describe("role-scoped navigation", () => {
     it("Requester: New Ticket and My Tickets — never the queue or User Management", async () => {
       mockScreens();

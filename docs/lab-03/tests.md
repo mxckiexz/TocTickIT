@@ -72,7 +72,7 @@ handout's structure block is treated as illustrative naming, not a literal path.
 | Test ID | AC/BR | What it tests | Expected result | Final |
 |---|---|---|---|---|
 | SEC-01 | AC-27 | Every `/api/admin/*` route called by Requester and IT Staff sessions | All `403` | Pass — `authorization.api.test.ts` sweeps every `/api/admin/*` route as Requester and IT Staff |
-| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Pass — `authorization.api.test.ts` sweeps all `/api/staff/*` routes (queue, detail, claim, assign, priority, status, assignable-users) as Requester; the 25-route role × route matrix is generated from one table |
+| SEC-02 | AC-28a, AC-28b | Every `/api/staff/*` route called by a Requester session | All `403` (Administrator's split read/write behavior on this same route set is covered separately by API-54/API-55, since it isn't a flat "all 403") | Pass — `authorization.api.test.ts` sweeps all `/api/staff/*` routes (queue, detail, claim, assign, priority, status, assignable-users) as Requester; the role × route matrix (26 routes after Feature 9) is generated from one table |
 | SEC-03 | AC-03, BR-03 | `POST /api/tickets` / `GET /api/tickets` with a spoofed `requesterId` in body/query | Session identity used; spoofed value has no effect | Pass — `authorization.api.test.ts` (spoofed `requesterId`, body and query) plus the Lab 2 tests `create-ticket.api.test.ts` ("ignores a requesterId in the body") and `my-tickets.api.test.ts` |
 | SEC-04 | AC-11, BR-14 | Requester A requests Requester B's ticket id (detail, attachments, comments) | `404` on every route, never `403` or the data | Pass — `authorization.api.test.ts` (cross-requester `404` across detail/attachments/comments) plus one "returns 404 (not 403)" test per route in the Lab 2 files and `comments-notes.api.test.ts` |
 | SEC-05 | AC-04, AC-21 | Requester calls `GET`/`POST /api/tickets/:id/notes` on their own ticket | `403`, no note content in the response body | Pass — `authorization.api.test.ts` and `comments-notes.api.test.ts` (API-21): `403`, and the response body is checked to contain no note text |
@@ -129,6 +129,8 @@ handout's structure block is treated as illustrative naming, not a literal path.
 | API-59 | BR-42 | A legal transition to a target **not** in the confirmation list (e.g. `NEW` → `IN_PROGRESS`), called with `confirm` omitted | `200` — confirmation is only required for the four listed targets | Pass |
 | API-60 | BR-13, BR-42 | A transition that is both illegal per the matrix **and** missing required confirmation (e.g. `NEW` → `CLOSED`, no `confirm`) | `400`, not `409` — the confirmation check runs before the legality check | Pass |
 | API-38 | — | `GET /api/staff/tickets/:id` for a nonexistent id | `404` | Pass |
+| API-61 | AC-32, BR-43 | `GET /api/staff/tickets/:id/attachments/:attachmentId`: no session; as a Requester; as IT Staff on a ticket they don't own; as Administrator; missing ticket; missing attachment; an attachment of a different ticket; a soft-removed attachment; non-numeric ids; and the Requester-only route called by IT Staff | `401`; `403` with no file content; `200` with the file's body, content type and filename; `200`; `404`; `404`; `404`; `404`; `400`; still `403` | Pass — `server/tests/lab-03/staff-ticket-detail.api.test.ts` (an `authorization.api.test.ts` matrix row too: 26 routes). Added by Feature 9 (issue #53) after the lab-sheet audit |
+| API-62 | AC-34, FR-31 | `GET /api/staff/tickets/:id` — Category and Related System | `categoryName`/`relatedSystemName` returned alongside the ids, including for a ticket whose Category was deactivated after it was filed | Pass — `server/tests/lab-03/staff-ticket-detail.api.test.ts` (Feature 9, issue #53) |
 
 ### 2.7 Administrator User Management (`server/tests/lab-03/users-admin.api.test.ts`)
 
@@ -223,6 +225,9 @@ with `RequesterBanner.tsx`).
 | UI-12 | User Management | Edit form: self-suspend guard message, last-admin guard message, both rendered at the correct control | Matches `ui-spec.md` §8 states table | `client/tests/lab-03/UserManagement.test.tsx` | Pass |
 | UI-13 | User Management | Reset-password action success message | Matches `ui-spec.md` §8 | `client/tests/lab-03/UserManagement.test.tsx` | Pass |
 | UI-14 | Staff Ticket Detail | Selecting `Resolved`/`Closed`/`Reopened`/`Cancelled` opens the confirm/cancel step and sends `confirm: true` only on confirm; selecting any other target sends the request immediately, no confirm step shown; cancelling reverts the `<select>` and sends nothing | Matches `ui-spec.md` §7's status-control bullet (BR-42) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 5, issue #38) |
+| UI-15 | Staff Ticket Detail | Category and Related System are shown by name | Matches `ui-spec.md` §7 (FR-31) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 9, issue #53) |
+| UI-16 | Staff Ticket Detail | An active attachment's filename is a link through the staff route, opening in a new tab with `noopener`; a soft-removed attachment is struck through with its reason and is never a link | Matches `ui-spec.md` §7 (FR-29) | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass (Feature 9, issue #53) |
+| UI-17 | App Shell / Change Password | A "Change password" action next to Log out for each role; Cancel returns with nothing changed and no request sent; a wrong current password keeps the form open; success returns with "Password changed."; the forced first-login screen has neither the action nor a Cancel | Matches `ui-spec.md` §3 and §4.1 (FR-30, AC-33) | `client/tests/lab-03/AppShell.test.tsx`, `ChangePassword.test.tsx` | Pass (Feature 9, issue #53) |
 
 ## 4. UI style conformance
 
@@ -230,6 +235,7 @@ with `RequesterBanner.tsx`).
 |---|---|---|---|
 | STY-01 | Role/priority/status badges use only the tokens/classes in `ui-spec.md` §1 | No inline hex colors outside `theme.css`; badge classes match the mapping table | Partial — `styleConformance.test.tsx` proves what is built: every badge uses an allowed semantic class (`text-bg-success|warning|danger|secondary|info`) with a text label, priority maps HIGH → danger / MEDIUM → warning / LOW → secondary, and no inline hex/rgb in any Lab 3 screen (the single colour literal is a `var(--zg-pale-green, #eef7ee)` fallback). The spec's per-role badge colour mapping was **not** built; role/status badges use plain Bootstrap semantic classes |
 | STY-02 | Editable vs. read-only field styling on Staff Ticket Detail (IT Priority vs. Requested Priority) | Read-only field carries `--zg-readonly-bg` styling, editable does not | Pass — component half in `styleConformance.test.tsx` (IT Priority is an enabled `<select>`, Requested Priority a read-only badge); stylesheet half in `e2e/lab-03/style.spec.ts` against the real loaded CSS (a disabled field computes to the gray-green token, an active one to the normal surface). The stylesheet half is Playwright because Vitest stubs CSS |
+| STY-03 | Every control in the app header (buttons and the role badge), for each role, against the header background; and at 375px no header label wraps | Contrast >= 4.5:1 measured from computed colours in a real browser; one line per label; no horizontal overflow | Pass — `e2e/lab-03/style.spec.ts` (Feature 9, issue #53). Written after finding that the Log out button had been green-on-green (contrast 1:1, invisible) since Feature 3; it failed on the old header (and on a first fix that wrapped labels), and passes now |
 
 ## 5. Responsive tests
 
@@ -260,7 +266,7 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 
 | Test ID | What it tests | Expected result | Final |
 |---|---|---|---|
-| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 370/370, client 117/117) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 26-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
+| REG-01 | Full Lab 1 + Lab 2 automated suite — `server/tests/lab-01`, `lab-02`; `client/tests/lab-01`, `lab-02`; **and** `e2e/lab-02` (Lab 1 has no e2e specs) — with §2.9's documented updates applied | 100% still passing after Lab 3's schema/route changes | Pass — release run in §12: the Lab 1/2 server and client files pass inside the full suites (server 382/382, client 129/129 after Feature 9) and `e2e/lab-02/requester-ticket-flow.spec.ts` (the graded scenario, updated for real login) passes in the 35-test Playwright run. The two Lab 2 evidence-only scripts (`pdf-evidence.spec.ts`, `responsive-screenshots.spec.ts`) are excluded from the Playwright config (`testIgnore`) as stale — they are not part of the graded suite and their evidence was captured for Lab 2's own submission |
 
 ## 9. E2E tests
 
@@ -272,6 +278,8 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 | E2E-04 | AC-14–AC-20 | IT Staff: search the queue → open a ticket → claim it → set IT Priority → transition status → post a Public Comment → add an Internal Note | Each step's UI state matches `ui-spec.md` §6/§7; Internal Note never shown to a Requester session opened in a second browser context | `e2e/lab-03/staff-ticket-flow.spec.ts` | Pass |
 | E2E-05 | AC-12, AC-13 | Requester: open own ticket → post Public Comment → mark "Problem Appears Resolved" | Comment appears; status badge unchanged; confirmation note shown | `e2e/lab-03/staff-ticket-flow.spec.ts` | Pass |
 | E2E-06 | AC-22–AC-26 | Administrator: create user → search/filter finds them → edit role/status → reset password → attempt self-suspend (blocked) → attempt to demote the last Administrator (blocked) | Each step's message matches `ui-spec.md` §8 | `e2e/lab-03/user-administration.spec.ts` | Pass |
+| E2E-07 | AC-32, AC-34 | IT Staff opens a ticket: Category and Related System are named; the attachment link opens the file in a new tab; the same URL as a Requester session is `403` with no file content | Matches `ui-spec.md` §7 | `e2e/lab-03/staff-attachments-password.spec.ts` | Pass (Feature 9, issue #53) |
+| E2E-08 | AC-33 | A user opens Change password from the shell, cancels, is refused a wrong current password, then changes it; after logging out the old password is rejected and the new one works | Matches `ui-spec.md` §4.1 | `e2e/lab-03/staff-attachments-password.spec.ts` | Pass (Feature 9, issue #53) |
 
 ## 10. Acceptance Criteria → Test traceability matrix
 
@@ -310,6 +318,9 @@ Run against a copy of the Lab 2 database seeded with Lab 2's fixtures, not the l
 | AC-29 | API-52 |
 | AC-30 | API-53 |
 | AC-31 | API-57, API-58, API-59, API-60, UI-14 |
+| AC-32 | API-61, E2E-07 |
+| AC-33 | UI-17, E2E-08, API-07 |
+| AC-34 | API-62, UI-15, E2E-07 |
 
 ## 11. Business Rule → Test traceability
 
@@ -356,6 +367,8 @@ Every BR-01–BR-41 from `specification.md` §5 maps to at least one row below.
 | BR-40 | API-52 |
 | BR-41 | API-53 |
 | BR-42 | API-57, API-58, API-59, API-60, UI-14 |
+| BR-43 | API-61, UI-16, E2E-07 |
+| BR-44 | UI-17, E2E-08, API-07 |
 
 ## 12. What has actually been run
 
@@ -527,7 +540,7 @@ the server suites and Playwright share one database):
 | Screenshots | Staff Queue, Staff Ticket Detail and User Management (tablet) regenerated with the seed data present and opened one by one — all 8 statuses and 3 priorities render, no clipped columns or truncated labels |
 
 Added during this release pass to close gaps an audit against the lab sheet found:
-`authorization.api.test.ts` (SEC-01–08; a role × route matrix of 25 routes), `seed.api.test.ts`
+`authorization.api.test.ts` (SEC-01–08; a role × route matrix, 25 routes at this point and 26 after Feature 9), `seed.api.test.ts`
 (SEED-01), `AppShell.test.tsx` (UI-04), `styleConformance.test.tsx` and `style.spec.ts`
 (STY-01/02), an exported `validateCommentBody()` with direct tests (UNIT-05), and demo tickets
 in `prisma/seed.ts`. A mutation check (temporarily breaking the code to confirm the tests fail) was run on the
@@ -540,6 +553,40 @@ sets `asyncUtilTimeout: 4000`; this only gives a genuinely missing element longe
 and does not weaken any assertion. A separate pre-existing Lab 2 server test
 (`remove-attachment`) has been seen to fail intermittently because the route unlinks the file
 fire-and-forget; it did not fail in the release run. It is not hidden or skipped.
+
+**On `feature/9-lab3-gap-closure`** (issue #53) — after Feature 8 the built system was audited,
+requirement by requirement, against the lab sheet (not against our own spec). It found four
+defects the passing suites did not:
+
+1. **IT Staff could not open attachments** (sheet §8.4, Part 7 "Attachment continuity"). The
+   staff detail listed filenames only and the download route was Requester-only; our own
+   authorization test even asserted the `403`. Added a read-only staff route (FR-29, BR-43,
+   API-61, UI-16, E2E-07); the Requester route is unchanged, and both now share one
+   file-serving helper.
+2. **No way to change one's own password after first login** (sheet §7). The endpoint existed;
+   no screen offered it. Added "Change password" to the app header, reusing the screen with a
+   Cancel button (FR-30, BR-44, UI-17, E2E-08).
+3. **Staff Ticket Detail omitted Category and Related System** (sheet §8.4). The API returned
+   only ids. Names are now returned and shown (FR-31, API-62, UI-15).
+4. **The Log out button was invisible** — green-on-green, contrast 1:1 — from Feature 3 on. It
+   existed, was clickable, and passed every functional test; it was never in a screenshot, and
+   the Feature 7 visual inspection did not notice its absence. Fixed, and guarded by STY-03,
+   which measures real contrast per role and checks no label wraps at 375px.
+
+Each fix was test-first and mutation-checked (removing the staff route's role gate, serving
+removed attachments, and restoring the old non-link filename each make the new tests fail).
+
+| Check (run after the last code change, sequentially) | Result |
+|---|---|
+| Server `npx vitest run` | **382/382** passed, 17 files |
+| Client `npx vitest run` | **129/129** passed, 12 files |
+| Playwright `npx playwright test` | **35/35** passed (fixtures reset per run) |
+| `npx tsc --noEmit` + build | clean on `server` and `client` |
+| `npx prisma migrate status` | up to date (no schema change in this feature) |
+
+Screenshots regenerated and opened: Staff Queue, Staff Ticket Detail (now with Category,
+Related System and an attachment link), User Management, and the new voluntary Change Password
+screen, at desktop/tablet/mobile.
 
 ## 13. Known gaps (disclosed, not fixed)
 

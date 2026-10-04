@@ -591,6 +591,14 @@ flake — so summaries now break long words.
 Each fix was test-first and mutation-checked (removing the staff route's role gate, serving
 removed attachments, and restoring the old non-link filename each make the new tests fail).
 
+**Run on `main`, after the final merge (#56, `1326435`).** Server 382/382, client 145/145 and
+Playwright 38/38 all pass on `main`. Disclosed: the **first** Playwright run on `main` failed 17
+tests with login timeouts; the code was not at fault — an `npm ci` run just before it had deleted
+the dependency cache of an already-running Vite dev server (every dependency request then answered
+504). Confirmed by requesting a dependency from that server directly (504), then the stale server was
+stopped, Playwright started a fresh one, and the run was repeated: 38/38. The log kept is that second
+run. Do not run `npm ci` while a dev server is up.
+
 | Check (run after the last code change, sequentially) | Result |
 |---|---|
 | Server `npx vitest run` | **382/382** passed, 17 files |

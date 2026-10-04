@@ -665,8 +665,19 @@ Nothing below is ticked on the strength of an intention.
 - [x] `docs/lab-03/reviewer.md` and `docs/lab-03/ai-use.md` reflect the actual PRs and
       prompts used. `reviewer.md` was generated from the GitHub PR data, not retyped;
       `ai-use.md`'s reflection is the author's to review and edit before submission.
-- [ ] `lab3-staging` merged to `main` only after every item above is checked **and** the
-      release PR has been reviewed — this is the gate, and it is not self-merged.
+- [x] Every Lab 3 GitHub Issue (#34–#41 and the gap-closure issue #53) is closed, and each
+      feature pull request (#43–#52, #54) was peer reviewed and approved by Thanwarat1303
+      before it was merged into `lab3-staging` (the one exception, #45, was merged early,
+      reverted, and re-merged through an approved PR — recorded in `reviewer.md`).
+- [ ] The GitHub Projects board shows every Lab 3 issue with Status: Done (sheet §14, Part 1).
+      **Not yet true:** the board (users/mxckiexz/projects/2) lists only Lab 2's 16 items; the
+      Lab 3 issues have to be added to it. Left unticked on purpose.
+- [x] `lab3-staging` merged to `main` (PR #56, merge commit `1326435`) only after every item
+      above except the board was checked. **Stated plainly:** that final PR carried no change
+      beyond the already-approved feature PRs and the reviewer log (#55), and the author merged
+      it **without a separate review round**, by explicit decision — this was not the
+      originally planned gate ("not self-merged"), and `reviewer.md` records it that way.
+      Verified on `main` afterwards: server 382/382, client 145/145, Playwright 38/38.
 
 ### 10.1 Branch / issue numbering
 

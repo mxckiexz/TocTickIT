@@ -19,6 +19,7 @@ describe("GET /api/related-systems", () => {
     expect(response.body.error).toBeDefined();
   });
 
+  // API-10 (FR-04/BR-02) — every protected route except login/me/logout/change-password is 403 PASSWORD_CHANGE_REQUIRED while mustChangePassword is true
   it("rejects a session that still has the default password (requirePasswordUpToDate)", async () => {
     const forcedEmail = "lookup-must-change-fixture@toktickit.test";
     await createFixtureUser(forcedEmail, { mustChangePassword: true });

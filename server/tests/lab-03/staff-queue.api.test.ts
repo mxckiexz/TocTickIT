@@ -213,6 +213,7 @@ describe("GET /api/staff/tickets", () => {
     expect(ids).toEqual([ticketIds.delta]);
   });
 
+  // API-23 (AC-14) — search, category, related system, priority, status, owner filters, each alone and combined (this and the following filter tests)
   it("filters by categoryId", async () => {
     const response = await staffAgent
       .get("/api/staff/tickets")

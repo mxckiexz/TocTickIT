@@ -1,11 +1,12 @@
 # Lab 4 — Actions Taken, Ticket Workflow, Role Dashboards, Hardening — Specification
 
 > Source of truth for Sprint 4. Extends `docs/lab-03/specification.md`: everything in Lab 1 to
-> 3 keeps working. Built from `LAB4_BRIEF.md`; where the Lab 4 handout says something
-> different, the handout wins. **The handout was not available when this was drafted**, so
-> every point that depends on it is marked `OQ-n` (open question) in §11 and must be
-> confirmed before the matching implementation PR. See [api-spec.md](api-spec.md),
-> [ui-spec.md](ui-spec.md) and [tests.md](tests.md).
+> 3 keeps working, except the places listed in §3.5, where the Lab 4 handout deliberately
+> changes a Lab 3 rule. Built from the Lab 4 handout (the handout wins over any earlier
+> summary of it). The first draft was written without the handout and carried open questions;
+> after review against the handout every one of them is closed as a numbered decision in §11,
+> and no open question remains. See [api-spec.md](api-spec.md), [ui-spec.md](ui-spec.md) and
+> [tests.md](tests.md).
 
 ## 1. Sprint Goal
 
@@ -31,12 +32,15 @@ on a dashboard must open the list behind them.
 
 ### 3.1 In scope
 
-- Actions Taken: a list of append-only entries under a ticket (create, edit, no delete).
+- Actions Taken: a list of entries under a ticket (create, edit while not final, never delete;
+  "append-only" is defined in BR-08).
 - Status matrix for all 8 statuses with roles, enforced at the backend, and a resolution gate
   for `RESOLVED`.
 - Optimistic locking (`version` on `Ticket` and `ActionTaken`) with `409` on a stale write.
 - Requester "appears resolved" stays advisory.
-- Dashboards: Requester, IT Staff, Administrator (staff metrics plus short user counts).
+- The Administrator performs every IT Staff ticket operation (handout §4.3), see §3.4 and §3.5.
+- Dashboards: Requester, IT Staff, Administrator (staff metrics plus short user counts); the staff
+  dashboard includes the current user's Actions Taken.
 - Navigation per role with a visible active page; states loading / empty / forbidden /
   conflict / error on every new screen.
 - Hardening: double-submit and retry protection, forms keep values after an error,
@@ -56,21 +60,43 @@ Unchanged from Lab 3: `REQUESTER`, `IT_STAFF`, `ADMINISTRATOR`.
 
 ### 3.4 Authorization Matrix
 
+The handout (§4.3) gives the Administrator "IT Staff behavior" plus the administrative access
+needed for support. Therefore on tickets the Administrator and IT Staff columns are identical;
+the only extra Administrator rights are the Lab 3 user-management routes (BR-26).
+
 | Action | Requester | IT Staff | Administrator |
 |---|---|---|---|
 | List Actions Taken of a ticket | own ticket only (else `404`) | any ticket | any ticket |
 | Create an Action Taken | no | yes | yes |
 | Edit an Action Taken | no | yes | yes |
 | Delete an Action Taken | not offered | not offered | not offered |
-| Change ticket status (matrix §7.3) | no | yes | no (OQ-2) |
+| Change ticket status (matrix §7.3) | no | yes | yes |
+| Claim / assign a ticket owner, set IT priority | no | yes | yes |
+| Post a Public Comment / Internal Note | comment on own ticket only, no note | yes | yes |
 | "Problem appears resolved" (advisory) | own ticket only | no | no |
 | Requester dashboard | yes (own tickets only) | no | no |
-| Staff dashboard | no | yes | yes |
+| Staff dashboard (including my Actions Taken) | no | yes | yes |
 | User counts on the dashboard | no | no | yes |
+| User management (Lab 3) | no | no | yes |
 
 `no` means `403` for a role that is authenticated but not allowed, `401` for no session, and
 `404` for another Requester's ticket (BR-14 of Lab 3, no leak that it exists). A hidden or
 disabled button is feedback only; the API enforces everything above.
+
+### 3.5 Lab 3 rules that Lab 4 changes on purpose
+
+The handout gives the Administrator IT Staff behavior (§4.3). That reverses these Lab 3 rules;
+each is replaced, not weakened, and the affected Lab 3 tests are listed in `tests.md` §9.
+
+| Lab 3 rule | Lab 4 rule |
+|---|---|
+| BR-39: Administrator is read-only on tickets, comments and notes | BR-26: Administrator performs every IT Staff ticket operation |
+| BR-17 / BR-41: a ticket owner and an assignable user must be an active `IT_STAFF` | BR-26: an active `IT_STAFF` or `ADMINISTRATOR` |
+| BR-23: Administrator cannot transition status | BR-26: Administrator transitions status like IT Staff |
+| AC-20b, AC-28b: Administrator gets `403` on claim, assign, priority, status, comment and note writes | `200` / `201`, same validation as IT Staff |
+
+Unchanged: login, sessions, user management (Administrator only), the Requester rules, BR-14
+(`404` for another Requester's ticket).
 
 ## 4. Functional Requirements
 
@@ -82,33 +108,41 @@ disabled button is feedback only; the API enforces everything above.
 - **FR-03** — IT Staff and Administrator edit an Action Taken they can see; the edit carries
   the `version` the editor last saw.
 - **FR-04** — `description` is required; `followUpNote` is required when `followUpRequired`
-  is true; `result` is required when the status is `COMPLETED` (OQ-1).
+  is true; `result` is required when the status is `COMPLETED`, on create and on edit (D-1).
 - **FR-05** — An Action Taken has `status` PLANNED, IN_PROGRESS, COMPLETED or CANCELLED and an
-  optional `assigneeId`, who must be an active IT Staff or Administrator (OQ-1).
-- **FR-06** — Actions Taken are append-only: no delete endpoint. An action that should not
-  count is set to CANCELLED.
+  optional `assigneeId`, who must be an active IT Staff or Administrator (D-1). A new action
+  may be created as PLANNED (default), IN_PROGRESS or COMPLETED, never as CANCELLED.
+- **FR-06** — Actions Taken are never deleted (no delete endpoint); an action that should not
+  count is set to CANCELLED. Edits are allowed in place until the action is final (BR-08).
 - **FR-07** — The list is returned in a stable order: `actionAt` ascending, then `id`.
 - **FR-08** — Actions cannot be added to a CLOSED or CANCELLED ticket.
 
 **Ticket workflow**
-- **FR-09** — A ticket status change is accepted only if the matrix (§7.3) allows it for the
-  caller's role; everything else is rejected by the backend.
+- **FR-09** — A ticket status change is accepted only if the matrix (§7.3) allows it and the
+  caller is IT Staff or Administrator; everything else is rejected by the backend.
 - **FR-10** — Moving a ticket to RESOLVED is accepted only if the resolution gate passes.
 - **FR-11** — A write that carries an out-of-date `version` is rejected `409` and changes
   nothing.
 - **FR-12** — The staff ticket detail response includes the ticket `version`, the list of
-  statuses the caller may move to now, and the current gate result with its unmet conditions.
+  statuses the caller may move to now (the same list for IT Staff and Administrator), and the
+  current gate result with its unmet conditions.
 - **FR-13** — The Requester's "appears resolved" signal never changes the status.
 
 **Dashboards**
 - **FR-14** — A Requester dashboard with: open tickets, waiting for requester, recently
   updated, recently resolved; own tickets only.
 - **FR-15** — A staff dashboard with: unassigned, assigned to me, by status, by IT priority,
-  recently updated.
+  recently updated, and the current user's Actions Taken: the number of open tickets that hold
+  an open action assigned to me, and my 5 most recent actions (BR-27).
 - **FR-16** — The Administrator sees the staff dashboard plus a short user count.
 - **FR-17** — Every metric has a drill-down to the list behind it with the same filter.
 - **FR-18** — A dashboard response contains summary numbers and at most 5 recent tickets,
   never the full ticket list.
+
+**Administrator on tickets**
+- **FR-25** — The Administrator may claim, assign, set IT priority, change status, post comments
+  and notes, and create and edit Actions Taken exactly as IT Staff do (BR-26). The Ticket Queue
+  and Ticket Detail screens are reachable from the Administrator navigation with all controls.
 
 **Application**
 - **FR-19** — Navigation shows a Dashboard item per role and marks the current page.
@@ -132,17 +166,27 @@ disabled button is feedback only; the API enforces everything above.
   `followUpRequired` is false the note is stored empty.
 - **BR-05** — `actionAt` defaults to now, may be in the past, and may not be more than 5
   minutes in the future.
-- **BR-06** — Action status moves PLANNED → IN_PROGRESS | COMPLETED | CANCELLED and
-  IN_PROGRESS → COMPLETED | CANCELLED. COMPLETED and CANCELLED are final; any edit of a final
-  action is rejected `409` (OQ-1).
+- **BR-06** — Action status. **On create** the allowed statuses are PLANNED (the default when
+  omitted), IN_PROGRESS and COMPLETED; CANCELLED is rejected `400` because there is nothing
+  yet to cancel. **On edit** the allowed moves are PLANNED → IN_PROGRESS | COMPLETED |
+  CANCELLED and IN_PROGRESS → COMPLETED | CANCELLED; an unchanged status is allowed (the edit
+  changes other fields). COMPLETED and CANCELLED are final; any edit of a final action is
+  rejected `409 ACTION_FINAL`. `result` is required whenever the status is COMPLETED, on create
+  and on edit (D-1).
 - **BR-07** — `assigneeId`, when given, must be an active user with role IT_STAFF or
-  ADMINISTRATOR; an inactive, missing, or Requester user is rejected `400` (OQ-1).
-- **BR-08** — No delete of an Action Taken, by any role.
+  ADMINISTRATOR; an inactive, missing, or Requester user is rejected `400` (D-1).
+- **BR-08** — **Append-only means no deletion.** No role can delete an Action Taken and there is
+  no delete route. An entry may be edited in place while it is not final; every edit bumps
+  `version` and `updatedAt`, while `ticketId`, `performedById` and `createdAt` never change. No
+  revision history is stored: an edit overwrites the previous field values (documented
+  limitation; the record of what happened is kept by cancelling an action and adding a new one
+  rather than rewriting history).
 - **BR-09** — Actions are ordered by `actionAt` then `id`, both ascending, so the order never
   changes between reads.
 - **BR-10** — A ticket in CLOSED or CANCELLED accepts no new Action Taken (`409`).
-- **BR-11** — The status matrix of Lab 3 §7.3 is unchanged (§7.3 below repeats it with roles).
-- **BR-12** — **Resolution gate** (OQ-3): a transition to RESOLVED needs all of
+- **BR-11** — The status matrix of Lab 3 §7.3 is unchanged (§7.3 below repeats it); the roles
+  allowed to use it are IT Staff and Administrator (BR-26).
+- **BR-12** — **Resolution gate** (D-3): a transition to RESOLVED needs all of
   (a) the ticket has an owner, (b) it has at least one Action Taken with status COMPLETED,
   (c) it has no Action Taken with status PLANNED or IN_PROGRESS. Otherwise `409` with code
   `RESOLUTION_GATE` and the list of unmet conditions.
@@ -157,7 +201,7 @@ disabled button is feedback only; the API enforces everything above.
   stored one is rejected `409` with code `STALE_VERSION` and the current version.
 - **BR-17** — New Lab 4 write routes require `version`. The Lab 3 ticket routes (claim, assign,
   priority, status) accept an optional `version`: when sent it is checked, when omitted the
-  route behaves as before (OQ-4). Either way a successful write bumps `Ticket.version`.
+  route behaves as before (D-4). Either way a successful write bumps `Ticket.version`.
 - **BR-18** — Dashboard numbers come from the database at request time; "open" means status in
   NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED.
 - **BR-19** — A Requester dashboard only ever counts and lists the caller's own tickets.
@@ -172,13 +216,31 @@ disabled button is feedback only; the API enforces everything above.
   (same `404` as a missing one).
 - **BR-25** — The migration is additive: no column or row of Lab 1 to 3 is dropped or changed.
   `version` columns are added with a default so existing rows are valid.
+- **BR-26** — **Administrator performs IT Staff behavior** (handout §4.3). Every route that is
+  IT Staff only in Lab 3 (claim, assign, set priority, change status, post a Public Comment,
+  post an Internal Note, assignable users) is open to IT Staff and Administrator alike, with the
+  same validation and the same results. The ticket owner and every "assignable user" may be an
+  active `IT_STAFF` or `ADMINISTRATOR`. Administrator keeps the user-management routes, which
+  stay Administrator only. This replaces Lab 3 BR-17, BR-23, BR-39 and BR-41 (§3.5).
+- **BR-27** — **My Actions Taken on the staff dashboard.** "Open action assigned to me" means an
+  Action Taken with `assigneeId` = caller and status PLANNED or IN_PROGRESS on a ticket whose
+  status is open (BR-18). The metric `ticketsWithMyOpenActions` counts the distinct such
+  tickets. `myRecentActions` lists the caller's 5 newest actions by `actionAt` then `id`
+  descending where `performedById` = caller, on any ticket, with only id, ticket id and number,
+  status, `actionAt` and the first 120 characters of the description. Both are `0` / `[]` when
+  nothing matches (BR-23).
+- **BR-28** — An Action Taken belongs to exactly one ticket (`ticketId` is required and fixed)
+  and may be performed by any IT Staff or Administrator, not only the ticket owner (handout
+  §4.4 BR-01, BR-02). The owner coordinates the ticket; the performer is whoever recorded the
+  action.
 
 ## 6. UI Specification Summary
 
 Detail in [ui-spec.md](ui-spec.md). New or changed screens: the Actions Taken section of the
-Ticket Detail (staff: list, create mode, edit mode; Requester: read-only), status buttons with
-a conflict banner on the staff Ticket Detail, a Staff/Admin Dashboard, a Requester Dashboard,
-and a Dashboard item in the navigation. Zen Green tokens, badges (`ticketBadges.tsx`) and form
+Ticket Detail (staff and Administrator: list, create mode, edit mode; Requester: read-only), status
+buttons with a conflict banner on the staff Ticket Detail (same controls for IT Staff and
+Administrator), a Staff/Admin Dashboard with a "My actions" card and list, a Requester
+Dashboard, and a Dashboard item in the navigation. Zen Green tokens, badges (`ticketBadges.tsx`) and form
 conventions are reused; nothing new needs a new colour.
 
 ## 7. Data Changes
@@ -192,8 +254,8 @@ conventions are reused; nothing new needs a new colour.
 | id | Int, PK | |
 | ticketId | Int, FK Ticket | required, on delete restrict |
 | performedById | Int, FK User | from the session, required |
-| assigneeId | Int?, FK User | optional, active IT Staff or Administrator (OQ-1) |
-| status | enum ActionStatus | PLANNED (default), IN_PROGRESS, COMPLETED, CANCELLED (OQ-1) |
+| assigneeId | Int?, FK User | optional, active IT Staff or Administrator (D-1) |
+| status | enum ActionStatus | PLANNED (default), IN_PROGRESS, COMPLETED, CANCELLED (D-1); create allows the first three |
 | actionAt | DateTime | default now |
 | description | String | required |
 | result | String | default "" |
@@ -203,7 +265,8 @@ conventions are reused; nothing new needs a new colour.
 | createdAt, updatedAt | DateTime | server set |
 | version | Int | default 1 |
 
-Index `(ticketId, actionAt, id)` for the ordered list. `Ticket` gains `version Int @default(1)`.
+Index `(ticketId, actionAt, id)` for the ordered list, and `(assigneeId, status)` for the "my open
+actions" dashboard metric (BR-27). `Ticket` gains `version Int @default(1)`.
 
 ### 7.2 Design reasons (decision record)
 
@@ -217,7 +280,7 @@ Index `(ticketId, actionAt, id)` for the ordered list. `Ticket` gains `version I
 3. **Integer `version`, not `updatedAt` or a lock.** Options: compare `updatedAt`; row locks;
    an integer version. `updatedAt` can tie or lose precision; row locks hold a connection
    while a person thinks. A version compared in the `UPDATE ... WHERE version = n` is atomic,
-   cheap, and gives a clean `409` (BR-16). Cost: every writer must send it, hence OQ-4.
+   cheap, and gives a clean `409` (BR-16). Cost: every writer must send it, hence D-4.
 4. **Foreign key to `User`, not a name.** The history survives a rename; users are never
    deleted (Lab 3 BR-38), so `restrict` never fires.
 5. **Enum for action status.** The database rejects any value outside the four.
@@ -225,7 +288,8 @@ Index `(ticketId, actionAt, id)` for the ordered list. `Ticket` gains `version I
 ### 7.3 Ticket status matrix and roles
 
 Unchanged from Lab 3 (`server/src/ticketStatus.ts`); written out here as the Lab 4 contract.
-Role that may perform any of these: IT Staff only (OQ-2). `*` = needs `confirm: true`.
+Roles that may perform any of these: IT Staff and Administrator (BR-26, D-2); a Requester
+never. `*` = needs `confirm: true`.
 
 | From \ To | New | Open | In Progress | Waiting | Resolved * | Closed * | Reopened * | Cancelled * |
 |---|---|---|---|---|---|---|---|---|
@@ -267,8 +331,9 @@ Summary here; exact shapes in [api-spec.md](api-spec.md).
 | Edit action | `PATCH /api/tickets/:id/actions/:actionId` |
 | Change status (extended: `version`, gate) | `PATCH /api/staff/tickets/:id/status` |
 | Ticket detail (extended: `version`, allowed transitions, gate) | `GET /api/staff/tickets/:id` |
+| Lab 3 staff routes opened to Administrator (BR-26) | claim, assign, priority, status, `POST /api/tickets/:id/comments`, `POST /api/tickets/:id/notes`, `GET /api/staff/assignable-users` |
 | Requester dashboard | `GET /api/dashboard/requester` |
-| Staff / Admin dashboard | `GET /api/dashboard/staff` |
+| Staff / Admin dashboard (includes my Actions Taken) | `GET /api/dashboard/staff` |
 
 Authentication and session: unchanged (cookie `toktickit_session`, same-origin check on every
 write). Conflicts: `409` with `{ error, code, currentVersion }`.
@@ -297,12 +362,21 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
 - **AC-10** — Given an action in COMPLETED or CANCELLED, when edited, then `409`.
 - **AC-11** — Given a DELETE on an action, then no such route exists (`404` / `405`).
 - **AC-12** — Given a CLOSED or CANCELLED ticket, when an action is posted, then `409`.
+- **AC-40** — Given a create request, then `status` omitted stores PLANNED; PLANNED, IN_PROGRESS
+  and COMPLETED are accepted; CANCELLED is `400` at `status`; COMPLETED without a `result` is
+  `400` at `result`, and with one is `201`.
+- **AC-41** — Given an edit, then every move in BR-06 is accepted, every other move is `400`, an
+  unchanged status is accepted, and COMPLETED without a `result` is `400` at `result`.
+- **AC-42** — Given a Requester viewing the actions of their own ticket, then every field of
+  every entry is returned and shown: time, performer, assignee, status, description, result,
+  follow-up flag and note, attachment notes (D-5).
 
 **Workflow**
-- **AC-13** — Given every cell of the matrix, when IT Staff request the transition, then
-  allowed cells succeed and every other cell is `409`, called directly against the API.
-- **AC-14** — Given a Requester or an Administrator, when they call the status route, then
-  `403`.
+- **AC-13** — Given every cell of the matrix, when IT Staff or an Administrator request the
+  transition, then allowed cells succeed and every other cell is `409`, called directly against
+  the API.
+- **AC-14** — Given a Requester, when they call the status route, then `403`; given an
+  Administrator, the same request is handled exactly as for IT Staff.
 - **AC-15** — Given a transition to RESOLVED on a ticket with no owner, then `409`
   `RESOLUTION_GATE` listing "no owner".
 - **AC-16** — Given a ticket with an owner but no COMPLETED action, then `409` listing "no
@@ -314,11 +388,19 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
 - **AC-19** — Given a Requester who marks "appears resolved", then `currentStatus` is
   unchanged and the gate result is unchanged.
 - **AC-20** — Given a status request with a stale ticket `version`, then `409`
-  `STALE_VERSION`; with no `version`, the Lab 3 behaviour (OQ-4).
+  `STALE_VERSION`; with no `version`, the Lab 3 behaviour (D-4).
 - **AC-21** — Given a successful status change, then the response carries the new status,
   the new `version` and the next allowed transitions.
 - **AC-22** — Given a successful change by the existing claim, assign or priority route, then
   `Ticket.version` increased by 1.
+- **AC-43** — Given an Administrator, when they claim, assign (to an IT Staff or an
+  Administrator), set priority, change status, post a Public Comment, post an Internal Note, or
+  create and edit an Action Taken, then each succeeds with the same response as for IT Staff;
+  a Requester still gets `403` on every one of them (BR-26).
+- **AC-44** — Given an assign request whose `ownerId` is an inactive user, a Requester, or a
+  missing id, then `400`; an active IT Staff or Administrator is accepted, and
+  `GET /api/staff/assignable-users` lists both roles, active only, for IT Staff and
+  Administrator, `403` for a Requester.
 
 **Dashboards**
 - **AC-23** — Given a Requester with tickets, when they GET their dashboard, then every number
@@ -328,6 +410,16 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
   me, by status, by IT priority and recently updated equal raw SQL over the same data.
 - **AC-26** — Given an Administrator, then the staff dashboard plus user counts; given IT Staff,
   no user counts.
+- **AC-45** — Given IT Staff or an Administrator with actions on tickets, when they GET the staff
+  dashboard, then `ticketsWithMyOpenActions` equals raw SQL over the caller's open actions on
+  open tickets, and `myRecentActions` equals the caller's 5 newest performed actions in the
+  documented order (BR-27); another user's actions are never counted or listed.
+- **AC-46** — Given a caller with no assigned open actions and no performed actions, then
+  `ticketsWithMyOpenActions` is `0`, `myRecentActions` is `[]`, and the UI shows "Nothing
+  here" and "You have not recorded any actions yet."
+- **AC-47** — Given the "My open actions" card, when its drill-down (`actionAssigneeId=me`) is
+  followed, then the Ticket Queue lists exactly the tickets counted; given a row of "My recent
+  actions", then it opens that ticket's detail at the Actions Taken section.
 - **AC-27** — Given any dashboard, then recent lists have at most 5 entries and no full ticket
   list is returned.
 - **AC-28** — Given a Requester calling the staff dashboard, or staff calling the Requester
@@ -369,30 +461,54 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
 
 ## 11. Assumptions and Decisions
 
-**Open questions (to confirm against the handout and with the owner before the matching PR):**
+No open question remains. The first draft carried six (OQ-1 to OQ-6); after review against the
+Lab 4 handout each is closed here as a final engineering decision. Handout section numbers are
+cited so a reader can check them.
 
-- **OQ-1** — Action Taken `status` and `assigneeId` are not fields in the brief's list; they are
-  proposed so that Part 6 (assign, change status, complete, cancel, reject an inactive assignee)
-  can be demonstrated. Proposed: `assigneeId` optional, active IT Staff or Administrator;
-  `status` PLANNED, IN_PROGRESS, COMPLETED, CANCELLED; `result` required to COMPLETE; COMPLETED
-  and CANCELLED are final. **Waiting for the owner's confirmation before Phase 1.**
-- **OQ-2** — The brief says Administrator may do "everything" with Actions Taken, while Lab 3
-  keeps the Administrator read-only on tickets (Lab 3 BR-39). Proposed: Administrator creates and
-  edits Actions Taken and sees the staff dashboard, but does not change ticket status or claim.
-- **OQ-3** — Lab 3's sheet deferred "blocks resolution while Actions Taken remain incomplete" to
-  Lab 4. The brief's example gate is "owner and at least one action". BR-12 combines both; the
-  exact handout wording decides.
-- **OQ-4** — Lab 3 routes carry no `version`. Proposed: optional on them, required on new routes
-  (BR-17), so no Lab 1 to 3 client breaks.
-- **OQ-5** — Requesters see every field of an Action Taken, including `followUpNote` and
-  `attachmentNotes`. Confirm none of it should be staff-only.
+- **D-1 (was OQ-1) — Action Taken `status` and `assigneeId` are in the model.** The handout's
+  field list (§3, §8.3) names the content fields, and Part 6 requires the UI to demonstrate
+  "create, assign, edit, status transition, complete, cancel, validation, inactive-assignee
+  rejection". Those can only be shown if an action has an assignee and a status, so both are
+  fields. `assigneeId`: optional, an active IT Staff or Administrator (BR-07). `status`:
+  PLANNED, IN_PROGRESS, COMPLETED, CANCELLED with the moves of BR-06; COMPLETED and CANCELLED
+  are final. Create allows PLANNED (default), IN_PROGRESS and COMPLETED, so a finished piece of
+  work can be logged in one step; `result` is required whenever the status is COMPLETED, on
+  create and on edit. The assignee is "the person responsible for doing the action"; it may
+  differ from the performer and from the ticket owner (BR-28).
+- **D-2 (was OQ-2) — The Administrator performs IT Staff behavior on tickets.** Handout §4.3:
+  "Administrator: perform IT Staff behavior and retain administrative access". So claim, assign,
+  priority, status, comments, notes, Actions Taken, the queue and the detail screen are all open
+  to the Administrator with identical rules (BR-26, §3.4, FR-25). The Lab 3 read-only rule
+  (Lab 3 BR-39) is replaced, with the owner eligibility widened to active IT Staff or
+  Administrator, because an Administrator who claims a ticket becomes its owner. The affected
+  Lab 3 tests are listed in `tests.md` §9. User management stays Administrator only.
+- **D-3 (was OQ-3) — The resolution gate.** The handout (§4.5) requires the backend to enforce
+  "the resolution rule" and leaves its content to the contract. Ours (BR-12): the ticket has an
+  owner, at least one COMPLETED action, and no PLANNED or IN_PROGRESS action. This satisfies
+  Lab 3's deferred "block resolution while Actions Taken remain incomplete" and the stakeholder
+  text that the owner coordinates the whole ticket and the work is recorded. CANCELLED actions
+  are ignored by the gate.
+- **D-4 (was OQ-4) — Optimistic locking is required on new routes, optional on Lab 3 routes.**
+  Handout §6.1 requires stale-update handling. `version` is required on the new action PATCH and
+  optional on the existing claim, assign, priority, status and mark-resolved routes, so a Lab 1
+  to 3 client that does not send it keeps working (BR-17); every successful write bumps it.
+- **D-5 (was OQ-5) — Requesters see every field of every Action Taken on their own ticket.**
+  Handout §8.3: "Requesters will see all Actions Taken items", each with date/time, description,
+  result, performed by, follow-up required, follow-up note and attachment notes. None of these
+  is staff-only, so the Requester response has exactly the same fields as the staff response
+  and the Requester UI is read-only (AC-42). Anything that must stay private belongs in an
+  Internal Note, which a Requester can never read.
+- **D-6 (was OQ-6) — The Administrator navigation gets the Ticket Queue.** With D-2 the
+  Administrator works on tickets, so the navigation is Dashboard, Ticket Queue, User Management.
+  It is also the destination of every dashboard drill-down.
+- **D-7 — "Current-user Actions Taken" on the staff dashboard** (handout Part 5) is two things,
+  both defined in BR-27: a count of open tickets that hold an open action assigned to me
+  (drill-down: Ticket Queue filter `actionAssigneeId=me`), and my 5 most recent performed
+  actions (each row opens its ticket). A count of tickets, not of actions, so the drill-down
+  list can match the number exactly (AC-47).
 
-- **OQ-6** — The Lab 3 Administrator UI has only User Management; the Ticket Queue API is
-  readable by Administrator but has no screen for them. A dashboard drill-down needs a
-  destination, so the proposal adds "Ticket Queue (read-only)" to the Administrator navigation.
-
-**Decisions made here:** new routes live in their own modules (`actionsTaken.ts`,
-`dashboard.ts`) registered from `app.ts`, because three features touch the same large file;
-dashboard tests compare each endpoint with raw SQL run in the same test (the development
-database accumulates fixture rows, so no hard-coded counts); timezone handling is done in SQL
-with `AT TIME ZONE 'Asia/Bangkok'`.
+**Other decisions:** new routes live in their own modules (`actionsTaken.ts`, `dashboard.ts`)
+registered from `app.ts`, because three features touch the same large file; dashboard tests
+compare each endpoint with raw SQL run in the same test (the development database accumulates
+fixture rows, so no hard-coded counts); timezone handling is done in SQL with
+`AT TIME ZONE 'Asia/Bangkok'`.

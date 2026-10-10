@@ -11,7 +11,11 @@ same-origin check; the order of checks is 401, 403, 400, 404, 409. Rule IDs refe
 - Error body: `{ "error": "<safe message>" }`; validation errors add
   `"errors": { "<field>": "<message>" }`; conflicts add `"code"` and `"currentVersion"`.
 - Messages never reveal whether a resource of another user exists (BR-24).
-- `version` is an integer. It is returned on every ticket and action, and sent back on writes.
+- `version` is an integer. It is returned on every ticket and action, and **required** on every
+  state-changing ticket write and on the action edit (BR-17, D-4). Missing or non-integer is
+  `400` at `errors.version`; a wrong value is `409 STALE_VERSION`.
+- Ticket status writes and Action Taken writes take a row lock on the ticket (BR-13); a request
+  may therefore wait briefly for a concurrent one, but never sees a half-applied state.
 
 ### Conflict body
 
@@ -108,8 +112,28 @@ Roles: IT_STAFF, ADMINISTRATOR. Body: any editable field plus a required `versio
 | 404 | ticket or action missing, or the action belongs to another ticket |
 | 409 | `STALE_VERSION`; `ACTION_FINAL` (the action is COMPLETED or CANCELLED); `TICKET_CLOSED` |
 
-There is **no** `DELETE` route (AC-11). Edits overwrite in place and bump `version` and
-`updatedAt`; `ticketId`, `performedBy` and `createdAt` never change (BR-08).
+There is **no** `DELETE` route (AC-11). An edit updates the current row, bumps `version` and
+`updatedAt`, and appends one `ActionTakenRevision` in the same transaction; `ticketId`,
+`performedBy` and `createdAt` never change (BR-08). The transaction takes the ticket lock first
+(BR-13). A create also writes revision 1.
+
+### `GET /api/tickets/:id/actions/:actionId/revisions`
+
+Roles: IT_STAFF, ADMINISTRATOR (a Requester gets `403`). Returns every revision, oldest first:
+
+```json
+{ "revisions": [ { "revision": 1, "editedBy": { "id": 7, "name": "..." }, "editedAt": "...",
+  "status": "PLANNED", "assigneeId": 7, "actionAt": "...", "description": "...", "result": "",
+  "followUpRequired": false, "followUpNote": "", "attachmentNotes": "" } ] }
+```
+
+| Status | When |
+|---|---|
+| 200 | list (never empty: revision 1 exists from the create) |
+| 401 / 403 | no session / Requester |
+| 404 | ticket or action missing, or the action belongs to another ticket |
+
+There is no `POST`, `PATCH` or `DELETE` on revisions.
 
 ## Ticket workflow
 
@@ -130,23 +154,28 @@ the current status has no legal next state for the caller. `unmet` values: `NO_O
 ### `PATCH /api/staff/tickets/:id/status` (extended)
 
 Roles: IT_STAFF, ADMINISTRATOR. Body: `{ "currentStatus": "RESOLVED", "confirm": true, "version": 4 }`.
-`version` is optional here (D-4).
+`version` is required (BR-17, D-4).
 
 | Status | When | Body |
 |---|---|---|
 | 200 | changed | `{ ticket: { ..., version, allowedTransitions, resolutionGate } }` |
-| 400 | invalid status value; missing `confirm` for RESOLVED / CLOSED / REOPENED / CANCELLED; `version` not an integer | `{ error, errors }` |
+| 400 | invalid status value; missing `confirm` for RESOLVED / CLOSED / REOPENED / CANCELLED; `version` missing or not an integer (`errors.version`) | `{ error, errors }` |
 | 401 / 403 | no session / a Requester | |
 | 404 | ticket missing | |
 | 409 | `ILLEGAL_TRANSITION`; `RESOLUTION_GATE` (body adds `"unmet": [...]`); `STALE_VERSION` | conflict body |
 
-The gate check and the update run in one transaction (BR-13).
+The transaction starts with `SELECT ... FOR UPDATE` on the ticket row; the matrix check, the gate
+check and the status write all happen while it is held, and every Action Taken create and edit
+takes the same lock, so no action can appear between the gate check and the write (BR-13).
 
-### Existing routes that now bump `version`
+### Existing routes that now require and bump `version`
 
 `POST /api/staff/tickets/:id/claim`, `POST .../assign`, `PATCH .../priority` and
-`POST /api/tickets/:id/mark-resolved` accept an optional `version` and return the new one.
-A stale `version` is `409 STALE_VERSION`. Without `version` they behave as in Lab 3.
+`POST /api/tickets/:id/mark-resolved` require `version` in the body and return the new one. A
+stale `version` is `409 STALE_VERSION`; a missing one is `400` at `errors.version`; nothing is
+written in either case. The Requester ticket detail response also carries `version` so the
+Requester client can send it. `POST .../comments` and `POST .../notes` only insert rows and are
+unchanged (D-4).
 
 ### `GET /api/staff/tickets` (extended filter)
 
@@ -222,5 +251,5 @@ Drill-downs: queue links with `ownerId=unassigned`, `ownerId=me`, `actionAssigne
 
 ## Migration note
 
-Database changes are additive (specification §7.4): table `ActionTaken`, enum `ActionStatus`,
+Database changes are additive (specification §7.4): tables `ActionTaken` and `ActionTakenRevision`, enum `ActionStatus`,
 column `Ticket.version`.

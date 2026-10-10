@@ -68,7 +68,12 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-19 | Lab 3 SEC-07 | forged and missing Origin on POST and PATCH | `403` | Planned |
 | API-46 | AC-40, BR-06, FR-05 | create with `status` omitted, PLANNED, IN_PROGRESS, COMPLETED with result, COMPLETED without result, CANCELLED, unknown value | PLANNED stored; `201` ×3; `400` at `result`; `400` at `status` ×2 | Planned |
 | API-47 | AC-42, D-5 | Requester lists the actions of their own ticket | every field present and equal to what staff receive (including `followUpNote`, `attachmentNotes`, performer, assignee) | Planned |
-| API-48 | BR-08 | edit an action, read it again | `ticketId`, `performedBy`, `createdAt` unchanged; `version` and `updatedAt` changed; no revision rows exist | Planned |
+| API-48 | BR-08 | edit an action, read it again | `ticketId`, `performedBy`, `createdAt` unchanged; `version` and `updatedAt` changed; one new revision row | Planned |
+| API-60 | AC-48, BR-08 | create an action, edit it twice, list revisions | 3 revisions numbered 1 to 3 equal to `ActionTaken.version` at each step; revision 1 holds the created values, including those the edits overwrote; editor and time set | Planned |
+| API-61 | AC-48 | stale edit, edit of a final action, invalid edit | each rejected; revision count unchanged | Planned |
+| API-62 | AC-48, AC-11 | `POST`, `PATCH`, `DELETE` on a revision URL; Requester GET | `404` / `405`; Requester `403` | Planned |
+| API-63 | AC-49, BR-08 | force a failure after the update inside the edit transaction | projection and revisions both unchanged | Planned |
+| API-64 | BR-13 | two edits of different actions of one ticket, and one edit while a status change runs, 20 rounds | no deadlock, no `500`; every request is `200` or a documented `409` | Planned |
 | API-49 | BR-28 | action created by staff B on a ticket owned by staff A | `201`; performer is B; owner is still A | Planned |
 
 ### 3.2 Ticket workflow (`server/tests/lab-04/ticket-workflow.api.test.ts`)
@@ -81,11 +86,13 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-23 | AC-15, BR-12 | RESOLVED with no owner | `409 RESOLUTION_GATE`, `NO_OWNER` | Planned |
 | API-24 | AC-16, BR-12 | owner, no COMPLETED action | `409`, `NO_COMPLETED_ACTION` | Planned |
 | API-25 | AC-17, BR-12 | PLANNED / IN_PROGRESS action present; then completed or cancelled | `409 OPEN_ACTIONS`; then `200` | Planned |
-| API-26 | AC-18, BR-13 | RESOLVED and "add a PLANNED action" fired together, 20 rounds | outcome equals one of the two serial orders, never a resolved ticket with an open action created before it | Planned |
+| API-26 | AC-18, BR-13 | RESOLVED fired together with (a) "add a PLANNED action" and (b) "edit an action to IN_PROGRESS" (a PLANNED one), 20 rounds each; after every round query the database | outcome equals one of the two serial orders; no round ends with a RESOLVED ticket that holds a PLANNED or IN_PROGRESS action; the lock is proven by also running the add with the ticket lock held by the test (the add waits until the test releases it) | Planned |
 | API-27 | AC-19, BR-15 | Requester marks "appears resolved" | status unchanged, gate unchanged, signal recorded | Planned |
-| API-28 | AC-20, BR-17 | status with stale `version`; with none | `409 STALE_VERSION`; Lab 3 behaviour | Planned |
+| API-28 | AC-20, BR-17 | status with stale `version`; with none; with a non-integer | `409 STALE_VERSION`; `400` at `errors.version`; `400`; ticket unchanged each time | Planned |
 | API-29 | AC-21 | successful status change | response has new status, `version`, `allowedTransitions`, `resolutionGate` | Planned |
-| API-30 | AC-22, BR-17 | claim, assign, priority, mark-resolved | `version` +1 each; stale optional `version` → `409` | Planned |
+| API-30 | AC-22, BR-17 | claim, assign, priority, mark-resolved, each with the current, a stale, and no `version` | `version` +1; `409 STALE_VERSION`; `400` at `errors.version`; nothing written in the last two |
+| API-65 | BR-17, D-4 | two callers claim, assign or change priority from the same loaded `version` at once | exactly one succeeds; the other gets `409`; the first caller's value is the stored one (no lost update) |
+| API-66 | D-4 | `POST` comment and note without `version` | `201`, ticket `version` unchanged | Planned |
 | API-31 | FR-12, BR-26 | staff detail GET as IT Staff and Administrator | `version`, transitions, gate present; both roles receive identical `allowedTransitions` | Planned |
 | API-32 | BR-14 | RESOLVED without `confirm` on a ticket that also fails the gate | `400` first, then after confirm `409` | Planned |
 | API-33 | api-spec | queue with `ownerId=me`, `ownerId=unassigned`, and a bad value | only the caller's tickets; only unowned tickets; `400` | Planned |
@@ -149,6 +156,8 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-01 | FR-01, AC-35 | list renders in the order given; empty, loading, error with Retry | `ActionsTaken.test.tsx` | Planned |
 | UI-02 | AC-04, AC-34, AC-40 | create: required fields, follow-up note required when checked, Result required when Completed is chosen, errors under fields, values kept after an error | `ActionsTaken.test.tsx` | Planned |
 | UI-03 | AC-09, AC-32 | edit sends `version`; `409` shows the conflict banner and keeps input | `ActionsTaken.test.tsx` | Planned |
+| UI-23 | AC-48 | staff "History" button expands the revisions oldest first; a Requester sees no History button | `ActionsTaken.test.tsx` | Planned |
+| UI-24 | AC-20, AC-22 | claim, assign, priority, status and mark-resolved calls each send the loaded `version` | `TicketWorkflow.test.tsx`, `RequesterTicketDetail.test.tsx` | Planned |
 | UI-04 | AC-08 | Requester sees the list read-only, no buttons | `ActionsTaken.test.tsx` | Planned |
 | UI-05 | AC-10, BR-06 | final actions have no Edit button | `ActionsTaken.test.tsx` | Planned |
 | UI-06 | AC-33 | Save disabled in flight; double click sends one request | `ActionsTaken.test.tsx` | Planned |
@@ -162,7 +171,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-14 | AC-26 | Administrator sees user counts, IT Staff does not | `StaffDashboard.test.tsx` | Planned |
 | UI-15 | AC-24, AC-35 | Requester dashboard numbers, lists, empty state with New Ticket | `RequesterDashboard.test.tsx` | Planned |
 | UI-16 | AC-31 | navigation per role (Administrator: Dashboard, Ticket Queue, User Management), `aria-current` on the active item | `AppShell.test.tsx` (Lab 3 file, extended) | Planned |
-| UI-17 | AC-45, AC-47 | staff dashboard "My open actions" card and "My recent actions" list: numbers, rows, link names and targets (`actionAssigneeId=me`, ticket detail at Actions Taken) | `StaffDashboard.test.tsx` | Planned |
+| UI-17 | AC-45, AC-47 | staff dashboard "Open actions assigned to me" card and "My recent actions" list: numbers, rows, link names and targets (`actionAssigneeId=me`, ticket detail at Actions Taken) | `StaffDashboard.test.tsx` | Planned |
 | UI-18 | AC-46 | my-actions zero state: `0` with "Nothing here", "You have not recorded any actions yet."; loading and error states cover the new card | `StaffDashboard.test.tsx` | Planned |
 | UI-19 | AC-43, FR-25 | Administrator ticket detail shows the same enabled controls as IT Staff (claim or reassign, priority, status buttons, comment and note forms, Actions Taken create and edit); Requester sees none | `TicketWorkflow.test.tsx`, `ActionsTaken.test.tsx` | Planned |
 | UI-20 | AC-40, BR-06 | create Status select offers exactly Planned (default), In progress, Completed; choosing Completed marks Result required and blocks Save with the message | `ActionsTaken.test.tsx` | Planned |
@@ -212,6 +221,9 @@ and F7 for the UI). The reason for each is written here:
 | `staff-ticket-detail.api.test.ts` "rejects an ownerId that references an Administrator" | an active Administrator is a valid owner (BR-26) | the case moves to the "accepted" side; Requester, inactive and missing stay `400` |
 | `comments-notes.api.test.ts` "rejects a caller with role ADMINISTRATOR" (comment) and "rejects an Administrator" (note) | Administrator may post both | assert `201`; Requester note stays `403` |
 | `authorization.api.test.ts` role sweep rows for claim, assign, priority, status, comment POST, note POST and `assignable-users` | the `allowed` lists gain ADMINISTRATOR | update the lists, keep the sweep logic |
+| every Lab 3 API test that calls claim, assign, priority, status or mark-resolved (`staff-ticket-detail.api.test.ts`, `requester-ticket-detail.api.test.ts`, `authorization.api.test.ts` role sweep, seed helpers) | `version` is now required (BR-17, D-4), so a call without it is `400` | send the ticket's current `version` through the shared helper; the role and validation assertions stay |
+| `client/tests/lab-03/StaffTicketDetail.test.tsx`, `RequesterTicketDetail.test.tsx` request bodies | the client must send `version` on those writes | assert the body carries the loaded `version` |
+| `e2e/lab-03/staff-ticket-flow.spec.ts`, `e2e/lab-03/requester-ticket-flow.spec.ts` | they go through the UI, which now sends `version` | no assertion change expected; rerun to confirm |
 | `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx` UI-08, UI-14 | status `<select>` becomes buttons | assertions move to the buttons |
 | `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons |
@@ -249,11 +261,11 @@ again on `main` (REG-01).
 | AC-15 | API-23, UI-08, UNIT-02, E2E-02 |
 | AC-16 | API-24, UNIT-02 |
 | AC-17 | API-25, UNIT-02, E2E-02 |
-| AC-18 | API-26 |
+| AC-18 | API-26, API-64 |
 | AC-19 | API-27, UI-11, E2E-02 |
-| AC-20 | API-28, E2E-02 |
+| AC-20 | API-28, API-65, UI-24, E2E-02 |
 | AC-21 | API-29, UI-10 |
-| AC-22 | API-30 |
+| AC-22 | API-30, API-65, API-66, UI-24 |
 | AC-23 | API-34, E2E-03 |
 | AC-24 | API-35, UI-15 |
 | AC-25 | API-39 |
@@ -279,6 +291,8 @@ again on `main` (REG-01).
 | AC-45 | API-55, API-56, API-58, UI-17, E2E-03 |
 | AC-46 | API-57, UI-18, E2E-03 |
 | AC-47 | API-59, UI-17, E2E-03 |
+| AC-48 | API-48, API-60, API-61, API-62, UI-23 |
+| AC-49 | API-63 |
 
 ## 12. Traceability: business rules → tests
 
@@ -287,16 +301,16 @@ again on `main` (REG-01).
 | BR-01 | API-02 | BR-14 | API-32, UI-09 |
 | BR-02 | API-05 | BR-15 | API-27 |
 | BR-03 | API-03, UNIT-03 | BR-16 | API-10, API-11 |
-| BR-04 | API-04 | BR-17 | API-28, API-30 |
+| BR-04 | API-04 | BR-17 | API-28, API-30, API-65, API-66 |
 | BR-05 | API-17, UNIT-03 | BR-18 | API-39, API-42 |
 | BR-06 | API-13, API-46, UNIT-01 | BR-19 | API-34 |
 | BR-07 | API-06 | BR-20 | API-44, UNIT-04 |
-| BR-08 | API-15, API-48 | BR-21 | API-38 |
+| BR-08 | API-15, API-48, API-60, API-61, API-62, API-63 | BR-21 | API-38 |
 | BR-09 | API-07 | BR-22 | API-36, API-41 |
 | BR-10 | API-16 | BR-23 | API-35, API-42 |
 | BR-11 | API-20, API-21 | BR-24 | API-08, SEC-02 |
 | BR-12 | API-23, API-24, API-25, UNIT-02 | BR-25 | MIG-01, MIG-02 |
-| BR-13 | API-26 | BR-26 | API-50, API-51, API-52, SEC-01 |
+| BR-13 | API-26, API-64 | BR-26 | API-50, API-51, API-52, SEC-01 |
 | | | BR-27 | API-55, API-56, API-57, API-58, UNIT-05 |
 | | | BR-28 | API-49 |
 
@@ -309,13 +323,14 @@ again on `main` (REG-01).
 | FR-03 | API-09, API-10 | FR-15 | API-39, API-55, API-56, UI-12, UI-17 |
 | FR-04 | API-04, API-14, API-46, UNIT-03 | FR-16 | API-40, UI-14 |
 | FR-05 | API-06, API-13, API-46, UNIT-01 | FR-17 | API-45, API-59, UI-12, UI-17 |
-| FR-06 | API-15 | FR-18 | API-36, API-41 |
+| FR-06 | API-15, API-60 | FR-18 | API-36, API-41 |
 | FR-07 | API-07 | FR-19 | UI-16, E2E-03 |
 | FR-08 | API-16 | FR-20 | UI-01, UI-13, UI-15 |
 | FR-09 | API-20, API-21, API-22 | FR-21 | UI-02, UI-06, E2E-04 |
 | FR-10 | API-23, API-24, API-25 | FR-22 | A11Y-01 to A11Y-04 |
 | FR-11 | API-10, API-28 | FR-23 | RSP-01, RSP-02 |
 | FR-12 | API-29, API-31 | FR-24 | REG-01, REG-02 | FR-25 | API-50, API-51, UI-19, E2E-05 |
+| FR-26 | API-60, API-62, UI-23 | | |
 
 ## 13. What has actually been run
 

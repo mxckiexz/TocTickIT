@@ -33,10 +33,13 @@ on a dashboard must open the list behind them.
 ### 3.1 In scope
 
 - Actions Taken: a list of entries under a ticket (create, edit while not final, never delete;
-  "append-only" is defined in BR-08).
+  every edit keeps the previous values as an immutable revision, BR-08).
 - Status matrix for all 8 statuses with roles, enforced at the backend, and a resolution gate
   for `RESOLVED`.
-- Optimistic locking (`version` on `Ticket` and `ActionTaken`) with `409` on a stale write.
+- Optimistic locking (`version` on `Ticket` and `ActionTaken`), required on every state-changing
+  ticket route and on the action edit, with `409` on a stale write (BR-17).
+- Pessimistic ticket-row lock shared by every Action Taken write and every ticket status write,
+  so the resolution gate cannot be bypassed by a concurrent action (BR-13).
 - Requester "appears resolved" stays advisory.
 - The Administrator performs every IT Staff ticket operation (handout §4.3), see §3.4 and §3.5.
 - Dashboards: Requester, IT Staff, Administrator (staff metrics plus short user counts); the staff
@@ -113,7 +116,10 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   optional `assigneeId`, who must be an active IT Staff or Administrator (D-1). A new action
   may be created as PLANNED (default), IN_PROGRESS or COMPLETED, never as CANCELLED.
 - **FR-06** — Actions Taken are never deleted (no delete endpoint); an action that should not
-  count is set to CANCELLED. Edits are allowed in place until the action is final (BR-08).
+  count is set to CANCELLED. Edits are allowed until the action is final; each edit stores the
+  previous values as an immutable revision (BR-08).
+- **FR-26** — IT Staff and Administrator list the revisions of an Action Taken (oldest first),
+  read-only.
 - **FR-07** — The list is returned in a stable order: `actionAt` ascending, then `id`.
 - **FR-08** — Actions cannot be added to a CLOSED or CANCELLED ticket.
 
@@ -175,12 +181,15 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   and on edit (D-1).
 - **BR-07** — `assigneeId`, when given, must be an active user with role IT_STAFF or
   ADMINISTRATOR; an inactive, missing, or Requester user is rejected `400` (D-1).
-- **BR-08** — **Append-only means no deletion.** No role can delete an Action Taken and there is
-  no delete route. An entry may be edited in place while it is not final; every edit bumps
-  `version` and `updatedAt`, while `ticketId`, `performedById` and `createdAt` never change. No
-  revision history is stored: an edit overwrites the previous field values (documented
-  limitation; the record of what happened is kept by cancelling an action and adding a new one
-  rather than rewriting history).
+- **BR-08** — **Append-only means no deletion and no lost value.** No role can delete an Action
+  Taken and there is no delete route. The `ActionTaken` row is the *current projection*; the
+  history is `ActionTakenRevision`, an immutable table. Creating an action writes revision 1
+  (the created values); every successful edit writes one more revision holding the values the
+  edit produced, in the same transaction as the update, with the editor and time. Revisions are
+  never updated or deleted and have no write route; so every value an action ever had can be
+  read back. An edit bumps `version` and `updatedAt` on the projection, while `ticketId`,
+  `performedById` and `createdAt` never change. `ActionTakenRevision.revision` equals the
+  `ActionTaken.version` it was written at, which makes the two easy to cross-check.
 - **BR-09** — Actions are ordered by `actionAt` then `id`, both ascending, so the order never
   changes between reads.
 - **BR-10** — A ticket in CLOSED or CANCELLED accepts no new Action Taken (`409`).
@@ -190,8 +199,17 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   (a) the ticket has an owner, (b) it has at least one Action Taken with status COMPLETED,
   (c) it has no Action Taken with status PLANNED or IN_PROGRESS. Otherwise `409` with code
   `RESOLUTION_GATE` and the list of unmet conditions.
-- **BR-13** — The gate is evaluated inside the same transaction that changes the status, so an
-  action added or changed at the same moment cannot slip past it.
+- **BR-13** — **Gate and Action Taken writes are serialized on the Ticket row.** Every Action
+  Taken create, every Action Taken edit, and every ticket status change (not only RESOLVED) runs
+  in one transaction whose first statement is `SELECT ... FROM "Ticket" WHERE id = $1 FOR
+  UPDATE` (the "ticket lock"). An action write takes the lock before reading the action again
+  and before the closed-ticket check (BR-10); a status change takes it before the matrix check,
+  the gate check (BR-12) and the status write. Lock order is always Ticket, then ActionTaken, so
+  there is no deadlock. Because the gate is read and the status written while the lock is held,
+  no action can be created or edited between the check and the write: the outcome is always one
+  of the two serial orders. The action edit finds `ticketId` with an unlocked read (it never
+  changes, BR-28), takes the ticket lock, then re-reads the action and compares `version`
+  (BR-16). Isolation stays READ COMMITTED; no retry is needed because writers wait on the lock.
 - **BR-14** — Confirmation (`confirm: true`) for RESOLVED, CLOSED, REOPENED, CANCELLED stays as
   in Lab 3 (BR-42 there); order of checks stays 401, 403, 400, 404, 409.
 - **BR-15** — The Requester's "appears resolved" signal is advisory only: it records who and
@@ -199,9 +217,14 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
 - **BR-16** — **Optimistic locking**: `Ticket.version` and `ActionTaken.version` start at 1 and
   increase by 1 on every successful change. A write that sends a `version` different from the
   stored one is rejected `409` with code `STALE_VERSION` and the current version.
-- **BR-17** — New Lab 4 write routes require `version`. The Lab 3 ticket routes (claim, assign,
-  priority, status) accept an optional `version`: when sent it is checked, when omitted the
-  route behaves as before (D-4). Either way a successful write bumps `Ticket.version`.
+- **BR-17** — `version` is **required** on every Lab 4 state-changing write: the action edit
+  and the ticket routes claim, assign, priority, status and mark-resolved. A missing or
+  non-integer `version` is `400` with `errors.version`; a wrong one is `409 STALE_VERSION`
+  (BR-16). The check and the update are one statement (`UPDATE ... WHERE id = $1 AND version =
+  $2`) so a caller can never overwrite a change it has not seen. Every successful write bumps
+  `Ticket.version`. Comments and internal notes insert a new row and overwrite nothing, so they
+  need no `version` and do not bump it (D-4). The Lab 3 client and tests are updated to send
+  `version` (`tests.md` §9).
 - **BR-18** — Dashboard numbers come from the database at request time; "open" means status in
   NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED.
 - **BR-19** — A Requester dashboard only ever counts and lists the caller's own tickets.
@@ -222,7 +245,10 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   same validation and the same results. The ticket owner and every "assignable user" may be an
   active `IT_STAFF` or `ADMINISTRATOR`. Administrator keeps the user-management routes, which
   stay Administrator only. This replaces Lab 3 BR-17, BR-23, BR-39 and BR-41 (§3.5).
-- **BR-27** — **My Actions Taken on the staff dashboard.** "Open action assigned to me" means an
+- **BR-27** — **My Actions Taken on the staff dashboard.** The card is labelled "Open actions
+  assigned to me" and the list "My recent actions"; the two use different people on purpose:
+  the card counts by `assigneeId` (work I must do), the list by `performedById` (work I
+  recorded). "Open action assigned to me" means an
   Action Taken with `assigneeId` = caller and status PLANNED or IN_PROGRESS on a ticket whose
   status is open (BR-18). The metric `ticketsWithMyOpenActions` counts the distinct such
   tickets. `myRecentActions` lists the caller's 5 newest actions by `actionAt` then `id`
@@ -265,8 +291,22 @@ conventions are reused; nothing new needs a new colour.
 | createdAt, updatedAt | DateTime | server set |
 | version | Int | default 1 |
 
-Index `(ticketId, actionAt, id)` for the ordered list, and `(assigneeId, status)` for the "my open
-actions" dashboard metric (BR-27). `Ticket` gains `version Int @default(1)`.
+Index `(ticketId, actionAt, id)` for the ordered list, and `(assigneeId, status)` for the "open
+actions assigned to me" dashboard metric (BR-27). `Ticket` gains `version Int @default(1)`.
+
+`ActionTakenRevision` (new, immutable, BR-08):
+
+| Field | Type | Notes |
+|---|---|---|
+| id | Int, PK | |
+| actionTakenId | Int, FK ActionTaken | required, on delete restrict |
+| revision | Int | equals `ActionTaken.version` at that moment; unique with `actionTakenId` |
+| editedById | Int, FK User | from the session (the creator for revision 1) |
+| editedAt | DateTime | server set |
+| status, assigneeId, actionAt, description, result, followUpRequired, followUpNote, attachmentNotes | same types as `ActionTaken` | the values the action had at this revision |
+
+Unique `(actionTakenId, revision)`. No update or delete route exists, and the application never
+issues an `UPDATE` or `DELETE` on this table.
 
 ### 7.2 Design reasons (decision record)
 
@@ -274,13 +314,17 @@ actions" dashboard metric (BR-27). `Ticket` gains `version Int @default(1)`.
    a child table. A child table keeps one row per entry with its own author and time (append-only
    history), lets the database count and filter actions for the gate and dashboards, and allows
    a foreign key to the performing user. A text column cannot enforce any of that. Cost: one join.
+   History of edits lives in a second child table, `ActionTakenRevision` (BR-08), because an
+   in-place overwrite would lose the earlier values and "no delete" alone is not append-only.
 2. **Composite index `(ticketId, actionAt, id)`.** The only list query is "all actions of one
    ticket in order"; the index serves the filter and the sort together, and `id` makes ties
    stable (BR-09).
 3. **Integer `version`, not `updatedAt` or a lock.** Options: compare `updatedAt`; row locks;
    an integer version. `updatedAt` can tie or lose precision; row locks hold a connection
    while a person thinks. A version compared in the `UPDATE ... WHERE version = n` is atomic,
-   cheap, and gives a clean `409` (BR-16). Cost: every writer must send it, hence D-4.
+   cheap, and gives a clean `409` (BR-16). Cost: every writer must send it, hence D-4. The
+   version protects a person's stale view; the Ticket-row lock (BR-13) protects the gate, which
+   spans several rows and so cannot be covered by one row's version.
 4. **Foreign key to `User`, not a name.** The history survives a rename; users are never
    deleted (Lab 3 BR-38), so `restrict` never fires.
 5. **Enum for action status.** The database rejects any value outside the four.
@@ -306,11 +350,11 @@ never. `*` = needs `confirm: true`.
 
 ### 7.4 Migration (additive, with rollback)
 
-One Prisma migration: `CREATE TYPE "ActionStatus"`, `CREATE TABLE "ActionTaken"` with the index
-and foreign keys, `ALTER TABLE "Ticket" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1`.
+One Prisma migration: `CREATE TYPE "ActionStatus"`, `CREATE TABLE "ActionTaken"` and
+`CREATE TABLE "ActionTakenRevision"` with their indexes and foreign keys, `ALTER TABLE "Ticket" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1`.
 Nothing existing is altered or dropped (BR-25). Rollback (documented in the README, tested for
 real on a scratch copy): restore from the `pg_dump` taken before the migration, or run the
-inverse SQL (`DROP TABLE "ActionTaken"; DROP TYPE "ActionStatus"; ALTER TABLE "Ticket" DROP
+inverse SQL (`DROP TABLE "ActionTakenRevision"; DROP TABLE "ActionTaken"; DROP TYPE "ActionStatus"; ALTER TABLE "Ticket" DROP
 COLUMN "version"`) which is only safe before Action Taken data has been written.
 
 ### 7.5 Seed
@@ -328,7 +372,8 @@ Summary here; exact shapes in [api-spec.md](api-spec.md).
 |---|---|
 | List actions | `GET /api/tickets/:id/actions` |
 | Create action | `POST /api/tickets/:id/actions` |
-| Edit action | `PATCH /api/tickets/:id/actions/:actionId` |
+| Edit action (writes a revision) | `PATCH /api/tickets/:id/actions/:actionId` |
+| List revisions of an action | `GET /api/tickets/:id/actions/:actionId/revisions` |
 | Change status (extended: `version`, gate) | `PATCH /api/staff/tickets/:id/status` |
 | Ticket detail (extended: `version`, allowed transitions, gate) | `GET /api/staff/tickets/:id` |
 | Lab 3 staff routes opened to Administrator (BR-26) | claim, assign, priority, status, `POST /api/tickets/:id/comments`, `POST /api/tickets/:id/notes`, `GET /api/staff/assignable-users` |
@@ -362,6 +407,12 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
 - **AC-10** — Given an action in COMPLETED or CANCELLED, when edited, then `409`.
 - **AC-11** — Given a DELETE on an action, then no such route exists (`404` / `405`).
 - **AC-12** — Given a CLOSED or CANCELLED ticket, when an action is posted, then `409`.
+- **AC-48** — Given an action created and then edited twice, when its revisions are listed, then
+  there are 3 revisions numbered 1 to 3, each holding the values the action had at that point
+  (including values the later edits overwrote on the projection), each with its editor and time;
+  a stale or rejected edit adds no revision; no route updates or deletes a revision (BR-08).
+- **AC-49** — Given an edit that fails after the revision insert would have run (forced error in
+  a test), then neither the projection nor the revisions change (one transaction).
 - **AC-40** — Given a create request, then `status` omitted stores PLANNED; PLANNED, IN_PROGRESS
   and COMPLETED are accepted; CANCELLED is `400` at `status`; COMPLETED without a `result` is
   `400` at `result`, and with one is `201`.
@@ -383,16 +434,18 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
   completed action".
 - **AC-17** — Given a ticket with a PLANNED or IN_PROGRESS action, then `409` listing the open
   actions; once they are COMPLETED or CANCELLED and one is COMPLETED, the transition succeeds.
-- **AC-18** — Given an action added at the same moment as a RESOLVED request, then the outcome
-  is the same as if they ran one after the other (never both succeeded against a stale gate).
+- **AC-18** — Given an action created or edited at the same moment as a RESOLVED request, then
+  the outcome is the same as if they ran one after the other, and the final state is never a
+  RESOLVED ticket holding a PLANNED or IN_PROGRESS action (BR-13).
 - **AC-19** — Given a Requester who marks "appears resolved", then `currentStatus` is
   unchanged and the gate result is unchanged.
 - **AC-20** — Given a status request with a stale ticket `version`, then `409`
-  `STALE_VERSION`; with no `version`, the Lab 3 behaviour (D-4).
+  `STALE_VERSION`; with no `version`, `400` at `errors.version`; in both cases nothing changes.
 - **AC-21** — Given a successful status change, then the response carries the new status,
   the new `version` and the next allowed transitions.
-- **AC-22** — Given a successful change by the existing claim, assign or priority route, then
-  `Ticket.version` increased by 1.
+- **AC-22** — Given a claim, assign, priority or mark-resolved request, then with the current
+  `version` it succeeds and `Ticket.version` increases by 1; with a stale one `409
+  STALE_VERSION`; with none `400` at `errors.version`; nothing changes in the last two cases.
 - **AC-43** — Given an Administrator, when they claim, assign (to an IT Staff or an
   Administrator), set priority, change status, post a Public Comment, post an Internal Note, or
   create and edit an Action Taken, then each succeeds with the same response as for IT Staff;
@@ -417,7 +470,7 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
 - **AC-46** — Given a caller with no assigned open actions and no performed actions, then
   `ticketsWithMyOpenActions` is `0`, `myRecentActions` is `[]`, and the UI shows "Nothing
   here" and "You have not recorded any actions yet."
-- **AC-47** — Given the "My open actions" card, when its drill-down (`actionAssigneeId=me`) is
+- **AC-47** — Given the "Open actions assigned to me" card, when its drill-down (`actionAssigneeId=me`) is
   followed, then the Ticket Queue lists exactly the tickets counted; given a row of "My recent
   actions", then it opens that ticket's detail at the Actions Taken section.
 - **AC-27** — Given any dashboard, then recent lists have at most 5 entries and no full ticket
@@ -488,10 +541,14 @@ cited so a reader can check them.
   Lab 3's deferred "block resolution while Actions Taken remain incomplete" and the stakeholder
   text that the owner coordinates the whole ticket and the work is recorded. CANCELLED actions
   are ignored by the gate.
-- **D-4 (was OQ-4) — Optimistic locking is required on new routes, optional on Lab 3 routes.**
-  Handout §6.1 requires stale-update handling. `version` is required on the new action PATCH and
-  optional on the existing claim, assign, priority, status and mark-resolved routes, so a Lab 1
-  to 3 client that does not send it keeps working (BR-17); every successful write bumps it.
+- **D-4 (was OQ-4) — `version` is required on every state-changing ticket route.** Handout §6.1
+  requires stale and concurrent updates to be handled. An optional `version` would let a caller
+  that omits it silently overwrite another caller's claim, assignment, priority or status, which
+  is exactly the lost update the handout forbids, and a server-side fallback (read, then write)
+  cannot guarantee it without the caller's view of the record. So the action PATCH and the
+  claim, assign, priority, status and mark-resolved routes all require it (BR-17). Cost: the Lab 3
+  client and the Lab 3 tests that call these routes must send `version`; they are listed in
+  `tests.md` §9. Comments and notes only insert rows, so they stay unversioned.
 - **D-5 (was OQ-5) — Requesters see every field of every Action Taken on their own ticket.**
   Handout §8.3: "Requesters will see all Actions Taken items", each with date/time, description,
   result, performed by, follow-up required, follow-up note and attachment notes. None of these

@@ -26,7 +26,7 @@ rendered; the API still answers `403` (Lab 3 FR-07).
 
 Layout (desktop): a row of metric cards, then two lists.
 
-- Cards: Unassigned, Assigned to me, **My open actions** (specification BR-27: the number of
+- Cards: Unassigned, Assigned to me, **Open actions assigned to me** (specification BR-27: the number of
   open tickets that hold an open action assigned to me), By status (8 small counts), By IT
   priority (3 counts).
   Each card has a label, the number, and a link "View" that opens the Ticket Queue with the
@@ -36,7 +36,7 @@ Layout (desktop): a row of metric cards, then two lists.
   priority badge, updated time); each row opens the ticket.
 - **My recent actions**: a list of my 5 newest performed actions (ticket number, status badge
   with text, action time, description cut to 120 characters). Each row is a link that opens the
-  ticket detail at the Actions Taken section. The "My open actions" card's "View" link opens the
+  ticket detail at the Actions Taken section. The "Open actions assigned to me" card's "View" link opens the
   Ticket Queue with `actionAssigneeId=me` (accessible name such as "View 2 tickets with my open
   actions"). Empty: the card shows `0` with "Nothing here" and the list shows "You have not
   recorded any actions yet."
@@ -68,7 +68,9 @@ Administrator, identical) and (read-only) in the Requester Ticket Detail.
 Requester sees every entry with every field below (specification D-5). Each entry shows: when (`actionAt`), who performed it, status badge with text (PLANNED / IN PROGRESS /
 COMPLETED / CANCELLED), assignee (or "Unassigned"), description, result, a "Follow-up needed"
 badge with its note, and attachment notes. Staff entries have an "Edit" button (not shown for
-COMPLETED or CANCELLED entries, which are final). The Requester sees no buttons.
+COMPLETED or CANCELLED entries, which are final) and a "History" button that expands the
+revisions of that entry (revision number, editor, time, and the values at that revision, oldest
+first; specification BR-08). The Requester sees no buttons and no History.
 
 **Create mode** (staff) — "Add action" opens an inline form: Description (required), Result,
 Action time (defaults to now), Status, Assignee (select of active IT Staff and Administrators),
@@ -82,7 +84,9 @@ server enforces it too.
 offers only the current status and the moves BR-06 allows from it (from Planned: In progress,
 Completed, Cancelled; from In progress: Completed, Cancelled). Completed requires Result, same
 message. Saving a stale entry shows the conflict banner (§6). There is no Delete button; to drop
-an entry the user sets it to Cancelled.
+an entry the user sets it to Cancelled. Every ticket write the client makes (claim, assign,
+priority, status, mark-resolved) also sends the `version` it last loaded, so a stale view is
+refused with the conflict banner and never silently overwrites.
 
 Feedback: field errors sit directly under the field and are tied to it (`aria-describedby`);
 a request failure shows a banner above the form; the values typed stay after an error
@@ -146,7 +150,7 @@ gate message. Checklist, filled in during F10 by opening each screenshot:
 - [ ] Badges carry text; priority and status colours match Lab 3.
 - [ ] Editable and read-only fields are distinct (Requester sees Actions Taken read-only).
 - [ ] The Administrator sees the same enabled ticket controls as IT Staff.
-- [ ] My open actions card and My recent actions list, with zero and non-zero data.
+- [ ] Open actions assigned to me card and My recent actions list, with zero and non-zero data.
 - [ ] Error messages under fields; banners above forms.
 - [ ] Focus visible on every new control.
 - [ ] No clipping, overlap or horizontal scroll at the three widths.

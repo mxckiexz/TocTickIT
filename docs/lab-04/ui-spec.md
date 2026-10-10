@@ -78,7 +78,9 @@ Action time (defaults to now), Status, Assignee (select of active IT Staff and A
 Attachment notes. Buttons: Save, Cancel. The Status select offers exactly Planned (selected by
 default), In progress and Completed (BR-06); Cancelled is not offered on create. Choosing
 Completed marks Result as required ("Result is required to complete an action") and the
-server enforces it too.
+server enforces it too. On a RESOLVED ticket the Status select offers only Completed, with the hint
+"Reopen the ticket to add open work" (BR-10); a `409 TICKET_RESOLVED` from the server shows the
+conflict banner and keeps what was typed.
 
 **Edit mode** — the same form filled with the entry; carries the `version`. The Status select
 offers only the current status and the moves BR-06 allows from it (from Planned: In progress,

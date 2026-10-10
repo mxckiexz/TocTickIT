@@ -24,7 +24,7 @@ same-origin check; the order of checks is 401, 403, 400, 404, 409. Rule IDs refe
   "code": "STALE_VERSION", "currentVersion": 4 }
 ```
 
-Other `409` codes: `ILLEGAL_TRANSITION`, `RESOLUTION_GATE`, `ACTION_FINAL`, `TICKET_CLOSED`.
+Other `409` codes: `ILLEGAL_TRANSITION`, `RESOLUTION_GATE`, `ACTION_FINAL`, `TICKET_CLOSED`, `TICKET_RESOLVED`.
 
 ## Roles (read this first)
 
@@ -94,7 +94,7 @@ Roles: IT_STAFF, ADMINISTRATOR. Body (all but `description` optional). `status` 
 | 400 | validation: `description` empty or over 2000; `followUpNote` missing when `followUpRequired`; `actionAt` more than 5 minutes ahead or not a date; `assigneeId` inactive, missing, or not IT Staff / Administrator; `status` not allowed on create (`CANCELLED`, or an unknown value) at `errors.status`; `result` empty when `status` is `COMPLETED` at `errors.result` |
 | 401 / 403 | no session / Requester |
 | 404 | ticket does not exist |
-| 409 | `TICKET_CLOSED` (ticket is CLOSED or CANCELLED) |
+| 409 | `TICKET_CLOSED` (ticket is CLOSED or CANCELLED); `TICKET_RESOLVED` (ticket is RESOLVED and `status` is PLANNED or IN_PROGRESS; a COMPLETED action is accepted; reopen the ticket first, BR-10) |
 
 ### `PATCH /api/tickets/:id/actions/:actionId`
 
@@ -110,7 +110,7 @@ Roles: IT_STAFF, ADMINISTRATOR. Body: any editable field plus a required `versio
 | 400 | same field validation as create; `version` missing or not an integer; status move not allowed by BR-06 (PLANNED → PLANNED and any move out of a final status are not moves; an unchanged `status` in the body is accepted); `result` empty when the resulting status is `COMPLETED` |
 | 401 / 403 | no session / Requester |
 | 404 | ticket or action missing, or the action belongs to another ticket |
-| 409 | `STALE_VERSION`; `ACTION_FINAL` (the action is COMPLETED or CANCELLED); `TICKET_CLOSED` |
+| 409 | `STALE_VERSION`; `ACTION_FINAL` (the action is COMPLETED or CANCELLED); `TICKET_CLOSED`; `TICKET_RESOLVED` (the ticket is RESOLVED and the edit would leave the action PLANNED or IN_PROGRESS) |
 
 There is **no** `DELETE` route (AC-11). An edit updates the current row, bumps `version` and
 `updatedAt`, and appends one `ActionTakenRevision` in the same transaction; `ticketId`,

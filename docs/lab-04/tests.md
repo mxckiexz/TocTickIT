@@ -63,6 +63,9 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-14 | FR-04, AC-41 | edit to COMPLETED without `result`; with it | `400` at `result`; `200` | Planned |
 | API-15 | AC-11, BR-08 | DELETE an action | no route (`404` / `405`) | Planned |
 | API-16 | AC-12, BR-10 | POST on a CLOSED and on a CANCELLED ticket | `409 TICKET_CLOSED` | Planned |
+| API-67 | AC-50, BR-10 | no concurrency: resolve a ticket through the gate, then POST a PLANNED action, an IN_PROGRESS action, a COMPLETED action with a result, and a COMPLETED action without one | `409 TICKET_RESOLVED` ×2 with nothing stored and no revision; `201`; `400` at `result`; afterwards the database holds no open action on the RESOLVED ticket | Planned |
+| API-68 | AC-50, BR-10, BR-12 | reopen the resolved ticket, POST a PLANNED action, then PATCH status to RESOLVED | `201`; `409 RESOLUTION_GATE` listing the open action; after it is COMPLETED the resolve succeeds | Planned |
+| API-69 | AC-50, BR-10 | insert an inconsistent PLANNED action on a RESOLVED ticket directly in the database, then PATCH it to IN_PROGRESS | `409 TICKET_RESOLVED`, row unchanged | Planned |
 | API-17 | BR-05 | `actionAt` past / default / 6 minutes ahead / not a date | `201` / now / `400` / `400` | Planned |
 | API-18 | BR-14 order | no session, bad ids, missing ticket, invalid body + missing ticket | `401`, `400`, `404`, ladder holds | Planned |
 | API-19 | Lab 3 SEC-07 | forged and missing Origin on POST and PATCH | `403` | Planned |
@@ -158,6 +161,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-03 | AC-09, AC-32 | edit sends `version`; `409` shows the conflict banner and keeps input | `ActionsTaken.test.tsx` | Planned |
 | UI-23 | AC-48 | staff "History" button expands the revisions oldest first; a Requester sees no History button | `ActionsTaken.test.tsx` | Planned |
 | UI-24 | AC-20, AC-22 | claim, assign, priority, status and mark-resolved calls each send the loaded `version` | `TicketWorkflow.test.tsx`, `RequesterTicketDetail.test.tsx` | Planned |
+| UI-25 | AC-50 | on a RESOLVED ticket the Add action form offers only Completed (with the hint "Reopen the ticket to add open work"); a `409 TICKET_RESOLVED` shows the banner and keeps the input | `ActionsTaken.test.tsx` | Planned |
 | UI-04 | AC-08 | Requester sees the list read-only, no buttons | `ActionsTaken.test.tsx` | Planned |
 | UI-05 | AC-10, BR-06 | final actions have no Edit button | `ActionsTaken.test.tsx` | Planned |
 | UI-06 | AC-33 | Save disabled in flight; double click sends one request | `ActionsTaken.test.tsx` | Planned |
@@ -256,6 +260,7 @@ again on `main` (REG-01).
 | AC-10 | API-12, UI-05, UNIT-01 |
 | AC-11 | API-15 |
 | AC-12 | API-16 |
+| AC-50 | API-67, API-68, API-69, UI-25 |
 | AC-13 | API-20, API-21, UI-07, API-22 |
 | AC-14 | API-22, SEC-01, UI-19 |
 | AC-15 | API-23, UI-08, UNIT-02, E2E-02 |
@@ -307,7 +312,7 @@ again on `main` (REG-01).
 | BR-07 | API-06 | BR-20 | API-44, UNIT-04 |
 | BR-08 | API-15, API-48, API-60, API-61, API-62, API-63 | BR-21 | API-38 |
 | BR-09 | API-07 | BR-22 | API-36, API-41 |
-| BR-10 | API-16 | BR-23 | API-35, API-42 |
+| BR-10 | API-16, API-67, API-68, API-69 | BR-23 | API-35, API-42 |
 | BR-11 | API-20, API-21 | BR-24 | API-08, SEC-02 |
 | BR-12 | API-23, API-24, API-25, UNIT-02 | BR-25 | MIG-01, MIG-02 |
 | BR-13 | API-26, API-64 | BR-26 | API-50, API-51, API-52, SEC-01 |
@@ -325,7 +330,7 @@ again on `main` (REG-01).
 | FR-05 | API-06, API-13, API-46, UNIT-01 | FR-17 | API-45, API-59, UI-12, UI-17 |
 | FR-06 | API-15, API-60 | FR-18 | API-36, API-41 |
 | FR-07 | API-07 | FR-19 | UI-16, E2E-03 |
-| FR-08 | API-16 | FR-20 | UI-01, UI-13, UI-15 |
+| FR-08 | API-16, API-67 | FR-20 | UI-01, UI-13, UI-15 |
 | FR-09 | API-20, API-21, API-22 | FR-21 | UI-02, UI-06, E2E-04 |
 | FR-10 | API-23, API-24, API-25 | FR-22 | A11Y-01 to A11Y-04 |
 | FR-11 | API-10, API-28 | FR-23 | RSP-01, RSP-02 |

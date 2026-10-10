@@ -121,7 +121,9 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
 - **FR-26** — IT Staff and Administrator list the revisions of an Action Taken (oldest first),
   read-only.
 - **FR-07** — The list is returned in a stable order: `actionAt` ascending, then `id`.
-- **FR-08** — Actions cannot be added to a CLOSED or CANCELLED ticket.
+- **FR-08** — Actions cannot be added to a CLOSED or CANCELLED ticket. On a RESOLVED ticket only
+  a COMPLETED action can be added; an open one (PLANNED or IN_PROGRESS) is rejected until the
+  ticket is reopened (BR-10).
 
 **Ticket workflow**
 - **FR-09** — A ticket status change is accepted only if the matrix (§7.3) allows it and the
@@ -192,7 +194,18 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   `ActionTaken.version` it was written at, which makes the two easy to cross-check.
 - **BR-09** — Actions are ordered by `actionAt` then `id`, both ascending, so the order never
   changes between reads.
-- **BR-10** — A ticket in CLOSED or CANCELLED accepts no new Action Taken (`409`).
+- **BR-10** — **Actions by ticket status.** A ticket in CLOSED or CANCELLED accepts no new
+  Action Taken and no edit (`409 TICKET_CLOSED`). A ticket in RESOLVED accepts a new action only
+  with status COMPLETED (late record of finished work, `result` required as always, BR-06);
+  creating one with status PLANNED or IN_PROGRESS is `409 TICKET_RESOLVED` with the message
+  "Reopen the ticket before adding open work". The same rule covers an edit: a write to an
+  action on a RESOLVED ticket may never leave that action PLANNED or IN_PROGRESS (an open
+  action cannot normally exist there, so this is a defence for inconsistent data, not a user
+  path). Every other ticket status accepts any action allowed by BR-06. Together with the gate
+  (BR-12) this keeps one invariant without relying on timing: **a RESOLVED ticket never holds
+  a PLANNED or IN_PROGRESS action**, whether the ticket was resolved first or the action was
+  added later. The check runs after the ticket lock is taken (BR-13) so it reads the current
+  ticket status.
 - **BR-11** — The status matrix of Lab 3 §7.3 is unchanged (§7.3 below repeats it); the roles
   allowed to use it are IT Staff and Administrator (BR-26).
 - **BR-12** — **Resolution gate** (D-3): a transition to RESOLVED needs all of
@@ -407,6 +420,12 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
 - **AC-10** — Given an action in COMPLETED or CANCELLED, when edited, then `409`.
 - **AC-11** — Given a DELETE on an action, then no such route exists (`404` / `405`).
 - **AC-12** — Given a CLOSED or CANCELLED ticket, when an action is posted, then `409`.
+- **AC-50** — Given a RESOLVED ticket (no concurrency involved), when a PLANNED or IN_PROGRESS
+  action is posted, then `409 TICKET_RESOLVED`, nothing is stored and no revision is written;
+  a COMPLETED action with a `result` is accepted (`201`); after the ticket is reopened
+  (RESOLVED to REOPENED) a PLANNED action is accepted (`201`), and resolving again is blocked by
+  the gate until it is finished (BR-12). A write that would leave an action PLANNED or
+  IN_PROGRESS on a RESOLVED ticket is `409 TICKET_RESOLVED` (BR-10).
 - **AC-48** — Given an action created and then edited twice, when its revisions are listed, then
   there are 3 revisions numbered 1 to 3, each holding the values the action had at that point
   (including values the later edits overwrote on the projection), each with its editor and time;

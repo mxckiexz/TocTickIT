@@ -198,8 +198,11 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   Action Taken and no edit (`409 TICKET_CLOSED`). A ticket in RESOLVED accepts a new action only
   with status COMPLETED (late record of finished work, `result` required as always, BR-06);
   creating one with status PLANNED or IN_PROGRESS is `409 TICKET_RESOLVED` with the message
-  "Reopen the ticket before adding open work". The same rule covers an edit: a write to an
-  action on a RESOLVED ticket may never leave that action PLANNED or IN_PROGRESS (an open
+  "Reopen the ticket before adding open work". The same rule covers an edit and is judged on
+  the status the action would have *after* the edit, not on the status in the request: a write
+  to an action on a RESOLVED ticket may never leave that action PLANNED or IN_PROGRESS, so even
+  an edit of only the description, with `status` omitted or unchanged, is rejected while the
+  stored status is open; only an edit that makes it COMPLETED or CANCELLED is accepted (an open
   action cannot normally exist there, so this is a defence for inconsistent data, not a user
   path). Every other ticket status accepts any action allowed by BR-06. Together with the gate
   (BR-12) this keeps one invariant without relying on timing: **a RESOLVED ticket never holds
@@ -425,7 +428,8 @@ write). Conflicts: `409` with `{ error, code, currentVersion }`.
   a COMPLETED action with a `result` is accepted (`201`); after the ticket is reopened
   (RESOLVED to REOPENED) a PLANNED action is accepted (`201`), and resolving again is blocked by
   the gate until it is finished (BR-12). A write that would leave an action PLANNED or
-  IN_PROGRESS on a RESOLVED ticket is `409 TICKET_RESOLVED` (BR-10).
+  IN_PROGRESS on a RESOLVED ticket, including a description-only edit of one, is `409
+  TICKET_RESOLVED` (BR-10).
 - **AC-48** — Given an action created and then edited twice, when its revisions are listed, then
   there are 3 revisions numbered 1 to 3, each holding the values the action had at that point
   (including values the later edits overwrote on the projection), each with its editor and time;

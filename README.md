@@ -342,6 +342,48 @@ npm run test:e2e              # Playwright (รันจากโฟลเดอ
 
 ---
 
+# 🧰 Lab 4 — Actions Taken: Migration, Rollback และ Seed
+
+Migration `20261012090000_lab4_actions_taken` เป็นแบบ **เพิ่มอย่างเดียว** (additive): เพิ่ม enum `ActionStatus`, ตาราง `ActionTaken` และ `ActionTakenRevision`, และคอลัมน์ `Ticket.version` (default 1) ไม่แก้และไม่ลบอะไรของ Lab 1 ถึง 3
+
+### Migrate
+
+```bash
+cd server
+pg_dump -Fc "$DATABASE_URL" -f ../before_lab4.dump   # สำรองก่อนเสมอ
+npx prisma migrate deploy                            # ใช้ migration ของ Lab 4
+npm run prisma:seed                                  # เพิ่ม Actions Taken ตัวอย่างบน TKT-SEED-002 ถึง 011
+```
+
+### Rollback
+
+ทางที่ 1: **restore จาก dump** (ใช้ได้เสมอ แม้มีข้อมูล Action Taken แล้ว):
+
+```bash
+dropdb toktickit && createdb toktickit
+pg_restore -d toktickit ../before_lab4.dump
+```
+
+ทางที่ 2: **SQL ย้อนกลับ** (ปลอดภัยเฉพาะก่อนมีข้อมูลใน `ActionTaken`; ถ้ามีแล้วข้อมูลจะหาย):
+
+```sql
+DROP TABLE "ActionTakenRevision";
+DROP TABLE "ActionTaken";
+DROP TYPE "ActionStatus";
+ALTER TABLE "Ticket" DROP COLUMN "version";
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261012090000_lab4_actions_taken';
+```
+
+ทั้งสองทางทดสอบจริงบนฐานข้อมูลสำเนา (`toktickit_f2_scratch`, ลบทิ้งแล้ว): สำเนาที่เป็นสถานะ Lab 3 มี 23 tickets, หลัง `migrate deploy` ยังมี 23 tickets และ `version` เป็น 1 ทุกแถว, หลัง SQL ย้อนกลับไม่มีตารางและไม่มีคอลัมน์ `version`, หลัง restore จาก dump `prisma migrate status` รายงานว่า migration ของ Lab 4 ยังไม่ถูกใช้ นอกจากนี้ `server/tests/lab-04/migration.api.test.ts` เล่น SQL ของ migration และ SQL ย้อนกลับซ้ำใน schema ชั่วคราวแล้ว rollback ทุกครั้ง
+
+### เทสต์ที่เกี่ยวข้อง
+
+```bash
+cd server && npx vitest run tests/lab-04/migration.api.test.ts tests/lab-04/seed.api.test.ts
+```
+
+---
+
 # 🌿 Git & Branching
 
 โปรเจกต์ใช้ Branch แยกตาม Issue / Feature

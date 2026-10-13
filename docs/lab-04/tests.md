@@ -146,11 +146,11 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
-| MIG-01 | AC-39, BR-25 | replay migrations on a scratch schema with Lab 3 data, apply the Lab 4 migration | every Lab 3 table's rows unchanged; `Ticket.version` = 1 everywhere | Planned |
-| MIG-02 | BR-25 | compare `information_schema` before and after | only additions | Planned |
-| MIG-03 | AC-39 | rollback on the scratch copy (documented procedure) | schema and rows equal the "before" snapshot | Planned |
-| SEED-01 | DoD | run the seed twice | identical row counts, no unique violation | Planned |
-| SEED-02 | spec §7.5 | seeded data | every status and priority, owner and none, 0 / 1 / many actions, a gate-passing and a gate-blocked ticket, zero and non-zero metrics | Planned |
+| MIG-01 | AC-39, BR-25 | replay migrations on a scratch schema with Lab 3 data, apply the Lab 4 migration | every Lab 3 table's rows unchanged; `Ticket.version` = 1 everywhere | Pass |
+| MIG-02 | BR-25 | compare `information_schema` before and after | only additions | Pass |
+| MIG-03 | AC-39 | rollback on the scratch copy (documented procedure) | schema and rows equal the "before" snapshot | Pass |
+| SEED-01 | DoD | run the seed twice | identical row counts, no unique violation | Pass |
+| SEED-02 | spec §7.5 | seeded data | every status and priority, owner and none, 0 / 1 / many actions, a gate-passing and a gate-blocked ticket, zero and non-zero metrics | Pass |
 
 ## 5. UI component tests (`client/tests/lab-04/`)
 
@@ -339,5 +339,18 @@ again on `main` (REG-01).
 
 ## 13. What has actually been run
 
-Nothing yet. This section is filled in by each feature PR and finally by the release PR with the
-output of the full suites run on `main`.
+Filled in by each feature PR and finally by the release PR with the output of the full suites
+run on `main`.
+
+**F2 (Actions Taken foundation, data), branch `feature/actions-taken-data`**, 2026-10-12:
+
+- `server/tests/lab-04/migration.api.test.ts`: 8 tests pass (MIG-01, MIG-02, MIG-03, the new
+  indexes, defaults, database-level constraints, restrict on delete). A mutation check (changing
+  the `version` default to 2 in the migration) made MIG-01 and MIG-02 fail, so they are not vacuous.
+- `server/tests/lab-04/seed.api.test.ts`: 8 tests pass (SEED-01, SEED-02).
+- Full server suite: 19 files, 398 tests pass. Full client suite: 13 files, 145 tests pass.
+- Rollback and restore run for real on a scratch copy of the dev database (`toktickit_f2_scratch`,
+  dropped afterwards): Lab 3 copy with 23 tickets, `prisma migrate deploy` left 23 tickets with
+  `version` 1 on every row, the documented inverse SQL left no `ActionTaken` table and no
+  `Ticket.version` column, and `pg_restore` of the pre-migration dump returned a Lab 3 database
+  on which `prisma migrate status` reports the Lab 4 migration as not applied. Steps are in the README.

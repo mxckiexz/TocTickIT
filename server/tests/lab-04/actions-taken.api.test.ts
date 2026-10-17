@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import type { ActionStatus, TicketStatus } from "@prisma/client";
 import { app } from "../../src/app.js";
@@ -208,6 +208,7 @@ describe("Actions Taken API", () => {
 
   beforeEach(() => {
     actionsTakenHooks.afterUpdate = undefined;
+    actionsTakenHooks.afterAssigneeCheck = undefined;
   });
 
   describe("create (API-01..06, 16, 17, 46, 49)", () => {
@@ -701,6 +702,86 @@ describe("Actions Taken API", () => {
         versionB = rb.body.version;
       }
       expect(versionA).toBe(21);
+    });
+  });
+
+  describe("assignee eligibility is re-checked inside the transaction (BR-07)", () => {
+    const assigneeEmail = "actions-race-assignee-fixture@toktickit.test";
+    let assigneeId: number;
+
+    beforeAll(async () => {
+      assigneeId = (await createFixtureUser(assigneeEmail, { role: "IT_STAFF" })).user.id;
+    });
+    beforeEach(async () => {
+      await getPrisma().user.update({ where: { id: assigneeId }, data: { isActive: true, role: "IT_STAFF" } });
+    });
+    afterAll(async () => {
+      await getPrisma().actionTakenRevision.deleteMany({ where: { actionTaken: { assigneeId } } });
+      await getPrisma().actionTaken.deleteMany({ where: { assigneeId } });
+      await deleteFixtureUser(assigneeEmail);
+    });
+
+    const changes: Array<[string, { isActive?: boolean; role?: "REQUESTER" }]> = [
+      ["deactivated", { isActive: false }],
+      ["turned into a Requester", { role: "REQUESTER" }],
+    ];
+
+    for (const [label, change] of changes) {
+      it(`POST: an assignee ${label} between the pre-check and the write is 400 at assigneeId and nothing is written`, async () => {
+        const ticketId = await makeTicket();
+        actionsTakenHooks.afterAssigneeCheck = async () => {
+          await getPrisma().user.update({ where: { id: assigneeId }, data: change });
+        };
+        const response = await post(staff, ticketId, { description: "assigned too late", assigneeId }).expect(400);
+        expect(response.body.errors.assigneeId).toEqual(expect.any(String));
+        expect(await countRows(ticketId)).toEqual({ actions: 0, revisions: 0 });
+      });
+
+      it(`PATCH: an assignee ${label} between the pre-check and the write is 400 at assigneeId; the action and its revisions are unchanged`, async () => {
+        const ticketId = await makeTicket();
+        const created = (await post(staff, ticketId, { description: "to reassign" }).expect(201)).body;
+        actionsTakenHooks.afterAssigneeCheck = async () => {
+          await getPrisma().user.update({ where: { id: assigneeId }, data: change });
+        };
+        const response = await patch(staff, ticketId, created.id, { version: 1, assigneeId, description: "changed" }).expect(400);
+        expect(response.body.errors.assigneeId).toEqual(expect.any(String));
+        const row = await getPrisma().actionTaken.findUniqueOrThrow({ where: { id: created.id } });
+        expect(row).toMatchObject({ assigneeId: null, description: "to reassign", version: 1 });
+        expect(await countRows(ticketId)).toEqual({ actions: 1, revisions: 1 });
+      });
+    }
+
+    it("a deactivation that is only attempted while the write is running waits for it, so no action ends up assigned to an inactive user", async () => {
+      for (let round = 0; round < 5; round++) {
+        const ticketId = await makeTicket();
+        await getPrisma().user.update({ where: { id: assigneeId }, data: { isActive: true } });
+        const [created] = await Promise.all([
+          post(staff, ticketId, { description: `race ${round}`, assigneeId }),
+          getPrisma().user.update({ where: { id: assigneeId }, data: { isActive: false } }),
+        ]);
+        expect([201, 400]).toContain(created.status);
+        const actions = await getPrisma().actionTaken.findMany({ where: { ticketId }, include: { assignee: true } });
+        for (const a of actions) {
+          // 201 means the write committed while the user was still active; either order is a valid serial order.
+          expect(created.status).toBe(201);
+          expect(a.assigneeId).toBe(assigneeId);
+        }
+        if (created.status === 400) expect(actions).toHaveLength(0);
+      }
+    });
+
+    it("a database error during the eligibility check is a 500 with a safe body, never a misleading write failure", async () => {
+      const ticketId = await makeTicket();
+      const spy = vi.spyOn(getPrisma().user, "findUnique").mockRejectedValueOnce(new Error("connection lost to db host"));
+      try {
+        const response = await post(staff, ticketId, { description: "x", assigneeId: ids.staffB });
+        expect(response.status).toBe(500);
+        expect(JSON.stringify(response.body)).not.toMatch(/connection lost|prisma|stack/i);
+        expect(response.body.errors).toBeUndefined();
+      } finally {
+        spy.mockRestore();
+      }
+      expect(await countRows(ticketId)).toEqual({ actions: 0, revisions: 0 });
     });
   });
 

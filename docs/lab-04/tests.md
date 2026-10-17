@@ -65,6 +65,9 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-16 | AC-12, BR-10 | POST on a CLOSED and on a CANCELLED ticket | `409 TICKET_CLOSED` | Pass |
 | API-67 | AC-50, BR-10 | no concurrency: resolve a ticket through the gate, then POST a PLANNED action, an IN_PROGRESS action, a COMPLETED action with a result, and a COMPLETED action without one | `409 TICKET_RESOLVED` ×2 with nothing stored and no revision; `201`; `400` at `result`; afterwards the database holds no open action on the RESOLVED ticket | Pass (F3 part: status set in the database; re-run through the gate in F4) |
 | API-68 | AC-50, BR-10, BR-12 | reopen the resolved ticket, POST a PLANNED action, then PATCH status to RESOLVED | `201`; `409 RESOLUTION_GATE` listing the open action; after it is COMPLETED the resolve succeeds | Planned |
+| API-70 | BR-07 | the assignee is deactivated, and separately turned into a Requester, in the gap between the early check and the write, on POST and on PATCH | `400` at `assigneeId`; no action and no revision written; the edited action unchanged | Pass |
+| API-71 | BR-07 | a database error during the assignee check | `500` with a safe body, never a field error or a misleading write failure; nothing written | Pass |
+| API-72 | BR-07 | create with an assignee while that user is being deactivated, 5 rounds | `201` (committed before) or `400`; never an action assigned to an inactive user from a `400` | Pass |
 | API-69 | AC-50, BR-10 | insert an inconsistent PLANNED action on a RESOLVED ticket directly in the database, then PATCH it four ways: `status` IN_PROGRESS; `description` only with `status` omitted; `description` with `status` PLANNED sent; `result` and `followUpNote` only | `409 TICKET_RESOLVED` each time (the rule is on the resulting status, not the incoming one); row, `version` and revisions unchanged after every attempt; a PATCH to COMPLETED or CANCELLED with a result is the only edit accepted | Pass |
 | API-17 | BR-05 | `actionAt` past / default / 6 minutes ahead / not a date | `201` / now / `400` / `400` | Pass |
 | API-18 | BR-14 order | no session, bad ids, missing ticket, invalid body + missing ticket | `401`, `400`, `404`, ladder holds | Pass |
@@ -363,5 +366,10 @@ run on `main`.
   in the RESOLVED rule fails 1, removing the stale check fails 3. Removing only the `version` from
   the `UPDATE ... WHERE` still passes, because the check under the ticket lock already rejects a
   stale caller; the statement-level check is a second guard.
+- Review fix (assignee re-check): `actions-taken.api.test.ts` now has 58 tests. Replacing the
+  in-transaction check with "always eligible" fails 4 of them (API-70). Removing only `FOR SHARE`
+  still passes API-72, because both serial orders are valid there; the lock is argued from
+  PostgreSQL's row-lock conflict rules (an `UPDATE` of the User row conflicts with `FOR SHARE`),
+  not proven by the test. Full server suite: 20 files, 456 tests pass.
 - Not covered yet and left `Planned`: API-26, API-67 and API-68 through the gate, and the status
   change half of API-64, because the status routes are F4.

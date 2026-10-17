@@ -147,7 +147,12 @@ export function resolveActionEdit(stored: ActionValues, input: ActionInput): { e
 
 // Test seam for API-63: lets a test throw after the update, inside the
 // transaction, to prove the projection and the revision roll back together.
-export const actionsTakenHooks: { afterUpdate?: () => void } = {};
+export const actionsTakenHooks: {
+  afterUpdate?: () => void;
+  // Runs after the early assignee check and before the transaction: lets a test
+  // change the assignee in that gap to prove the in-transaction re-check (BR-07).
+  afterAssigneeCheck?: () => Promise<void> | void;
+} = {};
 
 const personSelect = { select: { id: true, name: true } } as const;
 const actionInclude = { performedBy: personSelect, assignee: personSelect } satisfies Prisma.ActionTakenInclude;
@@ -192,14 +197,30 @@ async function findVisibleTicket(ticketId: number, user: NonNullable<AuthedReque
   return prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
 }
 
-// BR-07: the assignee must be an active IT Staff or Administrator.
+const ASSIGNEE_MESSAGE = "Assignee must be an active IT Staff or Administrator.";
+const isEligibleAssignee = (user: { role: string; isActive: boolean } | null | undefined) =>
+  !!user && user.isActive && (user.role === "IT_STAFF" || user.role === "ADMINISTRATOR");
+
+// BR-07, early check: gives the documented 400-before-404 order. It is not
+// enough on its own (the user can change before the write), so the write
+// re-checks with checkAssigneeLocked. A database error here is not swallowed:
+// it propagates to the route's 500 handler.
 async function checkAssignee(assigneeId: number | null | undefined): Promise<string | undefined> {
   if (assigneeId === undefined || assigneeId === null) return undefined;
   const user = await getPrisma().user.findUnique({ where: { id: assigneeId }, select: { role: true, isActive: true } });
-  if (!user || !user.isActive || (user.role !== "IT_STAFF" && user.role !== "ADMINISTRATOR")) {
-    return "Assignee must be an active IT Staff or Administrator.";
-  }
-  return undefined;
+  return isEligibleAssignee(user) ? undefined : ASSIGNEE_MESSAGE;
+}
+
+// BR-07, authoritative check: inside the transaction, after the Ticket lock and
+// immediately before the write. FOR SHARE on the User row makes a concurrent
+// deactivation or role change wait until this transaction commits, so the
+// assignee cannot become ineligible between this read and the write.
+async function checkAssigneeLocked(tx: Prisma.TransactionClient, assigneeId: number | null | undefined): Promise<string | undefined> {
+  if (assigneeId === undefined || assigneeId === null) return undefined;
+  const rows = await tx.$queryRaw<Array<{ role: string; isActive: boolean }>>(
+    Prisma.sql`SELECT "role"::text AS "role", "isActive" FROM "User" WHERE "id" = ${assigneeId} FOR SHARE`
+  );
+  return isEligibleAssignee(rows[0]) ? undefined : ASSIGNEE_MESSAGE;
 }
 
 const TICKET_CLOSED = { error: "This ticket is closed or cancelled and accepts no actions.", code: "TICKET_CLOSED" };
@@ -248,14 +269,16 @@ export function registerActionsTakenRoutes(app: Express): void {
 
     const fields = validateActionFields(req.body, now);
     const resolved = fields.errors ? { errors: fields.errors } : resolveActionCreate(fields.values, now);
-    const assigneeError = await checkAssignee(fields.values.assigneeId).catch(() => undefined);
-    if ("errors" in resolved || assigneeError) {
-      const errors = { ...("errors" in resolved ? resolved.errors : {}), ...(assigneeError ? { assigneeId: assigneeError } : {}) };
-      return res.status(400).json({ error: "Please correct the highlighted fields.", errors });
-    }
-    const values = resolved.values;
 
     try {
+      const assigneeError = await checkAssignee(fields.values.assigneeId);
+      if ("errors" in resolved || assigneeError) {
+        const errors = { ...("errors" in resolved ? resolved.errors : {}), ...(assigneeError ? { assigneeId: assigneeError } : {}) };
+        return res.status(400).json({ error: "Please correct the highlighted fields.", errors });
+      }
+      const values = resolved.values;
+      await actionsTakenHooks.afterAssigneeCheck?.();
+
       const prisma = getPrisma();
       if (!(await findVisibleTicket(ticketId, req.user!))) return res.status(404).json({ error: "Ticket not found." });
       const performerId = req.user!.id;
@@ -266,6 +289,8 @@ export function registerActionsTakenRoutes(app: Express): void {
         if (!ticket) return { kind: "missing" as const };
         if (ticket.currentStatus === "CLOSED" || ticket.currentStatus === "CANCELLED") return { kind: "closed" as const };
         if (ticket.currentStatus === "RESOLVED" && OPEN_ACTION_STATUSES.includes(values.status)) return { kind: "resolved" as const };
+        const assigneeRecheck = await checkAssigneeLocked(tx, values.assigneeId);
+        if (assigneeRecheck) return { kind: "assignee" as const, message: assigneeRecheck };
         const created = await tx.actionTaken.create({ data: { ticketId, performedById: performerId, ...values } });
         await tx.actionTakenRevision.create({ data: { ...revisionData(created.id, 1, performerId, values), editedAt: created.createdAt } });
         const row = await tx.actionTaken.findUniqueOrThrow({ where: { id: created.id }, include: actionInclude });
@@ -275,6 +300,7 @@ export function registerActionsTakenRoutes(app: Express): void {
       if (outcome.kind === "missing") return res.status(404).json({ error: "Ticket not found." });
       if (outcome.kind === "closed") return res.status(409).json(TICKET_CLOSED);
       if (outcome.kind === "resolved") return res.status(409).json(TICKET_RESOLVED);
+      if (outcome.kind === "assignee") return res.status(400).json({ error: "Please correct the highlighted fields.", errors: { assigneeId: outcome.message } });
       res.status(201).json(serializeAction(outcome.row));
     } catch (error) {
       console.error("Failed to create action:", error);
@@ -293,11 +319,13 @@ export function registerActionsTakenRoutes(app: Express): void {
     const errors: FieldErrors = { ...(fields.errors ?? {}) };
     const version = body.version;
     if (typeof version !== "number" || !Number.isInteger(version)) errors.version = "Version is required.";
-    const assigneeError = await checkAssignee(fields.values.assigneeId).catch(() => undefined);
-    if (assigneeError) errors.assigneeId = assigneeError;
-    if (Object.keys(errors).length > 0) return res.status(400).json({ error: "Please correct the highlighted fields.", errors });
 
     try {
+      const assigneeError = await checkAssignee(fields.values.assigneeId);
+      if (assigneeError) errors.assigneeId = assigneeError;
+      if (Object.keys(errors).length > 0) return res.status(400).json({ error: "Please correct the highlighted fields.", errors });
+      await actionsTakenHooks.afterAssigneeCheck?.();
+
       const prisma = getPrisma();
       if (!(await findVisibleTicket(ticketId, req.user!))) return res.status(404).json({ error: "Ticket not found." });
       if (!(await prisma.actionTaken.findFirst({ where: { id: actionId, ticketId }, select: { id: true } }))) {
@@ -322,6 +350,10 @@ export function registerActionsTakenRoutes(app: Express): void {
         const resolved = resolveActionEdit(stored, fields.values);
         if ("errors" in resolved) return { kind: "invalid" as const, errors: resolved.errors };
         const values = resolved.values;
+        // Only an assignee supplied in this request is re-checked; an existing
+        // assignment that was valid when made is left as it is.
+        const assigneeRecheck = await checkAssigneeLocked(tx, fields.values.assigneeId);
+        if (assigneeRecheck) return { kind: "invalid" as const, errors: { assigneeId: assigneeRecheck } };
 
         // The version check and the write are one statement (BR-17).
         const updated = await tx.actionTaken.updateMany({

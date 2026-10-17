@@ -112,6 +112,11 @@ Roles: IT_STAFF, ADMINISTRATOR. Body: any editable field plus a required `versio
 | 404 | ticket or action missing, or the action belongs to another ticket |
 | 409 | `STALE_VERSION`; `ACTION_FINAL` (the action is COMPLETED or CANCELLED); `TICKET_CLOSED`; `TICKET_RESOLVED` (the ticket is RESOLVED and the action would be PLANNED or IN_PROGRESS after the edit, whatever fields the body carries) |
 
+The assignee of a create or an edit is checked early (for the 400-before-404 order) and checked
+again inside the transaction, after the ticket lock, with the assignee's User row held `FOR SHARE`
+(BR-07); if it is no longer an active IT Staff or Administrator the response is `400` at
+`errors.assigneeId` and nothing is written.
+
 Order of checks on an edit: 401, 403, then 400 for ids and request fields (including a missing
 `version` and an unusable `assigneeId`), then 404, then, with the ticket locked and the action
 re-read: `409 TICKET_CLOSED`, `409 ACTION_FINAL`, `409 STALE_VERSION`, `409 TICKET_RESOLVED`, and

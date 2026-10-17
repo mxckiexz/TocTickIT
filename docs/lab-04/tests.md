@@ -35,9 +35,9 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | Rule | What | Expected | File | Final |
 |---|---|---|---|---|---|
-| UNIT-01 | BR-06 | action status move lookup | on edit: PLANNED → IN_PROGRESS / COMPLETED / CANCELLED, IN_PROGRESS → COMPLETED / CANCELLED allowed, unchanged status allowed, everything else and anything from a final status rejected; on create: PLANNED / IN_PROGRESS / COMPLETED allowed, CANCELLED rejected | `actions-taken.api.test.ts` | Planned |
+| UNIT-01 | BR-06 | action status move lookup | on edit: PLANNED → IN_PROGRESS / COMPLETED / CANCELLED, IN_PROGRESS → COMPLETED / CANCELLED allowed, unchanged status allowed, everything else and anything from a final status rejected; on create: PLANNED / IN_PROGRESS / COMPLETED allowed, CANCELLED rejected | `actions-taken.api.test.ts` | Pass |
 | UNIT-02 | BR-12 | resolution gate evaluator `(owner, actions[]) → unmet[]` | `NO_OWNER`, `NO_COMPLETED_ACTION`, `OPEN_ACTIONS` exactly when true; empty when all pass; cancelled actions ignored | `ticket-workflow.api.test.ts` | Planned |
-| UNIT-03 | BR-03, BR-04, BR-05, BR-06 | action validator | trims; 1 to 2000; follow-up rule; `actionAt` window (5 min ahead); `result` required when the status is COMPLETED | `actions-taken.api.test.ts` | Planned |
+| UNIT-03 | BR-03, BR-04, BR-05, BR-06 | action validator | trims; 1 to 2000; follow-up rule; `actionAt` window (5 min ahead); `result` required when the status is COMPLETED | `actions-taken.api.test.ts` | Pass |
 | UNIT-04 | BR-20 | start of the 7-day window in Asia/Bangkok | midnight boundary; not shifted by the server timezone | `staff-dashboard.api.test.ts` | Planned |
 | UNIT-05 | BR-27 | description cut for `ActionBrief` | 120 characters then an ellipsis; shorter text unchanged; no result or follow-up text | `staff-dashboard.api.test.ts` | Planned |
 
@@ -47,37 +47,40 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
-| API-01 | AC-01 | IT Staff POST valid action | `201`, `performedBy` = caller, `version` 1, status PLANNED | Planned |
-| API-02 | AC-02, BR-01 | Requester POST on own ticket | `403`, no row stored | Planned |
-| API-03 | AC-03, BR-03 | empty, whitespace, 2001-char description | `400` with message at `description` | Planned |
-| API-04 | AC-04, BR-04 | `followUpRequired` without note; with note; false with a note | `400` at `followUpNote`; `201`; note stored empty | Planned |
-| API-05 | AC-05, BR-02 | body contains `performedById` | ignored, session user stored | Planned |
-| API-06 | AC-06, BR-07 | `assigneeId`: inactive, Requester, missing, active staff, active admin | `400` ×3 at `assigneeId`; `201` ×2 | Planned |
-| API-07 | AC-07, BR-09 | several actions with equal `actionAt`, list 5 times | identical order every time | Planned |
-| API-08 | AC-08, BR-24 | Requester lists own / another's; staff; admin | `200` read-only; `404`; `200`; `200` | Planned |
-| API-09 | AC-09 | PATCH with current version | `200`, fields changed, `version` +1 | Planned |
-| API-10 | AC-09, BR-16 | PATCH with a stale version | `409 STALE_VERSION`, `currentVersion`, row unchanged | Planned |
-| API-11 | AC-09, BR-16 | two PATCH with the same version at once | exactly one `200`, one `409` | Planned |
-| API-12 | AC-10, BR-06 | edit a COMPLETED and a CANCELLED action | `409 ACTION_FINAL` | Planned |
-| API-13 | BR-06, AC-41 | every action status pair on edit, generated from the move table, plus an unchanged status | allowed pairs `200`, every other `400`, unchanged `200` | Planned |
-| API-14 | FR-04, AC-41 | edit to COMPLETED without `result`; with it | `400` at `result`; `200` | Planned |
-| API-15 | AC-11, BR-08 | DELETE an action | no route (`404` / `405`) | Planned |
-| API-16 | AC-12, BR-10 | POST on a CLOSED and on a CANCELLED ticket | `409 TICKET_CLOSED` | Planned |
-| API-67 | AC-50, BR-10 | no concurrency: resolve a ticket through the gate, then POST a PLANNED action, an IN_PROGRESS action, a COMPLETED action with a result, and a COMPLETED action without one | `409 TICKET_RESOLVED` ×2 with nothing stored and no revision; `201`; `400` at `result`; afterwards the database holds no open action on the RESOLVED ticket | Planned |
+| API-01 | AC-01 | IT Staff POST valid action | `201`, `performedBy` = caller, `version` 1, status PLANNED | Pass |
+| API-02 | AC-02, BR-01 | Requester POST on own ticket | `403`, no row stored | Pass |
+| API-03 | AC-03, BR-03 | empty, whitespace, 2001-char description | `400` with message at `description` | Pass |
+| API-04 | AC-04, BR-04 | `followUpRequired` without note; with note; false with a note | `400` at `followUpNote`; `201`; note stored empty | Pass |
+| API-05 | AC-05, BR-02 | body contains `performedById` | ignored, session user stored | Pass |
+| API-06 | AC-06, BR-07 | `assigneeId`: inactive, Requester, missing, active staff, active admin | `400` ×3 at `assigneeId`; `201` ×2 | Pass |
+| API-07 | AC-07, BR-09 | several actions with equal `actionAt`, list 5 times | identical order every time | Pass |
+| API-08 | AC-08, BR-24 | Requester lists own / another's; staff; admin | `200` read-only; `404`; `200`; `200` | Pass |
+| API-09 | AC-09 | PATCH with current version | `200`, fields changed, `version` +1 | Pass |
+| API-10 | AC-09, BR-16 | PATCH with a stale version | `409 STALE_VERSION`, `currentVersion`, row unchanged | Pass |
+| API-11 | AC-09, BR-16 | two PATCH with the same version at once | exactly one `200`, one `409` | Pass |
+| API-12 | AC-10, BR-06 | edit a COMPLETED and a CANCELLED action | `409 ACTION_FINAL` | Pass |
+| API-13 | BR-06, AC-41 | every action status pair on edit, generated from the move table, plus an unchanged status | allowed pairs `200`, every other `400`, unchanged `200` | Pass |
+| API-14 | FR-04, AC-41 | edit to COMPLETED without `result`; with it | `400` at `result`; `200` | Pass |
+| API-15 | AC-11, BR-08 | DELETE an action | no route (`404` / `405`) | Pass |
+| API-16 | AC-12, BR-10 | POST on a CLOSED and on a CANCELLED ticket | `409 TICKET_CLOSED` | Pass |
+| API-67 | AC-50, BR-10 | no concurrency: resolve a ticket through the gate, then POST a PLANNED action, an IN_PROGRESS action, a COMPLETED action with a result, and a COMPLETED action without one | `409 TICKET_RESOLVED` ×2 with nothing stored and no revision; `201`; `400` at `result`; afterwards the database holds no open action on the RESOLVED ticket | Pass (F3 part: status set in the database; re-run through the gate in F4) |
 | API-68 | AC-50, BR-10, BR-12 | reopen the resolved ticket, POST a PLANNED action, then PATCH status to RESOLVED | `201`; `409 RESOLUTION_GATE` listing the open action; after it is COMPLETED the resolve succeeds | Planned |
-| API-69 | AC-50, BR-10 | insert an inconsistent PLANNED action on a RESOLVED ticket directly in the database, then PATCH it four ways: `status` IN_PROGRESS; `description` only with `status` omitted; `description` with `status` PLANNED sent; `result` and `followUpNote` only | `409 TICKET_RESOLVED` each time (the rule is on the resulting status, not the incoming one); row, `version` and revisions unchanged after every attempt; a PATCH to COMPLETED or CANCELLED with a result is the only edit accepted | Planned |
-| API-17 | BR-05 | `actionAt` past / default / 6 minutes ahead / not a date | `201` / now / `400` / `400` | Planned |
-| API-18 | BR-14 order | no session, bad ids, missing ticket, invalid body + missing ticket | `401`, `400`, `404`, ladder holds | Planned |
-| API-19 | Lab 3 SEC-07 | forged and missing Origin on POST and PATCH | `403` | Planned |
-| API-46 | AC-40, BR-06, FR-05 | create with `status` omitted, PLANNED, IN_PROGRESS, COMPLETED with result, COMPLETED without result, CANCELLED, unknown value | PLANNED stored; `201` ×3; `400` at `result`; `400` at `status` ×2 | Planned |
-| API-47 | AC-42, D-5 | Requester lists the actions of their own ticket | every field present and equal to what staff receive (including `followUpNote`, `attachmentNotes`, performer, assignee) | Planned |
-| API-48 | BR-08 | edit an action, read it again | `ticketId`, `performedBy`, `createdAt` unchanged; `version` and `updatedAt` changed; one new revision row | Planned |
-| API-60 | AC-48, BR-08 | create an action, edit it twice, list revisions | 3 revisions numbered 1 to 3 equal to `ActionTaken.version` at each step; revision 1 holds the created values, including those the edits overwrote; editor and time set | Planned |
-| API-61 | AC-48 | stale edit, edit of a final action, invalid edit | each rejected; revision count unchanged | Planned |
-| API-62 | AC-48, AC-11 | `POST`, `PATCH`, `DELETE` on a revision URL; Requester GET | `404` / `405`; Requester `403` | Planned |
-| API-63 | AC-49, BR-08 | force a failure after the update inside the edit transaction | projection and revisions both unchanged | Planned |
-| API-64 | BR-13 | two edits of different actions of one ticket, and one edit while a status change runs, 20 rounds | no deadlock, no `500`; every request is `200` or a documented `409` | Planned |
-| API-49 | BR-28 | action created by staff B on a ticket owned by staff A | `201`; performer is B; owner is still A | Planned |
+| API-70 | BR-07 | the assignee is deactivated, and separately turned into a Requester, in the gap between the early check and the write, on POST and on PATCH | `400` at `assigneeId`; no action and no revision written; the edited action unchanged | Pass |
+| API-71 | BR-07 | a database error during the assignee check | `500` with a safe body, never a field error or a misleading write failure; nothing written | Pass |
+| API-72 | BR-07 | create with an assignee while that user is being deactivated, 5 rounds | `201` (committed before) or `400`; never an action assigned to an inactive user from a `400` | Pass |
+| API-69 | AC-50, BR-10 | insert an inconsistent PLANNED action on a RESOLVED ticket directly in the database, then PATCH it four ways: `status` IN_PROGRESS; `description` only with `status` omitted; `description` with `status` PLANNED sent; `result` and `followUpNote` only | `409 TICKET_RESOLVED` each time (the rule is on the resulting status, not the incoming one); row, `version` and revisions unchanged after every attempt; a PATCH to COMPLETED or CANCELLED with a result is the only edit accepted | Pass |
+| API-17 | BR-05 | `actionAt` past / default / 6 minutes ahead / not a date | `201` / now / `400` / `400` | Pass |
+| API-18 | BR-14 order | no session, bad ids, missing ticket, invalid body + missing ticket | `401`, `400`, `404`, ladder holds | Pass |
+| API-19 | Lab 3 SEC-07 | forged and missing Origin on POST and PATCH | `403` | Pass |
+| API-46 | AC-40, BR-06, FR-05 | create with `status` omitted, PLANNED, IN_PROGRESS, COMPLETED with result, COMPLETED without result, CANCELLED, unknown value | PLANNED stored; `201` ×3; `400` at `result`; `400` at `status` ×2 | Pass |
+| API-47 | AC-42, D-5 | Requester lists the actions of their own ticket | every field present and equal to what staff receive (including `followUpNote`, `attachmentNotes`, performer, assignee) | Pass |
+| API-48 | BR-08 | edit an action, read it again | `ticketId`, `performedBy`, `createdAt` unchanged; `version` and `updatedAt` changed; one new revision row | Pass |
+| API-60 | AC-48, BR-08 | create an action, edit it twice, list revisions | 3 revisions numbered 1 to 3 equal to `ActionTaken.version` at each step; revision 1 holds the created values, including those the edits overwrote; editor and time set | Pass |
+| API-61 | AC-48 | stale edit, edit of a final action, invalid edit | each rejected; revision count unchanged | Pass |
+| API-62 | AC-48, AC-11 | `POST`, `PATCH`, `DELETE` on a revision URL; Requester GET | `404` / `405`; Requester `403` | Pass |
+| API-63 | AC-49, BR-08 | force a failure after the update inside the edit transaction | projection and revisions both unchanged | Pass |
+| API-64 | BR-13 | two edits of different actions of one ticket, and one edit while a status change runs, 20 rounds | no deadlock, no `500`; every request is `200` or a documented `409` | Pass (F3 part: edits and creates; the status-change part is added in F4) |
+| API-49 | BR-28 | action created by staff B on a ticket owned by staff A | `201`; performer is B; owner is still A | Pass |
 
 ### 3.2 Ticket workflow (`server/tests/lab-04/ticket-workflow.api.test.ts`)
 
@@ -139,7 +142,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
 | SEC-01 | AC-02, AC-14, AC-28, AC-43 | role × route sweep including all new routes and the Lab 3 staff routes whose role set changed (BR-26), no session, forged Origin | each role gets 403 outside its set (Administrator now inside the IT Staff set), 401 with no session, 403 on forged Origin | Planned |
-| SEC-02 | AC-08, BR-24 | Requester A reaches for B's ticket's actions | `404`, never `403` or data | Planned |
+| SEC-02 | AC-08, BR-24 | Requester A reaches for B's ticket's actions | `404`, never `403` or data | Pass |
 | SEC-03 | BR-14 | two failures at once on the new routes | the earlier rung of the ladder wins | Planned |
 
 ## 4. Migration and seed (`server/tests/lab-04/migration.api.test.ts`, `seed.api.test.ts`)
@@ -354,3 +357,19 @@ run on `main`.
   `version` 1 on every row, the documented inverse SQL left no `ActionTaken` table and no
   `Ticket.version` column, and `pg_restore` of the pre-migration dump returned a Lab 3 database
   on which `prisma migrate status` reports the Lab 4 migration as not applied. Steps are in the README.
+
+**F3 (Actions Taken API), branch `feature/actions-taken-api`**, 2026-10-14:
+
+- `server/tests/lab-04/actions-taken.api.test.ts`: 52 tests pass (UNIT-01, UNIT-03, API-01 to API-19,
+  API-46 to API-49, API-60 to API-64 (F3 part), API-67 (F3 part), API-69, SEC-02, SEC-03 first rung).
+  Mutation checks: removing the revision insert on edit fails 5 tests, ignoring the resulting status
+  in the RESOLVED rule fails 1, removing the stale check fails 3. Removing only the `version` from
+  the `UPDATE ... WHERE` still passes, because the check under the ticket lock already rejects a
+  stale caller; the statement-level check is a second guard.
+- Review fix (assignee re-check): `actions-taken.api.test.ts` now has 58 tests. Replacing the
+  in-transaction check with "always eligible" fails 4 of them (API-70). Removing only `FOR SHARE`
+  still passes API-72, because both serial orders are valid there; the lock is argued from
+  PostgreSQL's row-lock conflict rules (an `UPDATE` of the User row conflicts with `FOR SHARE`),
+  not proven by the test. Full server suite: 20 files, 456 tests pass.
+- Not covered yet and left `Planned`: API-26, API-67 and API-68 through the gate, and the status
+  change half of API-64, because the status routes are F4.

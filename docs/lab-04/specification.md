@@ -182,7 +182,13 @@ Unchanged: login, sessions, user management (Administrator only), the Requester 
   rejected `409 ACTION_FINAL`. `result` is required whenever the status is COMPLETED, on create
   and on edit (D-1).
 - **BR-07** — `assigneeId`, when given, must be an active user with role IT_STAFF or
-  ADMINISTRATOR; an inactive, missing, or Requester user is rejected `400` (D-1).
+  ADMINISTRATOR; an inactive, missing, or Requester user is rejected `400` (D-1). The check is
+  made twice: early, to keep the 400-before-404 order, and again inside the write transaction
+  after the Ticket lock and immediately before the write, with `FOR SHARE` on the assignee's
+  User row, so a concurrent deactivation or role change either happens first (the write is
+  rejected `400` and nothing is written) or waits until the write commits. On an edit only an
+  assignee supplied in that request is re-checked. A database error during either check is a
+  `500`, never reported as a field error.
 - **BR-08** — **Append-only means no deletion and no lost value.** No role can delete an Action
   Taken and there is no delete route. The `ActionTaken` row is the *current projection*; the
   history is `ActionTakenRevision`, an immutable table. Creating an action writes revision 1

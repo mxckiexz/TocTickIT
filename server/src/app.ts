@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
 import { isLegalStatusTransition, statusRequiresConfirmation } from "./ticketStatus.js";
+import { registerActionsTakenRoutes } from "./actionsTaken.js";
 import {
   AuthedRequest,
   AuthenticatedUser,
@@ -2022,5 +2023,8 @@ app.post(
     }
   }
 );
+
+// Lab 4 F3: Actions Taken (own module, specification.md "Other decisions").
+registerActionsTakenRoutes(app);
 
 export default app;

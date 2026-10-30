@@ -50,6 +50,7 @@ function ticket(overrides: Partial<api.Ticket> = {}): api.Ticket {
     requesterMarkedResolvedById: null,
     createdAt: "2026-09-01T10:00:00.000Z",
     updatedAt: "2026-09-01T10:00:00.000Z",
+    version: 1,
     ...overrides,
   };
 }

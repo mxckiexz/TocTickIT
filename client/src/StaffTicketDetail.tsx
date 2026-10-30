@@ -122,7 +122,7 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     setOwnershipUiState("saving");
     setOwnershipError("");
     try {
-      await claimTicket(ticketId);
+      await claimTicket(ticketId, ticket!.version);
       await loadDetail();
     } catch (error) {
       console.error("Failed to claim ticket:", error);
@@ -159,7 +159,7 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     setOwnershipUiState("saving");
     setOwnershipError("");
     try {
-      await assignTicket(ticketId, Number(reassignSelection));
+      await assignTicket(ticketId, Number(reassignSelection), ticket!.version);
       setReassignOpen(false);
       await loadDetail();
     } catch (error) {
@@ -174,7 +174,7 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     setPriorityUiState("saving");
     setPriorityError("");
     try {
-      await updateTicketItPriority(ticketId, nextPriority);
+      await updateTicketItPriority(ticketId, nextPriority, ticket!.version);
       await loadDetail();
     } catch (error) {
       console.error("Failed to update priority:", error);
@@ -202,7 +202,7 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     setStatusUiState("saving");
     setStatusError("");
     try {
-      await updateTicketStatus(ticketId, target, confirm || undefined);
+      await updateTicketStatus(ticketId, target, ticket!.version, confirm || undefined);
       setStatusPendingTarget(null);
       await loadDetail();
     } catch (error) {

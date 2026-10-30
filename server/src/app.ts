@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { getPrisma } from "./prisma.js";
 import { isLegalStatusTransition, statusRequiresConfirmation } from "./ticketStatus.js";
 import { registerActionsTakenRoutes } from "./actionsTaken.js";
+import { registerTicketWorkflowRoutes, workflowFields } from "./ticketWorkflow.js";
 import {
   AuthedRequest,
   AuthenticatedUser,
@@ -947,10 +948,9 @@ app.get("/api/tickets/:id/comments", requireAuth, requirePasswordUpToDate, async
 app.post(
   "/api/tickets/:id/comments",
   requireAuth,
-  // BR-39: Administrator is read-only here — a Requester (own ticket) or IT
-  // Staff (any ticket) may post; Administrator gets 403 before the ticket is
-  // even looked up.
-  requireRole("REQUESTER", "IT_STAFF"),
+  // Lab 4 BR-26: a Requester (own ticket), IT Staff or Administrator (any
+  // ticket) may post; anyone else is 403 before the ticket is looked up.
+  requireRole("REQUESTER", "IT_STAFF", "ADMINISTRATOR"),
   requirePasswordUpToDate,
   async (req: AuthedRequest, res: Response) => {
     const ticketId = Number(req.params.id);
@@ -1025,9 +1025,8 @@ app.get(
 app.post(
   "/api/tickets/:id/notes",
   requireAuth,
-  // BR-29/BR-39: IT Staff only — Requester never sees/writes notes,
-  // Administrator is read-only.
-  requireRole("IT_STAFF"),
+  // BR-29, Lab 4 BR-26: IT Staff and Administrator; a Requester never writes notes.
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
   requirePasswordUpToDate,
   async (req: AuthedRequest, res: Response) => {
     const ticketId = Number(req.params.id);
@@ -1061,57 +1060,7 @@ app.post(
   }
 );
 
-// BR-40: once a ticket has reached one of these terminal-for-this-purpose
-// statuses, the Requester can no longer flag it as resolved themselves.
-const RESOLVE_BLOCKED_STATUSES: TicketStatus[] = ["RESOLVED", "CLOSED", "CANCELLED"];
-
-app.post(
-  "/api/tickets/:id/mark-resolved",
-  requireAuth,
-  requireRole("REQUESTER"),
-  requirePasswordUpToDate,
-  async (req: AuthedRequest, res: Response) => {
-    const ticketId = Number(req.params.id);
-    const requesterId = req.user!.id;
-    if (!Number.isInteger(ticketId) || ticketId <= 0) {
-      return res.status(400).json({ error: "Invalid ticket id." });
-    }
-
-    try {
-      const prisma = getPrisma();
-
-      // BR-14: not the caller's ticket looks the same as one that doesn't
-      // exist.
-      const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId } });
-      if (!ticket) {
-        return res.status(404).json({ error: "Ticket not found." });
-      }
-
-      if (RESOLVE_BLOCKED_STATUSES.includes(ticket.currentStatus)) {
-        return res.status(409).json({
-          error: `This ticket is already ${ticket.currentStatus} and can't be marked resolved.`,
-        });
-      }
-
-      // BR-24: idempotent while not yet terminal — a repeat call just
-      // overwrites the timestamp/author; currentStatus is untouched (this
-      // is a Requester-visible signal only, never a status transition).
-      const updated = await prisma.ticket.update({
-        where: { id: ticketId },
-        data: {
-          requesterMarkedResolvedAt: new Date(),
-          requesterMarkedResolvedById: requesterId,
-        },
-      });
-
-      res.status(200).json(updated);
-    } catch (error) {
-      console.error("Failed to mark ticket resolved:", error);
-
-      res.status(500).json({ error: "Failed to mark ticket resolved" });
-    }
-  }
-);
+// mark-resolved: see ticketWorkflow.ts (Lab 4 F4).
 
 // ---------------------------------------------------------------------------
 // Feature 4 — IT Staff Ticket Queue (Issue #37)
@@ -1336,7 +1285,7 @@ app.get(
         return res.status(404).json({ error: "Ticket not found." });
       }
 
-      const [attachments, comments, notes] = await Promise.all([
+      const [attachments, comments, notes, actionStatuses] = await Promise.all([
         prisma.attachment.findMany({
           where: { ticketId },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -1361,6 +1310,8 @@ app.get(
           include: { author: { select: { name: true, role: true } } },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         }),
+        // Lab 4 FR-12: the gate needs the actions' statuses.
+        prisma.actionTaken.findMany({ where: { ticketId }, select: { status: true } }),
       ]);
 
       const { requester, owner, category, relatedSystem, ...ticketFields } = ticket;
@@ -1368,6 +1319,7 @@ app.get(
       res.status(200).json({
         ticket: {
           ...ticketFields,
+          ...workflowFields(ticket, actionStatuses),
           categoryName: category.name,
           relatedSystemName: relatedSystem.name,
           requesterName: requester.name,
@@ -1432,235 +1384,7 @@ app.get(
   }
 );
 
-app.post(
-  "/api/staff/tickets/:id/claim",
-  requireAuth,
-  requireRole("IT_STAFF"),
-  requirePasswordUpToDate,
-  async (req: AuthedRequest, res: Response) => {
-    const ticketId = Number(req.params.id);
-    if (!Number.isInteger(ticketId) || ticketId <= 0) {
-      return res.status(400).json({ error: "Invalid ticket id." });
-    }
-
-    try {
-      const prisma = getPrisma();
-
-      // Atomic claim: the WHERE clause's ownerId: null is checked and
-      // written in the same statement, so two concurrent claims on the same
-      // ticket can't both read "unassigned" and both win — only the update
-      // whose WHERE still matches at execution time affects a row. A plain
-      // findUnique-then-update here would be a classic TOCTOU race (found
-      // in review): both requests could read ownerId: null before either
-      // writes, and the second write would silently overwrite the first
-      // claimant instead of getting BR-18's required 409.
-      const result = await prisma.ticket.updateMany({
-        where: { id: ticketId, ownerId: null },
-        data: { ownerId: req.user!.id },
-      });
-
-      if (result.count === 0) {
-        // Distinguish "doesn't exist" (404) from "exists but already
-        // claimed" (409, BR-18) — the updateMany above can't tell these
-        // apart on its own, since both leave count at 0.
-        const exists = await prisma.ticket.findUnique({
-          where: { id: ticketId },
-          select: { id: true },
-        });
-        if (!exists) {
-          return res.status(404).json({ error: "Ticket not found." });
-        }
-        return res.status(409).json({
-          error: "Ticket is already assigned. Use assign to change its owner.",
-        });
-      }
-
-      const updated = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
-      res.status(200).json(updated);
-    } catch (error) {
-      console.error("Failed to claim ticket:", error);
-
-      res.status(500).json({ error: "Failed to claim ticket" });
-    }
-  }
-);
-
-app.post(
-  "/api/staff/tickets/:id/assign",
-  requireAuth,
-  requireRole("IT_STAFF"),
-  requirePasswordUpToDate,
-  async (req: AuthedRequest, res: Response) => {
-    const ticketId = Number(req.params.id);
-    if (!Number.isInteger(ticketId) || ticketId <= 0) {
-      return res.status(400).json({ error: "Invalid ticket id." });
-    }
-
-    const ownerId = req.body?.ownerId;
-    if (!Number.isInteger(ownerId) || ownerId <= 0) {
-      return res.status(400).json({
-        errors: { ownerId: "ownerId is required and must be a positive integer." },
-      });
-    }
-
-    try {
-      const prisma = getPrisma();
-
-      // Both queried up front (in parallel) so an invalid ownerId is a 400
-      // even when the ticket also doesn't exist — BR-13's 400-before-404.
-      const [ticket, targetUser] = await Promise.all([
-        prisma.ticket.findUnique({ where: { id: ticketId } }),
-        prisma.user.findFirst({ where: { id: ownerId, role: "IT_STAFF", isActive: true } }),
-      ]);
-
-      if (!targetUser) {
-        return res.status(400).json({
-          errors: { ownerId: "ownerId must reference an active IT Staff user." },
-        });
-      }
-      if (!ticket) {
-        return res.status(404).json({ error: "Ticket not found." });
-      }
-
-      const updated = await prisma.ticket.update({
-        where: { id: ticketId },
-        data: { ownerId },
-      });
-
-      res.status(200).json(updated);
-    } catch (error) {
-      console.error("Failed to assign ticket:", error);
-
-      res.status(500).json({ error: "Failed to assign ticket" });
-    }
-  }
-);
-
-app.patch(
-  "/api/staff/tickets/:id/priority",
-  requireAuth,
-  requireRole("IT_STAFF"),
-  requirePasswordUpToDate,
-  async (req: AuthedRequest, res: Response) => {
-    const ticketId = Number(req.params.id);
-    if (!Number.isInteger(ticketId) || ticketId <= 0) {
-      return res.status(400).json({ error: "Invalid ticket id." });
-    }
-
-    const itPriority = req.body?.itPriority;
-    if (!REQUESTED_PRIORITIES.includes(itPriority)) {
-      return res.status(400).json({
-        errors: { itPriority: "itPriority must be LOW, MEDIUM, or HIGH." },
-      });
-    }
-
-    try {
-      const prisma = getPrisma();
-
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) {
-        return res.status(404).json({ error: "Ticket not found." });
-      }
-
-      // BR-20: requestedPriority is never touched by this route.
-      const updated = await prisma.ticket.update({
-        where: { id: ticketId },
-        data: { itPriority },
-      });
-
-      res.status(200).json(updated);
-    } catch (error) {
-      console.error("Failed to update ticket priority:", error);
-
-      res.status(500).json({ error: "Failed to update ticket priority" });
-    }
-  }
-);
-
-app.patch(
-  "/api/staff/tickets/:id/status",
-  requireAuth,
-  requireRole("IT_STAFF"),
-  requirePasswordUpToDate,
-  async (req: AuthedRequest, res: Response) => {
-    const ticketId = Number(req.params.id);
-    if (!Number.isInteger(ticketId) || ticketId <= 0) {
-      return res.status(400).json({ error: "Invalid ticket id." });
-    }
-
-    const targetStatus = req.body?.currentStatus;
-    if (!TICKET_STATUSES.includes(targetStatus)) {
-      return res.status(400).json({
-        errors: { currentStatus: `currentStatus must be one of: ${TICKET_STATUSES.join(", ")}.` },
-      });
-    }
-
-    // BR-42: confirmation is checked before the matrix's legality check
-    // (400 before 409, per BR-13's order) — a target requiring confirmation
-    // with confirm missing/false is 400 even if the transition would also
-    // have been illegal.
-    if (statusRequiresConfirmation(targetStatus) && req.body?.confirm !== true) {
-      return res.status(400).json({
-        errors: { confirm: "Confirmation is required to set this status." },
-      });
-    }
-
-    try {
-      const prisma = getPrisma();
-
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) {
-        return res.status(404).json({ error: "Ticket not found." });
-      }
-
-      // BR-22: only the matrix's ✅ cells are legal, including rejecting a
-      // status "transitioning" to itself.
-      if (!isLegalStatusTransition(ticket.currentStatus, targetStatus)) {
-        return res.status(409).json({
-          error: `Cannot transition from ${ticket.currentStatus} to ${targetStatus}.`,
-        });
-      }
-
-      const updated = await prisma.ticket.update({
-        where: { id: ticketId },
-        data: { currentStatus: targetStatus },
-      });
-
-      res.status(200).json(updated);
-    } catch (error) {
-      console.error("Failed to update ticket status:", error);
-
-      res.status(500).json({ error: "Failed to update ticket status" });
-    }
-  }
-);
-
-// FR-28/BR-41 — populates the claim/assign control's dropdown. Deliberately
-// not GET /api/admin/users: that route is Administrator-only and returns
-// every role, more data than a reassignment needs.
-app.get(
-  "/api/staff/assignable-users",
-  requireAuth,
-  requireRole("IT_STAFF"),
-  requirePasswordUpToDate,
-  async (_req: AuthedRequest, res: Response) => {
-    try {
-      const prisma = getPrisma();
-
-      const users = await prisma.user.findMany({
-        where: { role: "IT_STAFF", isActive: true },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      });
-
-      res.status(200).json(users);
-    } catch (error) {
-      console.error("Failed to retrieve assignable users:", error);
-
-      res.status(500).json({ error: "Failed to retrieve assignable users" });
-    }
-  }
-);
+// claim, assign, priority, status and assignable-users: see ticketWorkflow.ts (Lab 4 F4).
 
 // ---------------------------------------------------------------------------
 // Lab 3 — Administrator User Management (Issue #39)
@@ -2026,5 +1750,7 @@ app.post(
 
 // Lab 4 F3: Actions Taken (own module, specification.md "Other decisions").
 registerActionsTakenRoutes(app);
+// Lab 4 F4: ticket workflow (claim, assign, priority, status, mark-resolved, assignable users).
+registerTicketWorkflowRoutes(app);
 
 export default app;

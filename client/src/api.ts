@@ -120,6 +120,8 @@ export interface Ticket {
   requesterMarkedResolvedById: number | null;
   createdAt: string;
   updatedAt: string;
+  // Lab 4 (BR-16, BR-17): optimistic-locking counter; ticket writes send back the one last loaded.
+  version: number;
 }
 
 export interface Attachment {
@@ -319,9 +321,10 @@ export async function postComment(ticketId: number, body: string): Promise<Comme
   return parseJsonOrThrow<Comment>(response, "Failed to post comment");
 }
 
-export async function markTicketResolved(ticketId: number): Promise<Ticket> {
+export async function markTicketResolved(ticketId: number, version: number): Promise<Ticket> {
   const response = await apiFetch(`/api/tickets/${ticketId}/mark-resolved`, {
     method: "POST",
+    body: JSON.stringify({ version }),
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to mark ticket resolved");
 }
@@ -389,6 +392,9 @@ export type StaffTicket = Ticket & {
   requesterEmail: string;
   ownerName: string | null;
   ownerEmail: string | null;
+  // Lab 4 FR-12, same for IT Staff and Administrator.
+  allowedTransitions: TicketStatus[];
+  resolutionGate: { ok: boolean; unmet: Array<"NO_OWNER" | "NO_COMPLETED_ACTION" | "OPEN_ACTIONS"> };
 };
 
 // Not a fetch — the URL IT Staff / Administrator open an attachment from (the
@@ -415,23 +421,26 @@ export async function fetchStaffTicketDetail(ticketId: number): Promise<StaffTic
   return parseJsonOrThrow<StaffTicketDetailResponse>(response, "Failed to load ticket");
 }
 
-export async function claimTicket(ticketId: number): Promise<Ticket> {
-  const response = await apiFetch(`/api/staff/tickets/${ticketId}/claim`, { method: "POST" });
+export async function claimTicket(ticketId: number, version: number): Promise<Ticket> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ version }),
+  });
   return parseJsonOrThrow<Ticket>(response, "Failed to claim ticket");
 }
 
-export async function assignTicket(ticketId: number, ownerId: number): Promise<Ticket> {
+export async function assignTicket(ticketId: number, ownerId: number, version: number): Promise<Ticket> {
   const response = await apiFetch(`/api/staff/tickets/${ticketId}/assign`, {
     method: "POST",
-    body: JSON.stringify({ ownerId }),
+    body: JSON.stringify({ ownerId, version }),
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to assign ticket");
 }
 
-export async function updateTicketItPriority(ticketId: number, itPriority: Priority): Promise<Ticket> {
+export async function updateTicketItPriority(ticketId: number, itPriority: Priority, version: number): Promise<Ticket> {
   const response = await apiFetch(`/api/staff/tickets/${ticketId}/priority`, {
     method: "PATCH",
-    body: JSON.stringify({ itPriority }),
+    body: JSON.stringify({ itPriority, version }),
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to update priority");
 }
@@ -439,13 +448,16 @@ export async function updateTicketItPriority(ticketId: number, itPriority: Prior
 export async function updateTicketStatus(
   ticketId: number,
   currentStatus: TicketStatus,
+  version: number,
   confirm?: boolean
 ): Promise<Ticket> {
   const response = await apiFetch(`/api/staff/tickets/${ticketId}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ currentStatus, confirm }),
+    body: JSON.stringify({ currentStatus, confirm, version }),
   });
-  return parseJsonOrThrow<Ticket>(response, "Failed to update status");
+  // Lab 4: the route returns { ticket } (with allowedTransitions and resolutionGate).
+  const body = await parseJsonOrThrow<{ ticket: Ticket }>(response, "Failed to update status");
+  return body.ticket;
 }
 
 export async function fetchAssignableUsers(): Promise<AssignableUser[]> {

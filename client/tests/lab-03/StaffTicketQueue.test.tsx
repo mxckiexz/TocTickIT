@@ -33,6 +33,7 @@ function staffTicket(overrides: Partial<api.StaffTicketSummary> = {}): api.Staff
     requesterMarkedResolvedById: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    version: 1,
     ...overrides,
   };
 }
@@ -274,8 +275,11 @@ describe("StaffTicketQueue", () => {
         ...staffTicket(),
         categoryName: "Hardware",
         relatedSystemName: "Corporate Laptop",
+        requesterName: "Jennifer Anderson",
         requesterEmail: "jennifer.anderson@toktickit.test",
         ownerEmail: null,
+        allowedTransitions: ["OPEN", "IN_PROGRESS", "CANCELLED"],
+        resolutionGate: { ok: false, unmet: ["NO_OWNER", "NO_COMPLETED_ACTION"] },
       },
       attachments: [],
       comments: [],

@@ -30,6 +30,7 @@ const listedTicket: api.Ticket = {
   requesterMarkedResolvedById: null,
   createdAt: "2026-09-01T10:00:00.000Z",
   updatedAt: "2026-09-01T10:00:00.000Z",
+  version: 1,
 };
 
 function mockLookups() {
@@ -691,7 +692,7 @@ describe("TicketDetail", () => {
       fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
 
       expect(await screen.findByText(/You marked this as resolved on/i)).toBeInTheDocument();
-      expect(resolveSpy).toHaveBeenCalledWith(1);
+      expect(resolveSpy).toHaveBeenCalledWith(1, 1);
       expect(screen.queryByRole("button", { name: /Problem Appears Resolved/i })).not.toBeInTheDocument();
     });
 

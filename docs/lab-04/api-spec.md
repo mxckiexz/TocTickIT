@@ -175,6 +175,14 @@ Roles: IT_STAFF, ADMINISTRATOR. Body: `{ "currentStatus": "RESOLVED", "confirm":
 | 404 | ticket missing | |
 | 409 | `ILLEGAL_TRANSITION`; `RESOLUTION_GATE` (body adds `"unmet": [...]`); `STALE_VERSION` | conflict body |
 
+Order of checks: 401, 403, then 400 (ticket id, `currentStatus`, `confirm`, `version`), then 404, then,
+inside the transaction with the ticket locked: `409 STALE_VERSION`, `409 ILLEGAL_TRANSITION` (body adds
+`code`), then, for RESOLVED only, `409 RESOLUTION_GATE`. The same order applies to claim, assign, priority and
+mark-resolved without the matrix and gate rungs; a claim of an already owned ticket is `409` with code
+`ALREADY_ASSIGNED` after the stale check. For assign, `ownerId` must be an active IT Staff or Administrator:
+checked early (400 before 404) and again inside the transaction with the owner's User row held `FOR SHARE`
+(same rule as an action assignee, BR-07).
+
 The transaction starts with `SELECT ... FOR UPDATE` on the ticket row; the matrix check, the gate
 check and the status write all happen while it is held, and every Action Taken create and edit
 takes the same lock, so no action can appear between the gate check and the write (BR-13).

@@ -21,7 +21,7 @@ function ticket(overrides: Partial<api.StaffTicketSummary> = {}): api.StaffTicke
     categoryId: 1, relatedSystemId: 1, summary: "s", description: "d",
     requestedPriority: "HIGH", itPriority: "LOW", currentStatus: "IN_PROGRESS",
     requesterMarkedResolvedAt: null, requesterMarkedResolvedById: null,
-    createdAt: "2026-09-01T10:00:00.000Z", updatedAt: "2026-09-01T10:00:00.000Z", ...overrides,
+    createdAt: "2026-09-01T10:00:00.000Z", updatedAt: "2026-09-01T10:00:00.000Z", version: 1, ...overrides,
   };
 }
 

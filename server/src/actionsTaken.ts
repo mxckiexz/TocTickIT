@@ -205,22 +205,26 @@ const isEligibleAssignee = (user: { role: string; isActive: boolean } | null | u
 // enough on its own (the user can change before the write), so the write
 // re-checks with checkAssigneeLocked. A database error here is not swallowed:
 // it propagates to the route's 500 handler.
-async function checkAssignee(assigneeId: number | null | undefined): Promise<string | undefined> {
+export async function checkAssignee(assigneeId: number | null | undefined, message: string = ASSIGNEE_MESSAGE): Promise<string | undefined> {
   if (assigneeId === undefined || assigneeId === null) return undefined;
   const user = await getPrisma().user.findUnique({ where: { id: assigneeId }, select: { role: true, isActive: true } });
-  return isEligibleAssignee(user) ? undefined : ASSIGNEE_MESSAGE;
+  return isEligibleAssignee(user) ? undefined : message;
 }
 
 // BR-07, authoritative check: inside the transaction, after the Ticket lock and
 // immediately before the write. FOR SHARE on the User row makes a concurrent
 // deactivation or role change wait until this transaction commits, so the
 // assignee cannot become ineligible between this read and the write.
-async function checkAssigneeLocked(tx: Prisma.TransactionClient, assigneeId: number | null | undefined): Promise<string | undefined> {
+export async function checkAssigneeLocked(
+  tx: Prisma.TransactionClient,
+  assigneeId: number | null | undefined,
+  message: string = ASSIGNEE_MESSAGE
+): Promise<string | undefined> {
   if (assigneeId === undefined || assigneeId === null) return undefined;
   const rows = await tx.$queryRaw<Array<{ role: string; isActive: boolean }>>(
     Prisma.sql`SELECT "role"::text AS "role", "isActive" FROM "User" WHERE "id" = ${assigneeId} FOR SHARE`
   );
-  return isEligibleAssignee(rows[0]) ? undefined : ASSIGNEE_MESSAGE;
+  return isEligibleAssignee(rows[0]) ? undefined : message;
 }
 
 const TICKET_CLOSED = { error: "This ticket is closed or cancelled and accepts no actions.", code: "TICKET_CLOSED" };

@@ -98,6 +98,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-29 | AC-21 | successful status change | response has new status, `version`, `allowedTransitions`, `resolutionGate` | Pass |
 | API-30 | AC-22, BR-17 | claim, assign, priority, mark-resolved, each with the current, a stale, and no `version` | `version` +1; `409 STALE_VERSION`; `400` at `errors.version`; nothing written in the last two | | Pass |
 | API-65 | BR-17, D-4 | two callers claim, assign or change priority from the same loaded `version` at once | exactly one succeeds; the other gets `409`; the first caller's value is the stored one (no lost update) | | Pass |
+| API-73 | BR-17, D-4 | for each of claim, assign, priority, status and mark-resolved: the ticket's version is bumped inside the transaction after the version comparison and before the write (test seam), then the request is made with the version it loaded | `409 STALE_VERSION` with `currentVersion`; the row's own fields unchanged; the only change to `version` is the simulated writer's bump | Pass |
 | API-66 | D-4 | `POST` comment and note without `version` | `201`, ticket `version` unchanged | Pass |
 | API-31 | FR-12, BR-26 | staff detail GET as IT Staff and Administrator | `version`, transitions, gate present; both roles receive identical `allowedTransitions` | Pass |
 | API-32 | BR-14 | RESOLVED without `confirm` on a ticket that also fails the gate | `400` first, then after confirm `409` | Pass |
@@ -395,3 +396,8 @@ run on `main`.
 - Lab 3 tests updated as listed in section 9. Full server suite: 21 files, 490 tests pass. Full client suite: 13 files,
   145 tests pass. Full Playwright suite (Lab 2 and Lab 3 specs): 38 tests pass against the real UI, including
   `e2e/lab-03/staff-ticket-flow.spec.ts`.
+
+**F4 review fix (conditional write)**, 2026-10-31: claim, assign, priority, status and mark-resolved now write with
+one conditional statement (`UPDATE ... WHERE id = ? AND version = ?`, `updateMany`, zero rows is `409 STALE_VERSION`)
+instead of reading the version and then updating by id. API-73 proves it: removing `version` from the `WHERE` makes
+all 5 of its cases fail. `ticketWorkflow.api.test.ts` now has 40 tests. Full server suite after the change: 21 files, 496 tests pass.

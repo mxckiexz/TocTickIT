@@ -34,7 +34,13 @@ export function workflowFields(ticket: { currentStatus: TicketStatus; ownerId: n
 
 // Test seam: lets a test change the new owner in the gap between the early
 // eligibility check and the write, to prove the in-transaction re-check (BR-07).
-export const workflowHooks: { afterOwnerCheck?: () => Promise<void> | void } = {};
+export const workflowHooks: {
+  afterOwnerCheck?: () => Promise<void> | void;
+  // Runs inside the transaction, after the version was read and checked and just
+  // before the conditional write. Lets a test bump the version through `tx` to prove
+  // that the write's own `WHERE id = ? AND version = ?` rejects a stale caller (BR-17).
+  beforeWrite?: (tx: Prisma.TransactionClient) => Promise<void> | void;
+} = {};
 
 const PRIORITIES: readonly Priority[] = ["LOW", "MEDIUM", "HIGH"];
 const OWNER_MESSAGE = "ownerId must reference an active IT Staff or Administrator.";
@@ -55,6 +61,25 @@ const stale = (currentVersion: number) => ({
   code: "STALE_VERSION",
   currentVersion,
 });
+
+// BR-17, D-4: the version check and the write are ONE conditional statement
+// (UPDATE ... WHERE id = ? AND version = ?). The Ticket lock already serializes the
+// routes, but the database write must not depend on that: if the row's version is
+// not the one the caller loaded, nothing is written and the caller gets STALE_VERSION.
+async function updateTicketIfVersion(
+  tx: Prisma.TransactionClient,
+  ticketId: number,
+  version: number,
+  data: Prisma.TicketUncheckedUpdateManyInput
+): Promise<{ kind: "ok"; ticket: Prisma.TicketGetPayload<object> } | { kind: "stale"; currentVersion: number }> {
+  await workflowHooks.beforeWrite?.(tx);
+  const written = await tx.ticket.updateMany({ where: { id: ticketId, version }, data: { ...data, version: { increment: 1 } } });
+  if (written.count !== 1) {
+    const current = await tx.ticket.findUnique({ where: { id: ticketId }, select: { version: true } });
+    return { kind: "stale", currentVersion: current?.version ?? version };
+  }
+  return { kind: "ok", ticket: await tx.ticket.findUniqueOrThrow({ where: { id: ticketId } }) };
+}
 
 type Outcome<T> = { kind: "ok"; ticket: T } | { kind: "missing" } | { kind: "stale"; currentVersion: number } | { kind: "owner"; message: string } | { kind: "conflict"; status: number; body: object };
 
@@ -91,8 +116,7 @@ export function registerTicketWorkflowRoutes(app: Express): void {
         if (ticket.ownerId !== null) {
           return { kind: "conflict", status: 409, body: { error: "Ticket is already assigned. Use assign to change its owner.", code: "ALREADY_ASSIGNED" } };
         }
-        const updated = await tx.ticket.update({ where: { id: ticketId }, data: { ownerId: req.user!.id, version: { increment: 1 } } });
-        return { kind: "ok", ticket: updated };
+        return updateTicketIfVersion(tx, ticketId, version, { ownerId: req.user!.id });
       });
       respond(res, outcome, (t) => t);
     } catch (error) {
@@ -125,8 +149,7 @@ export function registerTicketWorkflowRoutes(app: Express): void {
         if (ticket.version !== version) return { kind: "stale", currentVersion: ticket.version };
         const recheck = await checkAssigneeLocked(tx, ownerId, OWNER_MESSAGE);
         if (recheck) return { kind: "owner", message: recheck };
-        const updated = await tx.ticket.update({ where: { id: ticketId }, data: { ownerId, version: { increment: 1 } } });
-        return { kind: "ok", ticket: updated };
+        return updateTicketIfVersion(tx, ticketId, version, { ownerId });
       });
       respond(res, outcome, (t) => t);
     } catch (error) {
@@ -152,8 +175,7 @@ export function registerTicketWorkflowRoutes(app: Express): void {
         const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) return { kind: "missing" };
         if (ticket.version !== version) return { kind: "stale", currentVersion: ticket.version };
-        const updated = await tx.ticket.update({ where: { id: ticketId }, data: { itPriority, version: { increment: 1 } } });
-        return { kind: "ok", ticket: updated };
+        return updateTicketIfVersion(tx, ticketId, version, { itPriority });
       });
       respond(res, outcome, (t) => t);
     } catch (error) {
@@ -198,8 +220,9 @@ export function registerTicketWorkflowRoutes(app: Express): void {
             return { kind: "conflict", status: 409, body: { error: "The resolution conditions are not met.", code: "RESOLUTION_GATE", unmet } };
           }
         }
-        const updated = await tx.ticket.update({ where: { id: ticketId }, data: { currentStatus: target, version: { increment: 1 } } });
-        return { kind: "ok", ticket: { ticket: updated, actions } };
+        const written = await updateTicketIfVersion(tx, ticketId, version, { currentStatus: target });
+        if (written.kind === "stale") return written;
+        return { kind: "ok", ticket: { ticket: written.ticket, actions } };
       });
       respond(res, outcome, ({ ticket, actions }) => ({ ticket: { ...ticket, ...workflowFields(ticket, actions) } }));
     } catch (error) {
@@ -233,11 +256,7 @@ export function registerTicketWorkflowRoutes(app: Express): void {
           return { kind: "conflict", status: 409, body: { error: `This ticket is already ${ticket.currentStatus} and can't be marked resolved.` } };
         }
         // BR-24: repeating the call while the ticket is not terminal just refreshes who and when.
-        const updated = await tx.ticket.update({
-          where: { id: ticketId },
-          data: { requesterMarkedResolvedAt: new Date(), requesterMarkedResolvedById: requesterId, version: { increment: 1 } },
-        });
-        return { kind: "ok", ticket: updated };
+        return updateTicketIfVersion(tx, ticketId, version, { requesterMarkedResolvedAt: new Date(), requesterMarkedResolvedById: requesterId });
       });
       respond(res, outcome, (t) => t);
     } catch (error) {

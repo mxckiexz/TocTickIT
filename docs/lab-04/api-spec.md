@@ -183,6 +183,11 @@ mark-resolved without the matrix and gate rungs; a claim of an already owned tic
 checked early (400 before 404) and again inside the transaction with the owner's User row held `FOR SHARE`
 (same rule as an action assignee, BR-07).
 
+Every ticket write (claim, assign, priority, status, mark-resolved) is one conditional statement,
+`UPDATE ... WHERE id = ? AND version = ?` with the version incremented in the same statement; zero rows
+updated is `409 STALE_VERSION` and nothing is written. The lock below serializes the routes, but the write
+does not depend on it (BR-17).
+
 The transaction starts with `SELECT ... FOR UPDATE` on the ticket row; the matrix check, the gate
 check and the status write all happen while it is held, and every Action Taken create and edit
 takes the same lock, so no action can appear between the gate check and the write (BR-13).

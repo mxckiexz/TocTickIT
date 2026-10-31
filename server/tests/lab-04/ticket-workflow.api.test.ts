@@ -133,6 +133,7 @@ describe("Ticket workflow API", () => {
 
   beforeEach(() => {
     workflowHooks.afterOwnerCheck = undefined;
+    workflowHooks.beforeWrite = undefined;
   });
 
   describe("status matrix, called directly (API-20, 21, 22, BR-11)", () => {
@@ -367,6 +368,54 @@ describe("Ticket workflow API", () => {
       await staff.post(`/api/tickets/${ticketId}/comments`).set("Origin", CLIENT_ORIGIN).send({ body: "hello" }).expect(201);
       await staff.post(`/api/tickets/${ticketId}/notes`).set("Origin", CLIENT_ORIGIN).send({ body: "internal" }).expect(201);
       expect(await version(ticketId)).toBe(v);
+    });
+  });
+
+  describe("the write itself enforces the loaded version (BR-17, D-4, API-73)", () => {
+    // The Ticket lock already serializes these routes, so a stale caller is normally stopped by
+    // the version comparison made under the lock. These tests bump the version through the same
+    // transaction after that comparison and before the write, which only the write's own
+    // `WHERE id = ? AND version = ?` can still catch.
+    const bump = async (tx: Parameters<NonNullable<typeof workflowHooks.beforeWrite>>[0], ticketId: number) => {
+      await tx.ticket.update({ where: { id: ticketId }, data: { version: { increment: 1 } } });
+    };
+    const cases: Array<[string, TicketOpts, (t: number, v: number) => request.Test, (before: Awaited<ReturnType<typeof row>>, after: Awaited<ReturnType<typeof row>>) => void]> = [
+      ["claim", { ownerId: null }, (t, v) => claim(staff, t, { version: v }), (b, a) => expect(a.ownerId).toBe(b.ownerId)],
+      ["assign", { ownerId: null }, (t, v) => assign(staff, t, { ownerId: ids.staffB, version: v }), (b, a) => expect(a.ownerId).toBe(b.ownerId)],
+      ["priority", { itPriority: "LOW" }, (t, v) => priority(staff, t, { itPriority: "HIGH", version: v }), (b, a) => expect(a.itPriority).toBe(b.itPriority)],
+      ["status", { status: "NEW" }, (t, v) => setStatus(staff, t, "OPEN", v), (b, a) => expect(a.currentStatus).toBe(b.currentStatus)],
+      [
+        "mark-resolved",
+        {},
+        (t, v) => markResolved(requester, t, { version: v }),
+        (b, a) => {
+          expect(a.requesterMarkedResolvedAt).toBeNull();
+          expect(a.requesterMarkedResolvedById).toBeNull();
+        },
+      ],
+    ];
+    for (const [name, opts, call, unchanged] of cases) {
+      it(`${name}: a version that changes after the check but before the write is 409 STALE_VERSION and the row is not modified`, async () => {
+        const ticketId = await makeTicket(opts);
+        const before = await row(ticketId);
+        workflowHooks.beforeWrite = (tx) => bump(tx, ticketId);
+        const response = await call(ticketId, before.version).expect(409);
+        workflowHooks.beforeWrite = undefined;
+        expect(response.body).toMatchObject({ code: "STALE_VERSION", currentVersion: before.version + 1 });
+        const after = await row(ticketId);
+        unchanged(before, after);
+        // The only change is the simulated writer's own bump; the request added nothing.
+        expect(after.version).toBe(before.version + 1);
+        expect(after.updatedAt.getTime()).toBeGreaterThanOrEqual(before.updatedAt.getTime());
+      });
+    }
+
+    it("a request that sends the version it actually loaded still succeeds when nothing intervenes", async () => {
+      const ticketId = await makeTicket({ ownerId: null });
+      const v = await version(ticketId);
+      workflowHooks.beforeWrite = () => undefined;
+      await claim(staff, ticketId, { version: v }).expect(200);
+      expect(await version(ticketId)).toBe(v + 1);
     });
   });
 

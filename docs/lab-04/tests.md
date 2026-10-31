@@ -38,8 +38,8 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UNIT-01 | BR-06 | action status move lookup | on edit: PLANNED → IN_PROGRESS / COMPLETED / CANCELLED, IN_PROGRESS → COMPLETED / CANCELLED allowed, unchanged status allowed, everything else and anything from a final status rejected; on create: PLANNED / IN_PROGRESS / COMPLETED allowed, CANCELLED rejected | `actions-taken.api.test.ts` | Pass |
 | UNIT-02 | BR-12 | resolution gate evaluator `(owner, actions[]) → unmet[]` | `NO_OWNER`, `NO_COMPLETED_ACTION`, `OPEN_ACTIONS` exactly when true; empty when all pass; cancelled actions ignored | `ticket-workflow.api.test.ts` | Pass |
 | UNIT-03 | BR-03, BR-04, BR-05, BR-06 | action validator | trims; 1 to 2000; follow-up rule; `actionAt` window (5 min ahead); `result` required when the status is COMPLETED | `actions-taken.api.test.ts` | Pass |
-| UNIT-04 | BR-20 | start of the 7-day window in Asia/Bangkok | midnight boundary; not shifted by the server timezone | `staff-dashboard.api.test.ts` | Planned |
-| UNIT-05 | BR-27 | description cut for `ActionBrief` | 120 characters then an ellipsis; shorter text unchanged; no result or follow-up text | `staff-dashboard.api.test.ts` | Planned |
+| UNIT-04 | BR-20 | start of the 7-day window in Asia/Bangkok | midnight boundary; not shifted by the server timezone | `staff-dashboard.api.test.ts` | Pass |
+| UNIT-05 | BR-27 | description cut for `ActionBrief` | 120 characters then an ellipsis; shorter text unchanged; no result or follow-up text | `staff-dashboard.api.test.ts` | Pass |
 
 ## 3. API / integration tests
 
@@ -102,7 +102,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-66 | D-4 | `POST` comment and note without `version` | `201`, ticket `version` unchanged | Pass |
 | API-31 | FR-12, BR-26 | staff detail GET as IT Staff and Administrator | `version`, transitions, gate present; both roles receive identical `allowedTransitions` | Pass |
 | API-32 | BR-14 | RESOLVED without `confirm` on a ticket that also fails the gate | `400` first, then after confirm `409` | Pass |
-| API-33 | api-spec | queue with `ownerId=me`, `ownerId=unassigned`, and a bad value | only the caller's tickets; only unowned tickets; `400` | Planned |
+| API-33 | api-spec | (in `dashboard-drilldown.api.test.ts`) queue with `ownerId=me`, `ownerId=unassigned`, and a bad value | only the caller's tickets; only unowned tickets; `400` | Pass |
 | API-50 | AC-43, BR-26, FR-25 | Administrator claims, assigns, sets priority, changes status, posts a comment and a note, creates and edits an action | every call succeeds with the IT Staff response shape | Pass |
 | API-51 | AC-43, BR-26 | the same calls as a Requester | `403` on each (comment on own ticket stays `201`) | Pass |
 | API-52 | AC-44, BR-26 | assign `ownerId` of an active Administrator, an active IT Staff, an inactive staff, a Requester, a missing id | `200`, `200`, `400`, `400`, `400` | Pass |
@@ -115,28 +115,28 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
-| API-34 | AC-23, BR-19 | Requester A with tickets of A and B in the database | every number equals raw SQL over A's tickets only | Planned |
-| API-35 | AC-24, BR-23 | Requester with no tickets | zeros and empty lists, no `null` | Planned |
-| API-36 | AC-27, BR-22 | many recent tickets | lists hold at most 5, only brief fields, no full list | Planned |
-| API-37 | AC-28 | staff, admin, no session | `403`, `403`, `401` | Planned |
-| API-38 | BR-21 | recently resolved | RESOLVED tickets ordered by `updatedAt` | Planned |
+| API-34 | AC-23, BR-19 | Requester A with tickets of A and B in the database | every number equals raw SQL over A's tickets only | Pass |
+| API-35 | AC-24, BR-23 | Requester with no tickets | zeros and empty lists, no `null` | Pass |
+| API-36 | AC-27, BR-22 | many recent tickets | lists hold at most 5, only brief fields, no full list | Pass |
+| API-37 | AC-28 | staff, admin, no session | `403`, `403`, `401` | Pass |
+| API-38 | BR-21 | recently resolved | RESOLVED tickets ordered by `updatedAt` | Pass |
 
 `staff-dashboard.api.test.ts`:
 
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
-| API-39 | AC-25, BR-18 | unassigned, assigned to me, by status, by IT priority, recent | equal raw SQL over the same rows | Planned |
-| API-40 | AC-26 | Administrator vs IT Staff | admin: `userCounts` equal raw SQL; staff: absent | Planned |
-| API-41 | AC-27 | many tickets | recent list at most 5 | Planned |
-| API-42 | BR-23 | status with no tickets | all 8 keys present, zeros kept | Planned |
-| API-43 | AC-28 | Requester, no session | `403`, `401` | Planned |
-| API-44 | AC-30, BR-20 | tickets updated 1 second either side of Bangkok midnight, 7 days ago | each on the correct side of the window | Planned |
-| API-45 | AC-29 | each metric's drill-down query | returns exactly the counted set | Planned |
-| API-55 | AC-45, BR-27 | caller has open assigned actions on open and on resolved tickets, plus actions assigned to someone else | `ticketsWithMyOpenActions` equals raw SQL (distinct open tickets only); the other user's actions are not counted | Planned |
-| API-56 | AC-45, BR-27 | caller performed 7 actions, some with equal `actionAt` | `myRecentActions` has 5, newest first by `actionAt` then `id`, equal to raw SQL; only brief fields; description cut to 120 | Planned |
-| API-57 | AC-46, BR-23 | caller with no assigned and no performed actions | `0` and `[]`, never `null` or missing | Planned |
-| API-58 | AC-45, AC-26 | IT Staff and Administrator each | both receive `ticketsWithMyOpenActions` and `myRecentActions` computed for themselves; `userCounts` only for Administrator | Planned |
-| API-59 | AC-47, FR-17 | queue with `actionAssigneeId=me`, and with a bad value | exactly the tickets counted by `ticketsWithMyOpenActions`, each once; `400` | Planned |
+| API-39 | AC-25, BR-18 | unassigned, assigned to me, by status, by IT priority, recent | equal raw SQL over the same rows | Pass |
+| API-40 | AC-26 | Administrator vs IT Staff | admin: `userCounts` equal raw SQL; staff: absent | Pass |
+| API-41 | AC-27 | many tickets | recent list at most 5 | Pass |
+| API-42 | BR-23 | status with no tickets | all 8 keys present, zeros kept | Pass |
+| API-43 | AC-28 | Requester, no session | `403`, `401` | Pass |
+| API-44 | AC-30, BR-20 | tickets updated 1 second either side of Bangkok midnight, 7 days ago | each on the correct side of the window | Pass |
+| API-45 | AC-29 | each metric's drill-down query | returns exactly the counted set | Pass |
+| API-55 | AC-45, BR-27 | caller has open assigned actions on open and on resolved tickets, plus actions assigned to someone else | `ticketsWithMyOpenActions` equals raw SQL (distinct open tickets only); the other user's actions are not counted | Pass |
+| API-56 | AC-45, BR-27 | caller performed 7 actions, some with equal `actionAt` | `myRecentActions` has 5, newest first by `actionAt` then `id`, equal to raw SQL; only brief fields; description cut to 120 | Pass |
+| API-57 | AC-46, BR-23 | caller with no assigned and no performed actions | `0` and `[]`, never `null` or missing | Pass |
+| API-58 | AC-45, AC-26 | IT Staff and Administrator each | both receive `ticketsWithMyOpenActions` and `myRecentActions` computed for themselves; `userCounts` only for Administrator | Pass |
+| API-59 | AC-47, FR-17 | queue with `actionAssigneeId=me`, and with a bad value | exactly the tickets counted by `ticketsWithMyOpenActions`, each once; `400` | Pass |
 
 ### 3.4 Cross-cutting security (`server/tests/lab-04/authorization.api.test.ts`)
 
@@ -401,3 +401,20 @@ run on `main`.
 one conditional statement (`UPDATE ... WHERE id = ? AND version = ?`, `updateMany`, zero rows is `409 STALE_VERSION`)
 instead of reading the version and then updating by id. API-73 proves it: removing `version` from the `WHERE` makes
 all 5 of its cases fail. `ticketWorkflow.api.test.ts` now has 40 tests. Full server suite after the change: 21 files, 496 tests pass.
+
+**F5 (Dashboard API), branch `feature/dashboard-api`**, 2026-10-31:
+
+- `server/tests/lab-04/requester-dashboard.api.test.ts`, `staff-dashboard.api.test.ts` and
+  `dashboard-drilldown.api.test.ts`: 35 tests pass (UNIT-04, UNIT-05, API-33 to API-45, API-55 to API-59). Every
+  expected number is raw SQL written separately from the implementation, for the same instant. API-44 also uses a
+  fixed clock and tickets one second either side of the Bangkok-midnight window start. `recentWindowStart` is checked
+  against PostgreSQL's `AT TIME ZONE` for a spread of instants and under four different server `TZ` values.
+- Mutation checks, each made tests fail: window as "now minus 7 x 24 h" (5 fail), user counts shown to IT Staff (2),
+  Requester numbers unscoped (6), open-action count ignoring the ticket's status (1), no zero-filling (1), staff
+  queue ignoring `open=1` (1).
+- Found while writing the SQL: comparing `"updatedAt"` (a `timestamp` stored in UTC) with a `timestamptz` depends on the
+  database session's time zone, so the test SQL writes `"updatedAt" AT TIME ZONE 'UTC'` explicitly. The server passes
+  the window start as a UTC instant, so it does not depend on the session zone.
+- Contract gaps closed here and written into `api-spec.md`: the queue and the Requester list needed `open=1` so that
+  a drill-down returns exactly the counted set (the dashboard counts open tickets for unassigned, assigned to me and
+  IT priority); the Requester list accepts `sortBy=updatedAt`; `ownerId` is now strict (an empty value was `0`).

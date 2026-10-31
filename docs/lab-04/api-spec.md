@@ -203,15 +203,17 @@ unchanged (D-4).
 
 ### `GET /api/staff/tickets` (extended filter)
 
-Roles: IT_STAFF, ADMINISTRATOR. Two additions, both for dashboard drill-downs:
+Roles: IT_STAFF, ADMINISTRATOR. Three additions, all for dashboard drill-downs:
 
+- `open=1` keeps only open tickets (BR-18). Combined with the other filters by AND.
 - `ownerId=me` is a shorthand for the caller's id ("assigned to me"); `ownerId=unassigned` is a
-  readable alias of Lab 3's `ownerId=0`.
+  readable alias of Lab 3's `ownerId=0`. `ownerId` is now strict: digits only, `me` or `unassigned`; an empty
+  value or anything else is `400` (Lab 3 treated an empty value as `0`).
 - `actionAssigneeId=me` keeps only open tickets (BR-18) that hold at least one Action Taken with
   `assigneeId` = caller and status PLANNED or IN_PROGRESS (BR-27). It returns each such ticket
   once, so the list size equals the dashboard's `ticketsWithMyOpenActions`.
 
-Any other value for these two params is `400`. Everything else as in Lab 3.
+Any other value for these params is `400`. Everything else as in Lab 3.
 
 ## Dashboards
 
@@ -227,8 +229,14 @@ Role: REQUESTER. Own tickets only (BR-19).
   "recentlyUpdated": [TicketBrief], "recentlyResolved": [TicketBrief] }
 ```
 
-Drill-downs (client links): `/my-tickets?open=1`, `/my-tickets?currentStatus=WAITING_FOR_REQUESTER`,
-`/my-tickets?sort=updatedAt`, `/my-tickets?currentStatus=RESOLVED`.
+`recentlyUpdated` and `recentlyResolved` use the 7-day window of BR-20; `recentlyResolved` keeps only
+tickets that are RESOLVED now and were updated inside it (BR-21). Both are ordered by `updatedAt`, then `id`,
+newest first.
+
+Drill-downs (client links, served by `GET /api/tickets`): `/my-tickets?open=1`,
+`/my-tickets?currentStatus=WAITING_FOR_REQUESTER`, `/my-tickets?sortBy=updatedAt`,
+`/my-tickets?currentStatus=RESOLVED`. For these, `GET /api/tickets` gains `open=1` (only open tickets, BR-18;
+any other value is `400`) and accepts `sortBy=updatedAt`.
 
 ### `GET /api/dashboard/staff`
 
@@ -263,8 +271,11 @@ Current-user Actions Taken (BR-27, handout Part 5):
   `description` is cut to the first 120 characters (with an ellipsis when cut). No result,
   follow-up or attachment text is included: the dashboard stays concise (FR-18).
 
-Drill-downs: queue links with `ownerId=unassigned`, `ownerId=me`, `actionAssigneeId=me`,
-`currentStatus=<S>`, `itPriority=<P>`, `sortBy=updatedAt`.
+Drill-downs (served by `GET /api/staff/tickets`), each returning exactly the counted set: unassigned is
+`ownerId=unassigned&open=1`, assigned to me `ownerId=me&open=1`, my open actions `actionAssigneeId=me`, a status
+`currentStatus=<S>`, an IT priority `itPriority=<P>&open=1`, recent `sortBy=updatedAt`. `open=1` is needed because
+`unassigned`, `assignedToMe` and `byItPriority` count open tickets only (BR-18), while the queue otherwise lists
+every status.
 
 | Status | When |
 |---|---|

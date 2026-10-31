@@ -11,6 +11,7 @@ import { getPrisma } from "./prisma.js";
 import { isLegalStatusTransition, statusRequiresConfirmation } from "./ticketStatus.js";
 import { registerActionsTakenRoutes } from "./actionsTaken.js";
 import { registerTicketWorkflowRoutes, workflowFields } from "./ticketWorkflow.js";
+import { OPEN_TICKET_STATUSES, registerDashboardRoutes } from "./dashboard.js";
 import {
   AuthedRequest,
   AuthenticatedUser,
@@ -377,7 +378,7 @@ app.post("/api/tickets", requireAuth, requireRole("REQUESTER"), requirePasswordU
 // Feature 4/5 — My Tickets: view, search, filter, sort, and page through a
 // Requester's own tickets (GET /api/tickets)
 // ---------------------------------------------------------------------------
-const TICKET_SORT_FIELDS = ["createdAt", "summary", "requestedPriority"] as const;
+const TICKET_SORT_FIELDS = ["createdAt", "summary", "requestedPriority", "updatedAt"] as const;
 type TicketSortField = (typeof TICKET_SORT_FIELDS)[number];
 const DEFAULT_SORT_BY: TicketSortField = "createdAt";
 const DEFAULT_SORT_DIR = "desc";
@@ -434,6 +435,12 @@ app.get("/api/tickets", requireAuth, requireRole("REQUESTER"), requirePasswordUp
     where.currentStatus = req.query.currentStatus;
   }
 
+  // Lab 4 dashboard drill-down: open=1 keeps only open tickets (BR-18), like the dashboard's own count.
+  if (req.query.open !== undefined) {
+    if (req.query.open !== "1") return res.status(400).json({ error: "open must be 1." });
+    where.AND = [{ currentStatus: { in: OPEN_TICKET_STATUSES } }];
+  }
+
   const sortByParam = req.query.sortBy;
   const sortBy: TicketSortField =
     sortByParam === undefined ? DEFAULT_SORT_BY : (sortByParam as TicketSortField);
@@ -477,6 +484,10 @@ app.get("/api/tickets", requireAuth, requireRole("REQUESTER"), requirePasswordUp
         break;
       case "requestedPriority":
         orderBy = [{ requestedPriority: sortDir }, { id: "desc" }];
+        break;
+      case "updatedAt":
+        // Lab 4 dashboard drill-down ("recently updated").
+        orderBy = [{ updatedAt: sortDir }, { id: "desc" }];
         break;
       case "createdAt":
       default:
@@ -1126,16 +1137,40 @@ app.get(
     }
 
     // ownerId=0 means "unassigned only" (where.ownerId: null); any other
-    // non-negative integer filters to that specific owner.
+    // non-negative integer filters to that specific owner. Lab 4 adds two readable
+    // values for the dashboard drill-downs: "me" (the caller) and "unassigned" (an
+    // alias of 0). Anything else is 400.
     if (req.query.ownerId !== undefined) {
-      const ownerId = Number(req.query.ownerId);
-      if (!Number.isInteger(ownerId) || ownerId < 0) {
+      const raw = req.query.ownerId;
+      if (raw === "me") {
+        where.ownerId = req.user!.id;
+      } else if (raw === "unassigned") {
+        where.ownerId = null;
+      } else if (typeof raw === "string" && /^\d+$/.test(raw)) {
+        const ownerId = Number(raw);
+        where.ownerId = ownerId === 0 ? null : ownerId;
+      } else {
         return res.status(400).json({
-          error: "ownerId must be a non-negative integer (0 means unassigned).",
+          error: "ownerId must be a non-negative integer (0 means unassigned), me, or unassigned.",
         });
       }
-      where.ownerId = ownerId === 0 ? null : ownerId;
     }
+
+    // Lab 4 dashboard drill-downs. open=1: only open tickets (BR-18), the same set the
+    // dashboard counts for unassigned, assigned to me and IT priority. actionAssigneeId=me:
+    // open tickets holding at least one PLANNED or IN_PROGRESS action assigned to the caller
+    // (BR-27), each ticket once.
+    const and: Record<string, unknown>[] = [];
+    if (req.query.open !== undefined) {
+      if (req.query.open !== "1") return res.status(400).json({ error: "open must be 1." });
+      and.push({ currentStatus: { in: OPEN_TICKET_STATUSES } });
+    }
+    if (req.query.actionAssigneeId !== undefined) {
+      if (req.query.actionAssigneeId !== "me") return res.status(400).json({ error: "actionAssigneeId must be me." });
+      and.push({ currentStatus: { in: OPEN_TICKET_STATUSES } });
+      and.push({ actionsTaken: { some: { assigneeId: req.user!.id, status: { in: ["PLANNED", "IN_PROGRESS"] } } } });
+    }
+    if (and.length > 0) where.AND = and;
 
     const sortByParam = req.query.sortBy;
     const sortBy: StaffTicketSortField =
@@ -1752,5 +1787,7 @@ app.post(
 registerActionsTakenRoutes(app);
 // Lab 4 F4: ticket workflow (claim, assign, priority, status, mark-resolved, assignable users).
 registerTicketWorkflowRoutes(app);
+// Lab 4 F5: Requester and staff dashboards.
+registerDashboardRoutes(app);
 
 export default app;

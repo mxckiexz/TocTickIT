@@ -40,6 +40,12 @@ export function recentWindowStart(now: Date, timeZone: string = DASHBOARD_TIMEZO
   return new Date(localMidnightSixDaysAgo - offsetMs);
 }
 
+// The BR-20 window as a Prisma filter, shared by the dashboards and the `recent=1` drill-down on both
+// ticket lists, so a "recent" list and its drill-down always cover the same tickets.
+export function recentUpdatedFilter(now: Date = dashboardClock.now()): { updatedAt: { gte: Date } } {
+  return { updatedAt: { gte: recentWindowStart(now) } };
+}
+
 // BR-27: the first 120 characters (not UTF-16 units) followed by an ellipsis when cut.
 export function briefDescription(text: string): string {
   const chars = Array.from(text);
@@ -62,14 +68,14 @@ export function registerDashboardRoutes(app: Express): void {
     try {
       const prisma = getPrisma();
       const now = dashboardClock.now();
-      const since = recentWindowStart(now);
+      const recent = recentUpdatedFilter(now);
       const own = { requesterId: req.user!.id };
       const [openTickets, waitingForRequester, recentlyUpdated, recentlyResolved] = await Promise.all([
         prisma.ticket.count({ where: { ...own, currentStatus: { in: OPEN_TICKET_STATUSES } } }),
         prisma.ticket.count({ where: { ...own, currentStatus: "WAITING_FOR_REQUESTER" } }),
-        prisma.ticket.findMany({ where: { ...own, updatedAt: { gte: since } }, orderBy: recentOrder, take: RECENT_LIMIT, select: ticketBrief }),
+        prisma.ticket.findMany({ where: { ...own, ...recent }, orderBy: recentOrder, take: RECENT_LIMIT, select: ticketBrief }),
         // BR-21: tickets currently RESOLVED, by updatedAt (no resolved timestamp is stored), in the same window.
-        prisma.ticket.findMany({ where: { ...own, currentStatus: "RESOLVED", updatedAt: { gte: since } }, orderBy: recentOrder, take: RECENT_LIMIT, select: ticketBrief }),
+        prisma.ticket.findMany({ where: { ...own, currentStatus: "RESOLVED", ...recent }, orderBy: recentOrder, take: RECENT_LIMIT, select: ticketBrief }),
       ]);
       res.status(200).json({ generatedAt: now.toISOString(), timezone: DASHBOARD_TIMEZONE, openTickets, waitingForRequester, recentlyUpdated, recentlyResolved });
     } catch (error) {
@@ -84,7 +90,7 @@ export function registerDashboardRoutes(app: Express): void {
       const prisma = getPrisma();
       const me = req.user!.id;
       const now = dashboardClock.now();
-      const since = recentWindowStart(now);
+      const recent = recentUpdatedFilter(now);
       const open = { currentStatus: { in: OPEN_TICKET_STATUSES } };
 
       const [unassigned, assignedToMe, byStatusRows, byPriorityRows, recentlyUpdated, openActionTickets, recentActions] = await Promise.all([
@@ -92,7 +98,7 @@ export function registerDashboardRoutes(app: Express): void {
         prisma.ticket.count({ where: { ...open, ownerId: me } }),
         prisma.ticket.groupBy({ by: ["currentStatus"], _count: { _all: true } }),
         prisma.ticket.groupBy({ by: ["itPriority"], where: open, _count: { _all: true } }),
-        prisma.ticket.findMany({ where: { updatedAt: { gte: since } }, orderBy: recentOrder, take: RECENT_LIMIT, select: ticketBrief }),
+        prisma.ticket.findMany({ where: recent, orderBy: recentOrder, take: RECENT_LIMIT, select: ticketBrief }),
         // BR-27: distinct open tickets that hold an open action assigned to the caller.
         prisma.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
           SELECT count(DISTINCT a."ticketId") AS n

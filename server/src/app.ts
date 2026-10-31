@@ -11,7 +11,7 @@ import { getPrisma } from "./prisma.js";
 import { isLegalStatusTransition, statusRequiresConfirmation } from "./ticketStatus.js";
 import { registerActionsTakenRoutes } from "./actionsTaken.js";
 import { registerTicketWorkflowRoutes, workflowFields } from "./ticketWorkflow.js";
-import { OPEN_TICKET_STATUSES, registerDashboardRoutes } from "./dashboard.js";
+import { OPEN_TICKET_STATUSES, recentUpdatedFilter, registerDashboardRoutes } from "./dashboard.js";
 import {
   AuthedRequest,
   AuthenticatedUser,
@@ -435,11 +435,19 @@ app.get("/api/tickets", requireAuth, requireRole("REQUESTER"), requirePasswordUp
     where.currentStatus = req.query.currentStatus;
   }
 
-  // Lab 4 dashboard drill-down: open=1 keeps only open tickets (BR-18), like the dashboard's own count.
+  // Lab 4 dashboard drill-downs: open=1 keeps only open tickets (BR-18), like the dashboard's own count;
+  // recent=1 keeps only tickets updated inside the dashboard's 7-day window (BR-20), so the
+  // "recently updated" and "recently resolved" drill-downs list exactly the dashboard's set.
+  const requesterAnd: Record<string, unknown>[] = [];
   if (req.query.open !== undefined) {
     if (req.query.open !== "1") return res.status(400).json({ error: "open must be 1." });
-    where.AND = [{ currentStatus: { in: OPEN_TICKET_STATUSES } }];
+    requesterAnd.push({ currentStatus: { in: OPEN_TICKET_STATUSES } });
   }
+  if (req.query.recent !== undefined) {
+    if (req.query.recent !== "1") return res.status(400).json({ error: "recent must be 1." });
+    requesterAnd.push(recentUpdatedFilter());
+  }
+  if (requesterAnd.length > 0) where.AND = requesterAnd;
 
   const sortByParam = req.query.sortBy;
   const sortBy: TicketSortField =
@@ -1164,6 +1172,12 @@ app.get(
     if (req.query.open !== undefined) {
       if (req.query.open !== "1") return res.status(400).json({ error: "open must be 1." });
       and.push({ currentStatus: { in: OPEN_TICKET_STATUSES } });
+    }
+    // recent=1: only tickets updated inside the dashboard's 7-day window (BR-20), the set behind
+    // the dashboard's "recently updated" list.
+    if (req.query.recent !== undefined) {
+      if (req.query.recent !== "1") return res.status(400).json({ error: "recent must be 1." });
+      and.push(recentUpdatedFilter());
     }
     if (req.query.actionAssigneeId !== undefined) {
       if (req.query.actionAssigneeId !== "me") return res.status(400).json({ error: "actionAssigneeId must be me." });

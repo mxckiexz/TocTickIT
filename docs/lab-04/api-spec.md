@@ -203,9 +203,11 @@ unchanged (D-4).
 
 ### `GET /api/staff/tickets` (extended filter)
 
-Roles: IT_STAFF, ADMINISTRATOR. Three additions, all for dashboard drill-downs:
+Roles: IT_STAFF, ADMINISTRATOR. Four additions, all for dashboard drill-downs:
 
 - `open=1` keeps only open tickets (BR-18). Combined with the other filters by AND.
+- `recent=1` keeps only tickets whose `updatedAt` is inside the 7-day window of BR-20 (from Asia/Bangkok
+  midnight six days back), computed exactly as the dashboards compute it. Combined with the other filters by AND.
 - `ownerId=me` is a shorthand for the caller's id ("assigned to me"); `ownerId=unassigned` is a
   readable alias of Lab 3's `ownerId=0`. `ownerId` is now strict: digits only, `me` or `unassigned`; an empty
   value or anything else is `400` (Lab 3 treated an empty value as `0`).
@@ -234,9 +236,10 @@ tickets that are RESOLVED now and were updated inside it (BR-21). Both are order
 newest first.
 
 Drill-downs (client links, served by `GET /api/tickets`): `/my-tickets?open=1`,
-`/my-tickets?currentStatus=WAITING_FOR_REQUESTER`, `/my-tickets?sortBy=updatedAt`,
-`/my-tickets?currentStatus=RESOLVED`. For these, `GET /api/tickets` gains `open=1` (only open tickets, BR-18;
-any other value is `400`) and accepts `sortBy=updatedAt`.
+`/my-tickets?currentStatus=WAITING_FOR_REQUESTER`, `/my-tickets?recent=1&sortBy=updatedAt`,
+`/my-tickets?currentStatus=RESOLVED&recent=1`. For these, `GET /api/tickets` gains `open=1` (only open tickets,
+BR-18) and `recent=1` (only tickets updated inside the BR-20 window, the same filter the dashboard uses), any other
+value of either is `400`, and accepts `sortBy=updatedAt`.
 
 ### `GET /api/dashboard/staff`
 
@@ -273,9 +276,9 @@ Current-user Actions Taken (BR-27, handout Part 5):
 
 Drill-downs (served by `GET /api/staff/tickets`), each returning exactly the counted set: unassigned is
 `ownerId=unassigned&open=1`, assigned to me `ownerId=me&open=1`, my open actions `actionAssigneeId=me`, a status
-`currentStatus=<S>`, an IT priority `itPriority=<P>&open=1`, recent `sortBy=updatedAt`. `open=1` is needed because
+`currentStatus=<S>`, an IT priority `itPriority=<P>&open=1`, recent `recent=1&sortBy=updatedAt`. `open=1` is needed because
 `unassigned`, `assignedToMe` and `byItPriority` count open tickets only (BR-18), while the queue otherwise lists
-every status.
+every status; `recent=1` is needed because `recentlyUpdated` only holds tickets inside the BR-20 window.
 
 | Status | When |
 |---|---|

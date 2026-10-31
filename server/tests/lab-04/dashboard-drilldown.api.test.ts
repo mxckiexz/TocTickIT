@@ -1,12 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { getPrisma } from "../../src/prisma.js";
+import { dashboardClock } from "../../src/dashboard.js";
 import { createFixtureUser, deleteFixtureUser, loginAgent } from "../helpers/auth-fixtures.js";
 import { DashboardFixtures } from "../helpers/dashboard-fixtures.js";
 
 // Lab 4 F5 (docs/lab-04/tests.md API-33, API-45, API-59; AC-29, AC-47, FR-17): the list behind every dashboard
 // number is exactly the set that was counted. The same fixture is read through the dashboard and through the
 // queue with the drill-down parameters of api-spec.md.
+
+const DAY = 86_400_000;
+// BR-20 window start, written in SQL separately from recentWindowStart. "updatedAt" is a UTC `timestamp`, so it is
+// compared as `"updatedAt" AT TIME ZONE 'UTC'` to stay independent of the session's time zone.
+const WINDOW_SQL = (nowParam: string) =>
+  `(date_trunc('day', ${nowParam}::timestamptz AT TIME ZONE 'Asia/Bangkok') - interval '6 days') AT TIME ZONE 'Asia/Bangkok'`;
+const IN_WINDOW = (nowParam: string) => `("updatedAt" AT TIME ZONE 'UTC') >= ${WINDOW_SQL(nowParam)}`;
 
 const STATUSES = ["NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "RESOLVED", "CLOSED", "REOPENED", "CANCELLED"] as const;
 
@@ -55,6 +63,7 @@ describe("Dashboard drill-downs", () => {
     }
     return { ids: out, total };
   }
+  const sqlOrderedIds = async (sql: string, ...params: unknown[]) => (await getPrisma().$queryRawUnsafe<Array<{ id: number }>>(sql, ...params)).map((r) => r.id);
   const sqlIds = async (sql: string, ...params: unknown[]) => (await getPrisma().$queryRawUnsafe<Array<{ id: number }>>(sql, ...params)).map((r) => r.id).sort((a, b) => a - b);
   const sorted = (a: number[]) => [...a].sort((x, y) => x - y);
   const OPEN = `('NEW','OPEN','IN_PROGRESS','WAITING_FOR_REQUESTER','REOPENED')`;
@@ -155,6 +164,77 @@ describe("Dashboard drill-downs", () => {
 
     it("a bad open value is 400", async () => {
       for (const bad of ["2", "true", "", "yes"]) await agents.requester.get(`/api/tickets?open=${bad}`).expect(400);
+    });
+  });
+
+  describe("Recent drill-downs: recent=1 (API-45, FR-17, BR-20)", () => {
+    // A fixed clock so the window cannot move between the dashboard call, the list calls and the SQL.
+    const fixedNow = new Date();
+    const old = {} as Record<"updated" | "resolved" | "staffOnly" | "resolvedJustBefore", number>;
+    let resolvedAtStart = 0;
+
+    beforeAll(async () => {
+      dashboardClock.now = () => fixedNow;
+      const start = (await getPrisma().$queryRawUnsafe<Array<{ s: Date }>>(`SELECT ${WINDOW_SQL("$1")} AS s`, fixedNow.toISOString()))[0].s;
+      const eightDaysAgo = new Date(fixedNow.getTime() - 8 * DAY);
+      old.updated = (await fx.ticket({ requesterId: ids.requester, status: "OPEN", updatedAt: eightDaysAgo, summary: "older than the window" })).id;
+      old.resolved = (await fx.ticket({ requesterId: ids.requester, status: "RESOLVED", updatedAt: eightDaysAgo, summary: "resolved before the window" })).id;
+      old.staffOnly = (await fx.ticket({ requesterId: ids.otherRequester, status: "IN_PROGRESS", updatedAt: eightDaysAgo, summary: "another requester, old" })).id;
+      old.resolvedJustBefore = (await fx.ticket({ requesterId: ids.requester, status: "RESOLVED", updatedAt: new Date(start.getTime() - 1000), summary: "one second before" })).id;
+      resolvedAtStart = (await fx.ticket({ requesterId: ids.requester, status: "RESOLVED", updatedAt: start, summary: "exactly at the start" })).id;
+    });
+    afterAll(() => {
+      dashboardClock.now = () => new Date();
+    });
+
+    it("staff recently updated: recent=1&sortBy=updatedAt lists exactly the in-window tickets, in the dashboard's order", async () => {
+      const dash = (await agents.staff.get("/api/dashboard/staff").expect(200)).body;
+      const list = await allIds(agents.staff, "/api/staff/tickets", "recent=1&sortBy=updatedAt");
+      expect(list.ids).toEqual(await sqlOrderedIds(`SELECT id FROM "Ticket" WHERE ${IN_WINDOW("$1")} ORDER BY "updatedAt" DESC, id DESC`, fixedNow.toISOString()));
+      expect(list.ids.slice(0, dash.recentlyUpdated.length)).toEqual(dash.recentlyUpdated.map((t: { id: number }) => t.id));
+      for (const id of Object.values(old)) expect(list.ids).not.toContain(id);
+      // Without recent=1 the old tickets are in the queue: the filter is what keeps them out.
+      const unfiltered = await allIds(agents.staff, "/api/staff/tickets", "sortBy=updatedAt");
+      for (const id of Object.values(old)) expect(unfiltered.ids).toContain(id);
+    });
+
+    it("Requester recently updated: recent=1&sortBy=updatedAt lists exactly the in-window own tickets, in the dashboard's order", async () => {
+      const dash = (await agents.requester.get("/api/dashboard/requester").expect(200)).body;
+      const list = await allIds(agents.requester, "/api/tickets", "recent=1&sortBy=updatedAt");
+      expect(list.ids).toEqual(
+        await sqlOrderedIds(`SELECT id FROM "Ticket" WHERE "requesterId" = $2 AND ${IN_WINDOW("$1")} ORDER BY "updatedAt" DESC, id DESC`, fixedNow.toISOString(), ids.requester)
+      );
+      expect(list.ids.slice(0, dash.recentlyUpdated.length)).toEqual(dash.recentlyUpdated.map((t: { id: number }) => t.id));
+      expect(list.ids).not.toContain(old.updated);
+      expect(list.ids).not.toContain(old.resolved);
+      expect(list.ids).not.toContain(old.resolvedJustBefore);
+      expect(list.ids).toContain(resolvedAtStart);
+    });
+
+    it("Requester recently resolved: currentStatus=RESOLVED&recent=1 lists exactly the dashboard's set; older RESOLVED tickets are not listed", async () => {
+      const dash = (await agents.requester.get("/api/dashboard/requester").expect(200)).body;
+      const list = await allIds(agents.requester, "/api/tickets", "currentStatus=RESOLVED&recent=1&sortBy=updatedAt");
+      expect(list.ids).toEqual(
+        await sqlOrderedIds(
+          `SELECT id FROM "Ticket" WHERE "requesterId" = $2 AND "currentStatus" = 'RESOLVED' AND ${IN_WINDOW("$1")} ORDER BY "updatedAt" DESC, id DESC`,
+          fixedNow.toISOString(),
+          ids.requester
+        )
+      );
+      expect(list.ids.slice(0, dash.recentlyResolved.length)).toEqual(dash.recentlyResolved.map((t: { id: number }) => t.id));
+      expect(list.ids).toContain(resolvedAtStart);
+      expect(list.ids).not.toContain(old.resolved);
+      expect(list.ids).not.toContain(old.resolvedJustBefore);
+      // The plain status filter still lists them: recent=1 is what matches the dashboard.
+      const unfiltered = await allIds(agents.requester, "/api/tickets", "currentStatus=RESOLVED");
+      expect(unfiltered.ids).toContain(old.resolved);
+    });
+
+    it("a bad recent value is 400 on both lists", async () => {
+      for (const bad of ["2", "true", "", "yes", "0"]) {
+        await agents.requester.get(`/api/tickets?recent=${bad}`).expect(400);
+        await agents.staff.get(`/api/staff/tickets?recent=${bad}`).expect(400);
+      }
     });
   });
 });

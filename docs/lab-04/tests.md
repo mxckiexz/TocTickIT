@@ -131,7 +131,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-42 | BR-23 | status with no tickets | all 8 keys present, zeros kept | Pass |
 | API-43 | AC-28 | Requester, no session | `403`, `401` | Pass |
 | API-44 | AC-30, BR-20 | tickets updated 1 second either side of Bangkok midnight, 7 days ago | each on the correct side of the window | Pass |
-| API-45 | AC-29 | each metric's drill-down query | returns exactly the counted set | Pass |
+| API-45 | AC-29, FR-17 | each metric's drill-down query, including `recent=1` for the recent lists, with tickets older than the 7-day window present | returns exactly the counted set; older tickets not listed | Pass |
 | API-55 | AC-45, BR-27 | caller has open assigned actions on open and on resolved tickets, plus actions assigned to someone else | `ticketsWithMyOpenActions` equals raw SQL (distinct open tickets only); the other user's actions are not counted | Pass |
 | API-56 | AC-45, BR-27 | caller performed 7 actions, some with equal `actionAt` | `myRecentActions` has 5, newest first by `actionAt` then `id`, equal to raw SQL; only brief fields; description cut to 120 | Pass |
 | API-57 | AC-46, BR-23 | caller with no assigned and no performed actions | `0` and `[]`, never `null` or missing | Pass |
@@ -418,3 +418,10 @@ all 5 of its cases fail. `ticketWorkflow.api.test.ts` now has 40 tests. Full ser
 - Contract gaps closed here and written into `api-spec.md`: the queue and the Requester list needed `open=1` so that
   a drill-down returns exactly the counted set (the dashboard counts open tickets for unassigned, assigned to me and
   IT priority); the Requester list accepts `sortBy=updatedAt`; `ownerId` is now strict (an empty value was `0`).
+
+**F5 review fix (recent drill-downs)**, 2026-10-31: the "recently updated" and "recently resolved" drill-downs used
+only `sortBy=updatedAt` or `currentStatus=RESOLVED`, so tickets older than the 7-day window appeared on later pages
+although the dashboard lists left them out. Both `GET /api/tickets` and `GET /api/staff/tickets` gain `recent=1`,
+built by the same `recentUpdatedFilter` the dashboards use; the drill-downs are now `recent=1&sortBy=updatedAt` and
+`currentStatus=RESOLVED&recent=1`. API-45 now includes tickets eight days old (and one second before the window
+start) and checks each recent drill-down against raw SQL, with a fixed clock; a bad `recent` value is `400`. Four new tests; removing the `recent=1` filter from both lists makes 3 fail. Full server suite: 24 files, 535 tests pass.

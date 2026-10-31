@@ -230,6 +230,20 @@ describe("Dashboard drill-downs", () => {
       expect(unfiltered.ids).toContain(old.resolved);
     });
 
+    it("recent=1 composes with the other filters instead of replacing them (open, ownerId), on both lists", async () => {
+      const mine = await allIds(agents.staff, "/api/staff/tickets", "ownerId=me&open=1&recent=1");
+      expect(sorted(mine.ids)).toEqual(
+        await sqlIds(`SELECT id FROM "Ticket" WHERE "ownerId" = $2 AND "currentStatus" IN ${OPEN} AND ${IN_WINDOW("$1")}`, fixedNow.toISOString(), ids.staff)
+      );
+      const ownRecentOpen = await allIds(agents.requester, "/api/tickets", "open=1&recent=1");
+      expect(sorted(ownRecentOpen.ids)).toEqual(
+        await sqlIds(`SELECT id FROM "Ticket" WHERE "requesterId" = $2 AND "currentStatus" IN ${OPEN} AND ${IN_WINDOW("$1")}`, fixedNow.toISOString(), ids.requester)
+      );
+      // The 8-day-old open ticket is in "open" alone, and out once recent=1 is added.
+      expect((await allIds(agents.requester, "/api/tickets", "open=1")).ids).toContain(old.updated);
+      expect(ownRecentOpen.ids).not.toContain(old.updated);
+    });
+
     it("a bad recent value is 400 on both lists", async () => {
       for (const bad of ["2", "true", "", "yes", "0"]) {
         await agents.requester.get(`/api/tickets?recent=${bad}`).expect(400);

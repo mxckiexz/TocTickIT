@@ -425,3 +425,8 @@ although the dashboard lists left them out. Both `GET /api/tickets` and `GET /ap
 built by the same `recentUpdatedFilter` the dashboards use; the drill-downs are now `recent=1&sortBy=updatedAt` and
 `currentStatus=RESOLVED&recent=1`. API-45 now includes tickets eight days old (and one second before the window
 start) and checks each recent drill-down against raw SQL, with a fixed clock; a bad `recent` value is `400`. Four new tests; removing the `recent=1` filter from both lists makes 3 fail. Full server suite: 24 files, 535 tests pass.
+
+**F5 review fix, composition check**, 2026-11-01: `dashboard-drilldown.api.test.ts` gains one case that `recent=1`
+composes with `open=1` and `ownerId=me` on both lists (an 8-day-old open ticket is in `open=1` alone and out with
+`recent=1`). Making the Requester list let `recent` replace `open` fails it. Server suite: 24 files, 536 tests pass.
+

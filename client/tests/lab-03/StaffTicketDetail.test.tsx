@@ -27,6 +27,9 @@ function staffTicket(overrides: Partial<api.StaffTicket> = {}): api.StaffTicket 
     requesterMarkedResolvedById: null,
     createdAt: "2026-09-01T10:00:00.000Z",
     updatedAt: "2026-09-01T10:00:00.000Z",
+    version: 1,
+    allowedTransitions: ["OPEN", "IN_PROGRESS", "CANCELLED"],
+    resolutionGate: { ok: false, unmet: ["NO_OWNER", "NO_COMPLETED_ACTION"] },
     ...overrides,
   };
 }
@@ -149,7 +152,7 @@ describe("StaffTicketDetail", () => {
       fireEvent.click(screen.getByRole("button", { name: /Claim this ticket/i }));
 
       expect(await screen.findByText("Priya Nair")).toBeInTheDocument();
-      expect(claimSpy).toHaveBeenCalledWith(1);
+      expect(claimSpy).toHaveBeenCalledWith(1, 1);
       expect(refetchSpy).toHaveBeenCalledTimes(2);
     });
 
@@ -191,7 +194,7 @@ describe("StaffTicketDetail", () => {
       fireEvent.change(select, { target: { value: "6" } });
       fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
 
-      await waitFor(() => expect(assignSpy).toHaveBeenCalledWith(1, 6));
+      await waitFor(() => expect(assignSpy).toHaveBeenCalledWith(1, 6, 1));
       expect(await screen.findByText("Marcus Chen")).toBeInTheDocument();
     });
   });
@@ -222,7 +225,7 @@ describe("StaffTicketDetail", () => {
 
       fireEvent.change(screen.getByLabelText("IT Priority"), { target: { value: "HIGH" } });
 
-      await waitFor(() => expect(prioritySpy).toHaveBeenCalledWith(1, "HIGH"));
+      await waitFor(() => expect(prioritySpy).toHaveBeenCalledWith(1, "HIGH", 1));
     });
   });
 
@@ -268,7 +271,7 @@ describe("StaffTicketDetail", () => {
 
       fireEvent.change(screen.getByLabelText("Status"), { target: { value: "IN_PROGRESS" } });
 
-      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "IN_PROGRESS", undefined));
+      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "IN_PROGRESS", 1, undefined));
       expect(screen.queryByText(/requires confirmation/i)).not.toBeInTheDocument();
     });
 
@@ -301,7 +304,7 @@ describe("StaffTicketDetail", () => {
 
       fireEvent.click(screen.getByRole("button", { name: /^Confirm$/i }));
 
-      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "RESOLVED", true));
+      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "RESOLVED", 1, true));
     });
 
     it("cancelling the confirm step sends nothing and reverts the select", async () => {

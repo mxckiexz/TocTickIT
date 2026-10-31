@@ -251,7 +251,7 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
     setResolveError("");
 
     try {
-      const updated = await markTicketResolved(ticketId);
+      const updated = await markTicketResolved(ticketId, ticket!.version);
       setTicket(updated);
       setResolveUiState("idle");
     } catch (error) {

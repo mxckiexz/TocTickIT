@@ -123,6 +123,9 @@ async function main() {
       where: { ticketId: { in: staleIds } },
       select: { storedFilename: true },
     });
+    // Lab 4: Actions Taken reference the ticket (restrict), revisions reference the action.
+    await prisma.actionTakenRevision.deleteMany({ where: { actionTaken: { ticketId: { in: staleIds } } } });
+    await prisma.actionTaken.deleteMany({ where: { ticketId: { in: staleIds } } });
     await prisma.internalNote.deleteMany({ where: { ticketId: { in: staleIds } } });
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: staleIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: staleIds } } });

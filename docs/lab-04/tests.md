@@ -36,7 +36,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | ID | Rule | What | Expected | File | Final |
 |---|---|---|---|---|---|
 | UNIT-01 | BR-06 | action status move lookup | on edit: PLANNED → IN_PROGRESS / COMPLETED / CANCELLED, IN_PROGRESS → COMPLETED / CANCELLED allowed, unchanged status allowed, everything else and anything from a final status rejected; on create: PLANNED / IN_PROGRESS / COMPLETED allowed, CANCELLED rejected | `actions-taken.api.test.ts` | Pass |
-| UNIT-02 | BR-12 | resolution gate evaluator `(owner, actions[]) → unmet[]` | `NO_OWNER`, `NO_COMPLETED_ACTION`, `OPEN_ACTIONS` exactly when true; empty when all pass; cancelled actions ignored | `ticket-workflow.api.test.ts` | Planned |
+| UNIT-02 | BR-12 | resolution gate evaluator `(owner, actions[]) → unmet[]` | `NO_OWNER`, `NO_COMPLETED_ACTION`, `OPEN_ACTIONS` exactly when true; empty when all pass; cancelled actions ignored | `ticket-workflow.api.test.ts` | Pass |
 | UNIT-03 | BR-03, BR-04, BR-05, BR-06 | action validator | trims; 1 to 2000; follow-up rule; `actionAt` window (5 min ahead); `result` required when the status is COMPLETED | `actions-taken.api.test.ts` | Pass |
 | UNIT-04 | BR-20 | start of the 7-day window in Asia/Bangkok | midnight boundary; not shifted by the server timezone | `staff-dashboard.api.test.ts` | Planned |
 | UNIT-05 | BR-27 | description cut for `ActionBrief` | 120 characters then an ellipsis; shorter text unchanged; no result or follow-up text | `staff-dashboard.api.test.ts` | Planned |
@@ -63,8 +63,8 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-14 | FR-04, AC-41 | edit to COMPLETED without `result`; with it | `400` at `result`; `200` | Pass |
 | API-15 | AC-11, BR-08 | DELETE an action | no route (`404` / `405`) | Pass |
 | API-16 | AC-12, BR-10 | POST on a CLOSED and on a CANCELLED ticket | `409 TICKET_CLOSED` | Pass |
-| API-67 | AC-50, BR-10 | no concurrency: resolve a ticket through the gate, then POST a PLANNED action, an IN_PROGRESS action, a COMPLETED action with a result, and a COMPLETED action without one | `409 TICKET_RESOLVED` ×2 with nothing stored and no revision; `201`; `400` at `result`; afterwards the database holds no open action on the RESOLVED ticket | Pass (F3 part: status set in the database; re-run through the gate in F4) |
-| API-68 | AC-50, BR-10, BR-12 | reopen the resolved ticket, POST a PLANNED action, then PATCH status to RESOLVED | `201`; `409 RESOLUTION_GATE` listing the open action; after it is COMPLETED the resolve succeeds | Planned |
+| API-67 | AC-50, BR-10 | no concurrency: resolve a ticket through the gate, then POST a PLANNED action, an IN_PROGRESS action, a COMPLETED action with a result, and a COMPLETED action without one | `409 TICKET_RESOLVED` ×2 with nothing stored and no revision; `201`; `400` at `result`; afterwards the database holds no open action on the RESOLVED ticket | Pass |
+| API-68 | AC-50, BR-10, BR-12 | reopen the resolved ticket, POST a PLANNED action, then PATCH status to RESOLVED | `201`; `409 RESOLUTION_GATE` listing the open action; after it is COMPLETED the resolve succeeds | Pass |
 | API-70 | BR-07 | the assignee is deactivated, and separately turned into a Requester, in the gap between the early check and the write, on POST and on PATCH | `400` at `assigneeId`; no action and no revision written; the edited action unchanged | Pass |
 | API-71 | BR-07 | a database error during the assignee check | `500` with a safe body, never a field error or a misleading write failure; nothing written | Pass |
 | API-72 | BR-07 | create with an assignee while that user is being deactivated, 5 rounds | `201` (committed before) or `400`; never an action assigned to an inactive user from a `400` | Pass |
@@ -79,34 +79,35 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | API-61 | AC-48 | stale edit, edit of a final action, invalid edit | each rejected; revision count unchanged | Pass |
 | API-62 | AC-48, AC-11 | `POST`, `PATCH`, `DELETE` on a revision URL; Requester GET | `404` / `405`; Requester `403` | Pass |
 | API-63 | AC-49, BR-08 | force a failure after the update inside the edit transaction | projection and revisions both unchanged | Pass |
-| API-64 | BR-13 | two edits of different actions of one ticket, and one edit while a status change runs, 20 rounds | no deadlock, no `500`; every request is `200` or a documented `409` | Pass (F3 part: edits and creates; the status-change part is added in F4) |
+| API-64 | BR-13 | two edits of different actions of one ticket, and one edit while a status change runs, 20 rounds | no deadlock, no `500`; every request is `200` or a documented `409` | Pass |
 | API-49 | BR-28 | action created by staff B on a ticket owned by staff A | `201`; performer is B; owner is still A | Pass |
 
 ### 3.2 Ticket workflow (`server/tests/lab-04/ticket-workflow.api.test.ts`)
 
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
-| API-20 | AC-13, BR-11 | every allowed matrix cell, generated from `STATUS_TRANSITIONS`, gate satisfied for RESOLVED | `200` | Planned |
-| API-21 | AC-13, BR-11 | every other cell including self-transitions | `409 ILLEGAL_TRANSITION` | Planned |
-| API-22 | AC-14, BR-26 | Requester calls the status route; Administrator makes a legal change | Requester `403`, status unchanged; Administrator `200`, same body shape as IT Staff | Planned |
-| API-23 | AC-15, BR-12 | RESOLVED with no owner | `409 RESOLUTION_GATE`, `NO_OWNER` | Planned |
-| API-24 | AC-16, BR-12 | owner, no COMPLETED action | `409`, `NO_COMPLETED_ACTION` | Planned |
-| API-25 | AC-17, BR-12 | PLANNED / IN_PROGRESS action present; then completed or cancelled | `409 OPEN_ACTIONS`; then `200` | Planned |
-| API-26 | AC-18, BR-13 | RESOLVED fired together with (a) "add a PLANNED action" and (b) "edit an action to IN_PROGRESS" (a PLANNED one), 20 rounds each; after every round query the database | outcome equals one of the two serial orders; no round ends with a RESOLVED ticket that holds a PLANNED or IN_PROGRESS action; the lock is proven by also running the add with the ticket lock held by the test (the add waits until the test releases it) | Planned |
-| API-27 | AC-19, BR-15 | Requester marks "appears resolved" | status unchanged, gate unchanged, signal recorded | Planned |
-| API-28 | AC-20, BR-17 | status with stale `version`; with none; with a non-integer | `409 STALE_VERSION`; `400` at `errors.version`; `400`; ticket unchanged each time | Planned |
-| API-29 | AC-21 | successful status change | response has new status, `version`, `allowedTransitions`, `resolutionGate` | Planned |
-| API-30 | AC-22, BR-17 | claim, assign, priority, mark-resolved, each with the current, a stale, and no `version` | `version` +1; `409 STALE_VERSION`; `400` at `errors.version`; nothing written in the last two |
-| API-65 | BR-17, D-4 | two callers claim, assign or change priority from the same loaded `version` at once | exactly one succeeds; the other gets `409`; the first caller's value is the stored one (no lost update) |
-| API-66 | D-4 | `POST` comment and note without `version` | `201`, ticket `version` unchanged | Planned |
-| API-31 | FR-12, BR-26 | staff detail GET as IT Staff and Administrator | `version`, transitions, gate present; both roles receive identical `allowedTransitions` | Planned |
-| API-32 | BR-14 | RESOLVED without `confirm` on a ticket that also fails the gate | `400` first, then after confirm `409` | Planned |
+| API-20 | AC-13, BR-11 | every allowed matrix cell, generated from `STATUS_TRANSITIONS`, gate satisfied for RESOLVED | `200` | Pass |
+| API-21 | AC-13, BR-11 | every other cell including self-transitions | `409 ILLEGAL_TRANSITION` | Pass |
+| API-22 | AC-14, BR-26 | Requester calls the status route; Administrator makes a legal change | Requester `403`, status unchanged; Administrator `200`, same body shape as IT Staff | Pass |
+| API-23 | AC-15, BR-12 | RESOLVED with no owner | `409 RESOLUTION_GATE`, `NO_OWNER` | Pass |
+| API-24 | AC-16, BR-12 | owner, no COMPLETED action | `409`, `NO_COMPLETED_ACTION` | Pass |
+| API-25 | AC-17, BR-12 | PLANNED / IN_PROGRESS action present; then completed or cancelled | `409 OPEN_ACTIONS`; then `200` | Pass |
+| API-26 | AC-18, BR-13 | RESOLVED fired together with (a) "add a PLANNED action" and (b) "complete the only PLANNED action", 20 rounds each; after every round query the database. (An earlier draft raced RESOLVED against "edit an action to IN_PROGRESS"; that cannot be a race, because an action that can be edited to IN_PROGRESS is a PLANNED one and already fails the gate.) A third test holds the ticket lock in another transaction and shows that an action create, an action edit and a status change all wait until it is released | outcome equals one of the two serial orders (a: `200` then `409 TICKET_RESOLVED`, or `201` then `409 RESOLUTION_GATE`; b: `200` then `409 TICKET_RESOLVED`, or `409 RESOLUTION_GATE` then `200`); no round ends with a RESOLVED ticket that holds a PLANNED or IN_PROGRESS action; the three requests stay pending while the lock is held | Pass |
+| API-27 | AC-19, BR-15 | Requester marks "appears resolved" | status unchanged, gate unchanged, signal recorded | Pass |
+| API-28 | AC-20, BR-17 | status with stale `version`; with none; with a non-integer | `409 STALE_VERSION`; `400` at `errors.version`; `400`; ticket unchanged each time | Pass |
+| API-29 | AC-21 | successful status change | response has new status, `version`, `allowedTransitions`, `resolutionGate` | Pass |
+| API-30 | AC-22, BR-17 | claim, assign, priority, mark-resolved, each with the current, a stale, and no `version` | `version` +1; `409 STALE_VERSION`; `400` at `errors.version`; nothing written in the last two | | Pass |
+| API-65 | BR-17, D-4 | two callers claim, assign or change priority from the same loaded `version` at once | exactly one succeeds; the other gets `409`; the first caller's value is the stored one (no lost update) | | Pass |
+| API-73 | BR-17, D-4 | for each of claim, assign, priority, status and mark-resolved: the ticket's version is bumped inside the transaction after the version comparison and before the write (test seam), then the request is made with the version it loaded | `409 STALE_VERSION` with `currentVersion`; the row's own fields unchanged; the only change to `version` is the simulated writer's bump | Pass |
+| API-66 | D-4 | `POST` comment and note without `version` | `201`, ticket `version` unchanged | Pass |
+| API-31 | FR-12, BR-26 | staff detail GET as IT Staff and Administrator | `version`, transitions, gate present; both roles receive identical `allowedTransitions` | Pass |
+| API-32 | BR-14 | RESOLVED without `confirm` on a ticket that also fails the gate | `400` first, then after confirm `409` | Pass |
 | API-33 | api-spec | queue with `ownerId=me`, `ownerId=unassigned`, and a bad value | only the caller's tickets; only unowned tickets; `400` | Planned |
-| API-50 | AC-43, BR-26, FR-25 | Administrator claims, assigns, sets priority, changes status, posts a comment and a note, creates and edits an action | every call succeeds with the IT Staff response shape | Planned |
-| API-51 | AC-43, BR-26 | the same calls as a Requester | `403` on each (comment on own ticket stays `201`) | Planned |
-| API-52 | AC-44, BR-26 | assign `ownerId` of an active Administrator, an active IT Staff, an inactive staff, a Requester, a missing id | `200`, `200`, `400`, `400`, `400` | Planned |
-| API-53 | AC-44 | assignable users as IT Staff, Administrator, Requester, no session | lists active IT Staff and Administrators, ordered by name, for both staff roles; `403`; `401` | Planned |
-| API-54 | AC-44, BR-26 | an Administrator who claimed a ticket is its owner and passes the gate's owner rule | `NO_OWNER` absent in the gate result | Planned |
+| API-50 | AC-43, BR-26, FR-25 | Administrator claims, assigns, sets priority, changes status, posts a comment and a note, creates and edits an action | every call succeeds with the IT Staff response shape | Pass |
+| API-51 | AC-43, BR-26 | the same calls as a Requester | `403` on each (comment on own ticket stays `201`) | Pass |
+| API-52 | AC-44, BR-26 | assign `ownerId` of an active Administrator, an active IT Staff, an inactive staff, a Requester, a missing id | `200`, `200`, `400`, `400`, `400` | Pass |
+| API-53 | AC-44 | assignable users as IT Staff, Administrator, Requester, no session | lists active IT Staff and Administrators, ordered by name, for both staff roles; `403`; `401` | Pass |
+| API-54 | AC-44, BR-26 | an Administrator who claimed a ticket is its owner and passes the gate's owner rule | `NO_OWNER` absent in the gate result | Pass |
 
 ### 3.3 Dashboards
 
@@ -236,6 +237,18 @@ and F7 for the UI). The reason for each is written here:
 | `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons |
 | `e2e/lab-03/user-administration.spec.ts`, `e2e/lab-03/accessibility.spec.ts` | assume the Administrator shell has one navigation item | adjust to the new navigation, keep every user-management assertion |
 | `e2e/lab-03/responsive-screenshots.spec.ts` | screenshots of the changed Ticket Detail and navigation | regenerate and re-inspect |
+
+**What F4 actually changed in Lab 3 tests** (all in the F4 PR, each recorded here):
+
+| File | Change | Reason |
+|---|---|---|
+| `server/tests/lab-03/staff-ticket-detail.api.test.ts` | every claim, assign, priority and status call sends the ticket's `version` (helper `sv`); status assertions read `response.body.ticket.currentStatus`; transitions to RESOLVED and the confirm tests create the ticket with an owner and a COMPLETED action (`completedAction` option) and the cleanup removes actions first | `version` is required (BR-17, D-4); the status route returns `{ ticket }`; the gate (BR-12); `ActionTaken` references the ticket |
+| same file | the 6 "rejects an Administrator session" and "excludes Administrator accounts" cases now assert `200` and the IT Staff response; "rejects an ownerId that references an Administrator" now accepts it | BR-26 |
+| `server/tests/lab-03/comments-notes.api.test.ts` | Administrator comment and note are `201`; mark-resolved calls send `version` | BR-26, BR-17 |
+| `server/tests/lab-03/authorization.api.test.ts` | `allowed` lists for claim, assign, priority, status, comment POST, note POST and assignable users gain ADMINISTRATOR; mark-resolved and status probes send `version` | BR-26, BR-17 |
+| `client/src/api.ts` and its callers | the five ticket write calls take and send `version`; the status call unwraps `{ ticket }`; `Ticket` gains `version`, `StaffTicket` gains `allowedTransitions` and `resolutionGate` | without it the existing screens would get `400` from the new required `version` |
+| `client/tests/lab-02/*`, `client/tests/lab-03/*` | fixtures carry `version` (and the gate fields on staff tickets); call assertions include the version argument | same |
+| `e2e/lab-03/staff-ticket-flow.spec.ts` (E2E-04) | records a COMPLETED action through the API before the Resolved step; `server/scripts/e2e-fixture.ts` removes actions and revisions before deleting stale tickets | the gate, and the foreign keys; the `<select>` to buttons change stays with F7 |
 
 Everything else in Lab 1 to 3 stays unmodified, and the full suites run on `lab4-staging` and
 again on `main` (REG-01).
@@ -373,3 +386,18 @@ run on `main`.
   not proven by the test. Full server suite: 20 files, 456 tests pass.
 - Not covered yet and left `Planned`: API-26, API-67 and API-68 through the gate, and the status
   change half of API-64, because the status routes are F4.
+
+**F4 (Ticket workflow), branch `feature/ticket-workflow`**, 2026-10-30:
+
+- `server/tests/lab-04/ticket-workflow.api.test.ts`: 34 tests pass (UNIT-02, API-20 to API-32, API-50 to API-54,
+  API-26, API-64, API-65, API-66, API-67 and API-68 through the gate). Mutation checks, each made tests fail:
+  gate skipped (6 fail), matrix check skipped (1), stale check removed from claim (1), ticket lock removed from the
+  status route (1, the lock-held test), owner re-check in the transaction removed (1).
+- Lab 3 tests updated as listed in section 9. Full server suite: 21 files, 490 tests pass. Full client suite: 13 files,
+  145 tests pass. Full Playwright suite (Lab 2 and Lab 3 specs): 38 tests pass against the real UI, including
+  `e2e/lab-03/staff-ticket-flow.spec.ts`.
+
+**F4 review fix (conditional write)**, 2026-10-31: claim, assign, priority, status and mark-resolved now write with
+one conditional statement (`UPDATE ... WHERE id = ? AND version = ?`, `updateMany`, zero rows is `409 STALE_VERSION`)
+instead of reading the version and then updating by id. API-73 proves it: removing `version` from the `WHERE` makes
+all 5 of its cases fail. `ticketWorkflow.api.test.ts` now has 40 tests. Full server suite after the change: 21 files, 496 tests pass.

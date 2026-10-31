@@ -46,6 +46,15 @@ test("E2E-04: IT Staff searches the queue, claims, prioritizes, transitions, com
   // Status: a routine transition applies immediately...
   await page.getByLabel("Status").selectOption("IN_PROGRESS");
   await expect(page.getByLabel("Status")).toHaveValue("IN_PROGRESS");
+  // Lab 4 (docs/lab-04/tests.md §9): Resolved also needs the resolution gate, an
+  // owner (claimed above) and a COMPLETED Action Taken. The Actions Taken screen
+  // is a later feature, so the action is recorded through the API here.
+  const found = await (await page.request.get(`${API}/api/staff/tickets?search=${STAFF_TICKET_NUMBER}`)).json();
+  const recorded = await page.request.post(`${API}/api/tickets/${found.tickets[0].id}/actions`, {
+    headers: { Origin: "http://localhost:5173" },
+    data: { description: "Replaced the faulty battery", status: "COMPLETED", result: "Battery replaced and tested" },
+  });
+  expect(recorded.status()).toBe(201);
   // ...while Resolved needs confirmation (BR-42): cancelling changes nothing,
   await page.getByLabel("Status").selectOption("RESOLVED");
   await expect(page.getByText(/requires confirmation/i)).toBeVisible();

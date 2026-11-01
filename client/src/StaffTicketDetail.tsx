@@ -16,6 +16,7 @@ import {
   updateTicketItPriority,
   updateTicketStatus,
 } from "./api.js";
+import ActionsTaken from "./ActionsTaken.js";
 import { PriorityBadge, STATUS_LABELS } from "./ticketBadges.js";
 
 const COMMENT_MAX_LENGTH = 2000;
@@ -515,6 +516,9 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
           ))}
         </ul>
       )}
+
+      {/* Lab 4 F6: IT Staff and Administrator get the same Actions Taken controls. */}
+      <ActionsTaken ticketId={ticketId} ticketStatus={ticket.currentStatus} canWrite />
 
       <h3 className="h6 mt-4">Comments</h3>
       {comments.length === 0 && <p className="text-muted">No comments yet.</p>}

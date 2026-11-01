@@ -1,9 +1,16 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+
+// Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
+// about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
+beforeEach(() => {
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+});
+
 
 const categories = [
   { id: 1, name: "Hardware" },

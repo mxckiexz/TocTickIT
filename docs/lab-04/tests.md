@@ -160,15 +160,15 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC / BR | What | File | Final |
 |---|---|---|---|---|
-| UI-01 | FR-01, AC-35 | list renders in the order given; empty, loading, error with Retry | `ActionsTaken.test.tsx` | Planned |
-| UI-02 | AC-04, AC-34, AC-40 | create: required fields, follow-up note required when checked, Result required when Completed is chosen, errors under fields, values kept after an error | `ActionsTaken.test.tsx` | Planned |
-| UI-03 | AC-09, AC-32 | edit sends `version`; `409` shows the conflict banner and keeps input | `ActionsTaken.test.tsx` | Planned |
-| UI-23 | AC-48 | staff "History" button expands the revisions oldest first; a Requester sees no History button | `ActionsTaken.test.tsx` | Planned |
+| UI-01 | FR-01, AC-35 | list renders in the order given; empty, loading, error with Retry | `ActionsTaken.test.tsx` | Pass |
+| UI-02 | AC-04, AC-34, AC-40 | create: required fields, follow-up note required when checked, Result required when Completed is chosen, errors under fields, values kept after an error | `ActionsTaken.test.tsx` | Pass |
+| UI-03 | AC-09, AC-32 | edit sends `version`; `409` shows the conflict banner and keeps input | `ActionsTaken.test.tsx` | Pass |
+| UI-23 | AC-48 | staff "History" button expands the revisions oldest first; a Requester sees no History button | `ActionsTaken.test.tsx` | Pass |
 | UI-24 | AC-20, AC-22 | claim, assign, priority, status and mark-resolved calls each send the loaded `version` | `TicketWorkflow.test.tsx`, `RequesterTicketDetail.test.tsx` | Planned |
-| UI-25 | AC-50 | on a RESOLVED ticket the Add action form offers only Completed (with the hint "Reopen the ticket to add open work"); a `409 TICKET_RESOLVED` shows the banner and keeps the input | `ActionsTaken.test.tsx` | Planned |
-| UI-04 | AC-08 | Requester sees the list read-only, no buttons | `ActionsTaken.test.tsx` | Planned |
-| UI-05 | AC-10, BR-06 | final actions have no Edit button | `ActionsTaken.test.tsx` | Planned |
-| UI-06 | AC-33 | Save disabled in flight; double click sends one request | `ActionsTaken.test.tsx` | Planned |
+| UI-25 | AC-50 | on a RESOLVED ticket the Add action form offers only Completed (with the hint "Reopen the ticket to add open work"); a `409 TICKET_RESOLVED` shows the banner and keeps the input | `ActionsTaken.test.tsx` | Pass |
+| UI-04 | AC-08 | Requester sees the list read-only, no buttons | `ActionsTaken.test.tsx` | Pass |
+| UI-05 | AC-10, BR-06 | final actions have no Edit button | `ActionsTaken.test.tsx` | Pass |
+| UI-06 | AC-33 | Save disabled in flight; double click sends one request | `ActionsTaken.test.tsx` | Pass |
 | UI-07 | AC-13 | only `allowedTransitions` rendered as buttons | `TicketWorkflow.test.tsx` | Planned |
 | UI-08 | AC-15 to AC-17 | gate unmet: Resolved disabled with each reason in text | `TicketWorkflow.test.tsx` | Planned |
 | UI-09 | BR-14 | confirm step for Resolved, Closed, Reopened, Cancelled; cancel sends nothing | `TicketWorkflow.test.tsx` | Planned |
@@ -181,10 +181,10 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-16 | AC-31 | navigation per role (Administrator: Dashboard, Ticket Queue, User Management), `aria-current` on the active item | `AppShell.test.tsx` (Lab 3 file, extended) | Planned |
 | UI-17 | AC-45, AC-47 | staff dashboard "Open actions assigned to me" card and "My recent actions" list: numbers, rows, link names and targets (`actionAssigneeId=me`, ticket detail at Actions Taken) | `StaffDashboard.test.tsx` | Planned |
 | UI-18 | AC-46 | my-actions zero state: `0` with "Nothing here", "You have not recorded any actions yet."; loading and error states cover the new card | `StaffDashboard.test.tsx` | Planned |
-| UI-19 | AC-43, FR-25 | Administrator ticket detail shows the same enabled controls as IT Staff (claim or reassign, priority, status buttons, comment and note forms, Actions Taken create and edit); Requester sees none | `TicketWorkflow.test.tsx`, `ActionsTaken.test.tsx` | Planned |
-| UI-20 | AC-40, BR-06 | create Status select offers exactly Planned (default), In progress, Completed; choosing Completed marks Result required and blocks Save with the message | `ActionsTaken.test.tsx` | Planned |
-| UI-21 | AC-41, BR-06 | edit Status select offers only the current status and the moves allowed from it; no Delete button anywhere | `ActionsTaken.test.tsx` | Planned |
-| UI-22 | AC-42, D-5 | Requester view shows every field of an entry (performer, assignee, result, follow-up note, attachment notes) read-only | `ActionsTaken.test.tsx` | Planned |
+| UI-19 | AC-43, FR-25 | Administrator ticket detail shows the same enabled controls as IT Staff (claim or reassign, priority, status buttons, comment and note forms, Actions Taken create and edit); Requester sees none | `TicketWorkflow.test.tsx`, `ActionsTaken.test.tsx` | Pass (Actions Taken part here; the ticket controls part comes with F7) |
+| UI-20 | AC-40, BR-06 | create Status select offers exactly Planned (default), In progress, Completed; choosing Completed marks Result required and blocks Save with the message | `ActionsTaken.test.tsx` | Pass |
+| UI-21 | AC-41, BR-06 | edit Status select offers only the current status and the moves allowed from it; no Delete button anywhere | `ActionsTaken.test.tsx` | Pass |
+| UI-22 | AC-42, D-5 | Requester view shows every field of an entry (performer, assignee, result, follow-up note, attachment notes) read-only | `ActionsTaken.test.tsx` | Pass |
 
 ## 6. Accessibility, responsive, style (Playwright, `e2e/lab-04/`)
 
@@ -232,7 +232,7 @@ and F7 for the UI). The reason for each is written here:
 | every Lab 3 API test that calls claim, assign, priority, status or mark-resolved (`staff-ticket-detail.api.test.ts`, `requester-ticket-detail.api.test.ts`, `authorization.api.test.ts` role sweep, seed helpers) | `version` is now required (BR-17, D-4), so a call without it is `400` | send the ticket's current `version` through the shared helper; the role and validation assertions stay |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx`, `RequesterTicketDetail.test.tsx` request bodies | the client must send `version` on those writes | assert the body carries the loaded `version` |
 | `e2e/lab-03/staff-ticket-flow.spec.ts`, `e2e/lab-03/requester-ticket-flow.spec.ts` | they go through the UI, which now sends `version` | no assertion change expected; rerun to confirm |
-| `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation |
+| `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation. **Done in F6** for Ticket Queue (the Administrator could not otherwise reach Actions Taken): the test now expects a "Main" navigation with Ticket Queue and User Management, `aria-current` on the current one, and that Ticket Queue opens the queue; the landing page stays User Management until the Dashboard exists (F8) |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx` UI-08, UI-14 | status `<select>` becomes buttons | assertions move to the buttons |
 | `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons |
 | `e2e/lab-03/user-administration.spec.ts`, `e2e/lab-03/accessibility.spec.ts` | assume the Administrator shell has one navigation item | adjust to the new navigation, keep every user-management assertion |
@@ -429,4 +429,32 @@ start) and checks each recent drill-down against raw SQL, with a fixed clock; a 
 **F5 review fix, composition check**, 2026-11-01: `dashboard-drilldown.api.test.ts` gains one case that `recent=1`
 composes with `open=1` and `ownerId=me` on both lists (an 8-day-old open ticket is in `open=1` alone and out with
 `recent=1`). Making the Requester list let `recent` replace `open` fails it. Server suite: 24 files, 536 tests pass.
+
+**F6 (Actions Taken UI), branch `feature/actions-taken-ui`**, 2026-11-01:
+
+- `client/tests/lab-04/ActionsTaken.test.tsx`: 29 tests pass (UI-01 to UI-06, the Actions Taken part of UI-19, UI-20 to
+  UI-23, UI-25). Covers the list order as given, loading, empty, error with Retry, 404 and 403; Requester read-only with
+  every field; Edit absent on final entries and no Delete anywhere; create and edit forms with errors under their fields
+  (`aria-invalid`, `aria-describedby`), the Completed and Follow-up rules, the Status choices per BR-06 and BR-10, Save
+  disabled while sending and one request for a double click, the conflict banner with Reload (the typed input stays and
+  the next Save sends the newest version, an entry that became final cannot be saved), and the History panel.
+- Lab 2 and Lab 3 client tests that render the two ticket detail screens now mock the Actions Taken list
+  (`fetchActions`), since both screens embed it. Client suite: 14 files, 174 tests pass. Full Playwright suite: 38 pass.
+- Checked in a real browser against the local servers with the e2e test accounts: empty form shows the field error under
+  Description; a Completed action with an assignee saved and appeared with its badge, performer, assignee, result and
+  attachment notes; History showed revision 1 with the assignee's name; the Requester sees the same entry read-only; at 375
+  px the form stacks in one column and the page has no horizontal scroll. This found one real defect: the first version
+  used Bootstrap's `btn-primary` (blue) where the project themes `btn-success` (Zen Green); fixed before this PR.
+- Not done here, by design: the Playwright screenshots for `artifacts/lab-04/screenshots/actions-taken/` and the visual
+  checklist belong to F10 (ui-spec.md section 9); the dashboard "My recent actions" links that open this section (the
+  section has the anchor `#actions-taken`) belong to F8.
+
+**F6 review fixes**, 2026-11-01: (1) `App.tsx` rendered only User Management for the Administrator, so they had no way to
+reach the Ticket Queue or Ticket Detail; it now has a "Main" navigation with Ticket Queue and User Management (current page
+marked with `aria-current`), AppShell tests cover it, and I checked it in a browser with the e2e Administrator account (queue,
+ticket, an action saved as "Performed by E2E Fixture Admin" with Edit and History). (2) An edit sent `assigneeId` every
+time, so a legacy action whose assignee was deactivated since could not be saved by the form (the server re-checks an
+assignee only when one is sent); an edit now sends it only when the selection changed (create always sends it, null for
+nobody). Four new tests: legacy inactive assignee description-only edit, changed and cleared assignee, people list failed,
+create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
 

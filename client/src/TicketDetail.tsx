@@ -15,6 +15,7 @@ import {
   ticketAttachmentUrl,
   uploadAttachment,
 } from "./api.js";
+import ActionsTaken from "./ActionsTaken.js";
 import { PriorityBadge, StatusBadge } from "./ticketBadges.js";
 
 // Mirrors server/src/app.ts's MAX_ACTIVE_ATTACHMENTS_PER_TICKET — a client-
@@ -426,6 +427,9 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
               )}
             </form>
           )}
+
+          {/* Lab 4 F6: the Requester sees every Action Taken on their own ticket, read-only (D-5). */}
+          <ActionsTaken ticketId={ticketId} ticketStatus={ticket.currentStatus} canWrite={false} />
 
           <h3 className="h6 mt-4">Comments</h3>
 

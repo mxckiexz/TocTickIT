@@ -42,12 +42,18 @@ export interface AuthUser {
 export class ApiError extends Error {
   status: number;
   fieldErrors?: Record<string, string>;
+  // Lab 4: a 409 carries a machine code (STALE_VERSION, TICKET_RESOLVED, ...) and, for a stale
+  // write, the version the server now holds.
+  code?: string;
+  currentVersion?: number;
 
-  constructor(message: string, status: number, fieldErrors?: Record<string, string>) {
+  constructor(message: string, status: number, fieldErrors?: Record<string, string>, extra?: { code?: string; currentVersion?: number }) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.code = extra?.code;
+    this.currentVersion = extra?.currentVersion;
   }
 }
 
@@ -66,7 +72,10 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
 async function parseJsonOrThrow<T>(response: Response, fallbackMessage: string): Promise<T> {
   const body = await response.json();
   if (!response.ok) {
-    throw new ApiError(body.error ?? fallbackMessage, response.status, body.errors);
+    throw new ApiError(body.error ?? fallbackMessage, response.status, body.errors, {
+      code: body.code,
+      currentVersion: body.currentVersion,
+    });
   }
   return body;
 }
@@ -545,4 +554,76 @@ export async function resetUserPassword(userId: number, password: string): Promi
     body: JSON.stringify({ password }),
   });
   return parseJsonOrThrow<AdminUser>(response, "Failed to reset password");
+}
+
+// ---------------------------------------------------------------------------
+// Lab 4 F6 — Actions Taken (docs/lab-04/api-spec.md "Actions Taken")
+// ---------------------------------------------------------------------------
+export type ActionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+
+export interface ActionTakenItem {
+  id: number;
+  ticketId: number;
+  performedBy: { id: number; name: string };
+  assignee: { id: number; name: string } | null;
+  status: ActionStatus;
+  actionAt: string;
+  description: string;
+  result: string;
+  followUpRequired: boolean;
+  followUpNote: string;
+  attachmentNotes: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+}
+
+export interface ActionRevision {
+  revision: number;
+  editedBy: { id: number; name: string };
+  editedAt: string;
+  status: ActionStatus;
+  assigneeId: number | null;
+  actionAt: string;
+  description: string;
+  result: string;
+  followUpRequired: boolean;
+  followUpNote: string;
+  attachmentNotes: string;
+}
+
+export interface ActionInput {
+  description?: string;
+  actionAt?: string;
+  status?: ActionStatus;
+  result?: string;
+  assigneeId?: number | null;
+  followUpRequired?: boolean;
+  followUpNote?: string;
+  attachmentNotes?: string;
+}
+
+export async function fetchActions(ticketId: number): Promise<ActionTakenItem[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions`);
+  const body = await parseJsonOrThrow<{ actions: ActionTakenItem[] }>(response, "Unable to load actions.");
+  return body.actions;
+}
+
+export async function createAction(ticketId: number, input: ActionInput): Promise<ActionTakenItem> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions`, { method: "POST", body: JSON.stringify(input) });
+  return parseJsonOrThrow<ActionTakenItem>(response, "Failed to save the action");
+}
+
+export async function updateAction(ticketId: number, actionId: number, input: ActionInput, version: number): Promise<ActionTakenItem> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ ...input, version }),
+  });
+  return parseJsonOrThrow<ActionTakenItem>(response, "Failed to save the action");
+}
+
+export async function fetchActionRevisions(ticketId: number, actionId: number): Promise<ActionRevision[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions/${actionId}/revisions`);
+  const body = await parseJsonOrThrow<{ revisions: ActionRevision[] }>(response, "Unable to load the history.");
+  return body.revisions;
 }

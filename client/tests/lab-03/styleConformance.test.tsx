@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import StaffTicketDetail from "../../src/StaffTicketDetail.js";
 import StaffTicketQueue from "../../src/StaffTicketQueue.js";
@@ -11,6 +11,13 @@ import queueSrc from "../../src/StaffTicketQueue.tsx?raw";
 import detailSrc from "../../src/StaffTicketDetail.tsx?raw";
 import userManagementSrc from "../../src/UserManagement.tsx?raw";
 import appSrc from "../../src/App.tsx?raw";
+
+// Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
+// about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
+beforeEach(() => {
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+});
+
 // Badge colors come only from Bootstrap's semantic classes (themed by
 // theme.css) — never an ad-hoc hex/rgb — and every badge carries a text label.
 const ALLOWED_BADGE_COLOR = /\btext-bg-(success|warning|danger|secondary|info)\b/;

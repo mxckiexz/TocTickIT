@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   AttachmentSummary,
@@ -77,6 +77,18 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
 
   const [resolveUiState, setResolveUiState] = useState<ResolveUiState>("idle");
   const [resolveError, setResolveError] = useState("");
+  // Lab 4 (ui-spec.md §6): a stale version on "Problem Appears Resolved" shows the shared banner; Reload fetches
+  // the ticket again and clears it.
+  const [resolveStale, setResolveStale] = useState(false);
+  const [ticketReloadKey, setTicketReloadKey] = useState(0);
+  const staleBannerRef = useRef<HTMLDivElement>(null);
+
+  // Focus makes a screen reader read the banner; scrolling brings it into view if it is off screen.
+  useEffect(() => {
+    if (!resolveStale) return;
+    staleBannerRef.current?.focus();
+    staleBannerRef.current?.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+  }, [resolveStale]);
 
   // Only active (non-removed) attachments count toward the 5-attachment
   // limit — a removed one stays in `attachments` (BR-14: still visible as
@@ -105,7 +117,7 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
     return () => {
       cancelled = true;
     };
-  }, [ticketId]);
+  }, [ticketId, ticketReloadKey]);
 
   // Fetched independently of the ticket's own fields — a network hiccup on
   // one shouldn't have to block the other, and the ownership check runs
@@ -250,6 +262,7 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
   async function handleConfirmResolve() {
     setResolveUiState("saving");
     setResolveError("");
+    setResolveStale(false);
 
     try {
       const updated = await markTicketResolved(ticketId, ticket!.version);
@@ -257,11 +270,20 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
       setResolveUiState("idle");
     } catch (error) {
       console.error("Failed to mark ticket resolved:", error);
-      setResolveError(
-        error instanceof ApiError ? error.message : "Unable to mark this ticket resolved."
-      );
+      if (error instanceof ApiError && error.code === "STALE_VERSION") {
+        setResolveStale(true);
+      } else {
+        setResolveError(
+          error instanceof ApiError ? error.message : "Unable to mark this ticket resolved."
+        );
+      }
       setResolveUiState("idle");
     }
+  }
+
+  function handleReloadTicket() {
+    setResolveStale(false);
+    setTicketReloadKey((key) => key + 1);
   }
 
   function categoryName(id: number) {
@@ -538,6 +560,15 @@ export default function TicketDetail({ ticketId, categories, relatedSystems, onB
                 >
                   {resolveUiState === "saving" ? "Saving…" : "Problem Appears Resolved"}
                 </button>
+              )}
+
+              {resolveStale && (
+                <div ref={staleBannerRef} tabIndex={-1} className="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2 mt-2" role="alert">
+                  <span>Someone else changed this. Reload to see the latest, then try again.</span>
+                  <button type="button" className="btn btn-outline-success btn-sm" onClick={handleReloadTicket}>
+                    Reload
+                  </button>
+                </div>
               )}
 
               {resolveError && (

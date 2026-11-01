@@ -164,16 +164,16 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-02 | AC-04, AC-34, AC-40 | create: required fields, follow-up note required when checked, Result required when Completed is chosen, errors under fields, values kept after an error | `ActionsTaken.test.tsx` | Pass |
 | UI-03 | AC-09, AC-32 | edit sends `version`; `409` shows the conflict banner and keeps input | `ActionsTaken.test.tsx` | Pass |
 | UI-23 | AC-48 | staff "History" button expands the revisions oldest first; a Requester sees no History button | `ActionsTaken.test.tsx` | Pass |
-| UI-24 | AC-20, AC-22 | claim, assign, priority, status and mark-resolved calls each send the loaded `version` | `TicketWorkflow.test.tsx`, `RequesterTicketDetail.test.tsx` | Planned |
+| UI-24 | AC-20, AC-22 | claim, assign, priority, status and mark-resolved calls each send the loaded `version` | `TicketWorkflow.test.tsx`, `ticket-detail.test.tsx` (Requester) | Pass |
 | UI-25 | AC-50 | on a RESOLVED ticket the Add action form offers only Completed (with the hint "Reopen the ticket to add open work"); a `409 TICKET_RESOLVED` shows the banner and keeps the input | `ActionsTaken.test.tsx` | Pass |
 | UI-04 | AC-08 | Requester sees the list read-only, no buttons | `ActionsTaken.test.tsx` | Pass |
 | UI-05 | AC-10, BR-06 | final actions have no Edit button | `ActionsTaken.test.tsx` | Pass |
 | UI-06 | AC-33 | Save disabled in flight; double click sends one request | `ActionsTaken.test.tsx` | Pass |
-| UI-07 | AC-13 | only `allowedTransitions` rendered as buttons | `TicketWorkflow.test.tsx` | Planned |
-| UI-08 | AC-15 to AC-17 | gate unmet: Resolved disabled with each reason in text | `TicketWorkflow.test.tsx` | Planned |
-| UI-09 | BR-14 | confirm step for Resolved, Closed, Reopened, Cancelled; cancel sends nothing | `TicketWorkflow.test.tsx` | Planned |
-| UI-10 | AC-21, AC-32 | `409` shows the banner; success refreshes version, buttons, gate | `TicketWorkflow.test.tsx` | Planned |
-| UI-11 | AC-19 | "appears resolved" button; status badge unchanged | `TicketWorkflow.test.tsx` | Planned |
+| UI-07 | AC-13 | only `allowedTransitions` rendered as buttons | `TicketWorkflow.test.tsx` | Pass |
+| UI-08 | AC-15 to AC-17 | gate unmet: Resolved disabled with each reason in text | `TicketWorkflow.test.tsx` | Pass |
+| UI-09 | BR-14 | confirm step for Resolved, Closed, Reopened, Cancelled; cancel sends nothing | `TicketWorkflow.test.tsx` | Pass |
+| UI-10 | AC-21, AC-32 | `409` shows the banner; success refreshes version, buttons, gate | `TicketWorkflow.test.tsx` | Pass |
+| UI-11 | AC-19 | "appears resolved" button; status badge unchanged | `ticket-detail.test.tsx` (Lab 2 file, Problem Appears Resolved block) | Pass |
 | UI-12 | AC-29, FR-17 | metric cards: numbers, drill-down links with accessible names and params | `StaffDashboard.test.tsx` | Planned |
 | UI-13 | AC-35 | staff dashboard zero, loading, error with Retry, forbidden | `StaffDashboard.test.tsx` | Planned |
 | UI-14 | AC-26 | Administrator sees user counts, IT Staff does not | `StaffDashboard.test.tsx` | Planned |
@@ -181,7 +181,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-16 | AC-31 | navigation per role (Administrator: Dashboard, Ticket Queue, User Management), `aria-current` on the active item | `AppShell.test.tsx` (Lab 3 file, extended) | Planned |
 | UI-17 | AC-45, AC-47 | staff dashboard "Open actions assigned to me" card and "My recent actions" list: numbers, rows, link names and targets (`actionAssigneeId=me`, ticket detail at Actions Taken) | `StaffDashboard.test.tsx` | Planned |
 | UI-18 | AC-46 | my-actions zero state: `0` with "Nothing here", "You have not recorded any actions yet."; loading and error states cover the new card | `StaffDashboard.test.tsx` | Planned |
-| UI-19 | AC-43, FR-25 | Administrator ticket detail shows the same enabled controls as IT Staff (claim or reassign, priority, status buttons, comment and note forms, Actions Taken create and edit); Requester sees none | `TicketWorkflow.test.tsx`, `ActionsTaken.test.tsx` | Pass (Actions Taken part here; the ticket controls part comes with F7) |
+| UI-19 | AC-43, FR-25 | Administrator ticket detail shows the same enabled controls as IT Staff (claim or reassign, priority, status buttons, comment and note forms, Actions Taken create and edit); Requester sees none | `TicketWorkflow.test.tsx`, `ActionsTaken.test.tsx` | Pass |
 | UI-20 | AC-40, BR-06 | create Status select offers exactly Planned (default), In progress, Completed; choosing Completed marks Result required and blocks Save with the message | `ActionsTaken.test.tsx` | Pass |
 | UI-21 | AC-41, BR-06 | edit Status select offers only the current status and the moves allowed from it; no Delete button anywhere | `ActionsTaken.test.tsx` | Pass |
 | UI-22 | AC-42, D-5 | Requester view shows every field of an entry (performer, assignee, result, follow-up note, attachment notes) read-only | `ActionsTaken.test.tsx` | Pass |
@@ -233,8 +233,8 @@ and F7 for the UI). The reason for each is written here:
 | `client/tests/lab-03/StaffTicketDetail.test.tsx`, `RequesterTicketDetail.test.tsx` request bodies | the client must send `version` on those writes | assert the body carries the loaded `version` |
 | `e2e/lab-03/staff-ticket-flow.spec.ts`, `e2e/lab-03/requester-ticket-flow.spec.ts` | they go through the UI, which now sends `version` | no assertion change expected; rerun to confirm |
 | `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation. **Done in F6** for Ticket Queue (the Administrator could not otherwise reach Actions Taken): the test now expects a "Main" navigation with Ticket Queue and User Management, `aria-current` on the current one, and that Ticket Queue opens the queue; the landing page stays User Management until the Dashboard exists (F8) |
-| `client/tests/lab-03/StaffTicketDetail.test.tsx` UI-08, UI-14 | status `<select>` becomes buttons | assertions move to the buttons |
-| `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons |
+| `client/tests/lab-03/StaffTicketDetail.test.tsx` UI-08, UI-14 | status `<select>` becomes buttons | assertions move to the buttons. **Done in F7** (see the F7 table below) |
+| `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons. **Done in F7** |
 | `e2e/lab-03/user-administration.spec.ts`, `e2e/lab-03/accessibility.spec.ts` | assume the Administrator shell has one navigation item | adjust to the new navigation, keep every user-management assertion |
 | `e2e/lab-03/responsive-screenshots.spec.ts` | screenshots of the changed Ticket Detail and navigation | regenerate and re-inspect |
 
@@ -249,6 +249,15 @@ and F7 for the UI). The reason for each is written here:
 | `client/src/api.ts` and its callers | the five ticket write calls take and send `version`; the status call unwraps `{ ticket }`; `Ticket` gains `version`, `StaffTicket` gains `allowedTransitions` and `resolutionGate` | without it the existing screens would get `400` from the new required `version` |
 | `client/tests/lab-02/*`, `client/tests/lab-03/*` | fixtures carry `version` (and the gate fields on staff tickets); call assertions include the version argument | same |
 | `e2e/lab-03/staff-ticket-flow.spec.ts` (E2E-04) | records a COMPLETED action through the API before the Resolved step; `server/scripts/e2e-fixture.ts` removes actions and revisions before deleting stale tickets | the gate, and the foreign keys; the `<select>` to buttons change stays with F7 |
+
+**What F7 actually changed in Lab 3 tests** (all in the F7 PR):
+
+| File | Change | Reason |
+|---|---|---|
+| `client/tests/lab-03/StaffTicketDetail.test.tsx` "Status control" (4 tests) | the `<select>` queries become queries on the "Change status" button group; the confirm-flow assertions (no confirm for routine moves, `confirm: true` only on Confirm, Cancel sends nothing) are unchanged; the first test now also checks the current status is shown as text; the "reverts the select" test now checks the buttons are as before | the control is a row of buttons, one per `allowedTransitions` entry (FR-09, ui-spec section 5) |
+| `client/tests/lab-03/styleConformance.test.tsx` STY-02 Staff Ticket Detail | the staff ticket fixture carries `allowedTransitions` and `resolutionGate` | the screen now reads them; the real API always sends them |
+| `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 and E2E-05 (staff view) | status is changed with the buttons; the COMPLETED action is recorded through the Actions Taken form (it was an API call in F4) and the test checks Resolved is disabled with "Needs a completed action" before it and enabled after it; E2E-05 checks the status badge and the button group instead of the select value | the select is gone; the gate is now visible in the UI |
+| `client/tests/lab-02/ticket-detail.test.tsx` | two tests added to "Problem Appears Resolved" (UI-11, stale banner with Reload); nothing existing changed | Requester side of F7 |
 
 Everything else in Lab 1 to 3 stays unmodified, and the full suites run on `lab4-staging` and
 again on `main` (REG-01).
@@ -458,3 +467,30 @@ assignee only when one is sent); an edit now sends it only when the selection ch
 nobody). Four new tests: legacy inactive assignee description-only edit, changed and cleared assignee, people list failed,
 create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
 
+**F7 (Ticket workflow UI), branch `feature/ticket-workflow-ui`**, 2026-11-01:
+
+- `client/tests/lab-04/TicketWorkflow.test.tsx`: 27 tests pass (UI-07 to UI-10, the ticket controls part of UI-19, UI-24 on
+  the staff side). Covers: exactly the `allowedTransitions` as buttons and no select, the list taken from the server
+  rather than a client copy, no buttons when nothing is allowed; Resolved disabled with each unmet reason in text and tied to
+  the button with `aria-describedby`, only the unmet reasons listed, a disabled click sends nothing, and recording a
+  completed action refreshes the gate without a reload; the confirm step for Resolved, Closed, Reopened and Cancelled (nothing
+  is sent until Confirm, then `confirm: true`; Cancel sends nothing; the step takes focus; a routine move is sent at once);
+  `STALE_VERSION`, `RESOLUTION_GATE` and `ILLEGAL_TRANSITION` in the same banner above the controls (Reload refetches, clears
+  it, and the next change carries the new version; the confirm step is closed when the change is rejected; claim and priority
+  conflicts use it too; the banner takes focus and is scrolled into view); a successful change refreshes buttons, gate and
+  badge; one request for a double click; every write sends the loaded `version`; the Administrator view has the same
+  controls (same component as IT Staff).
+- `client/tests/lab-02/ticket-detail.test.tsx`: two new tests for the Requester (UI-11 status badge unchanged after "Problem
+  appears resolved"; stale version shows the banner with Reload, Reload refetches, the next try sends the new version).
+  Client suite: 15 files, 209 tests pass. Full Playwright suite: 38 pass.
+- Mutation checks (each made one of these tests fail, then reverted): Resolved not disabled by the gate; no refresh after an
+  action is saved; Closed without confirm; the confirm step left open after a conflict; the Requester stale banner removed;
+  claim sent with a fixed version; scroll into view removed.
+- Checked in a real browser with the e2e Administrator account: status shown as a badge with one button per allowed status;
+  after Claim and In Progress, Resolved is disabled with "Needs a completed action" under it; I raised the ticket's version
+  from outside, then pressed a status button: the banner "Someone else changed this..." appeared with Reload, Reload
+  refreshed IT Priority to the new value and cleared the banner; at 375 px the buttons wrap and the page has no horizontal
+  scroll. This found one real defect: with the page scrolled down, the banner (above the controls) was out of view; it now takes
+  focus and is scrolled into view (instant, because the page uses smooth scrolling that cancelled a smooth scroll).
+- Not changed: the server (F4 already returns `allowedTransitions`, `resolutionGate` and the 409 codes). Not done here, by
+  design: Playwright screenshots of the status buttons and conflict banner (F10).

@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { ADMIN, REQUESTER, STAFF, VIEWPORTS, login } from "../helpers/accounts";
+import { ADMIN, LAB4_VIEWPORTS, REQUESTER, STAFF, login } from "../helpers/accounts";
 import {
   columnsAcross,
   expectNoHorizontalOverflow,
@@ -35,7 +35,7 @@ async function expectSoundLayout(page: Page) {
 
 test.describe.configure({ mode: "serial" });
 
-for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
+for (const [viewportName, size] of Object.entries(LAB4_VIEWPORTS)) {
   test.describe(`${viewportName} (${size.width}x${size.height})`, () => {
     test.use({ viewport: size });
 

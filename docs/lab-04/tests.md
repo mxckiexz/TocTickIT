@@ -574,7 +574,7 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
 **F10 (Hardening and polish), branch `feature/lab4-hardening`**, 2026-11-02:
 
 - New Playwright specs, 41 tests: `e2e/lab-04/accessibility.spec.ts` 14 (A11Y-01 to A11Y-04 and two style checks) and
-  `e2e/lab-04/responsive-screenshots.spec.ts` 27 (RSP-01, RSP-02 at 1280, 800 and 375, nine tests per width). Helpers in
+  `e2e/lab-04/responsive-screenshots.spec.ts` 27 (RSP-01, RSP-02 at 1280, 768 and 375, nine tests per width). Helpers in
   `e2e/helpers/layout.ts`. Full Playwright suite: 102 pass (38 Lab 2 and 3, 23 F9, 41 new). Client suite 291 and server suite 536 unchanged
   and pass.
 - A11Y-01: the keyboard alone (Tab, typing, Enter) adds a Completed action, finishes two open ones by editing them, and resolves the

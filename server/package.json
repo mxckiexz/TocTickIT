@@ -11,6 +11,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "e2e:fixture": "tsx scripts/e2e-fixture.ts",
     "e2e:admins": "tsx scripts/e2e-admins.ts",
+    "e2e:truth": "tsx scripts/e2e-dashboard-truth.ts",
     "test": "vitest run"
   },
   "prisma": {

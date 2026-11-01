@@ -16,6 +16,8 @@ import type { Role } from "@prisma/client";
 // previous run did to them.
 export const E2E_REQUESTER_EMAIL = "e2e-requester@toktickit.test";
 export const E2E_REQUESTER_PASSWORD = "E2E-Fixture-Pass1";
+// Lab 4 F9: a second Requester, so the dashboard spec can prove a Requester never sees another Requester's tickets.
+export const E2E_REQUESTER2_EMAIL = "e2e-requester2@toktickit.test";
 export const E2E_STAFF_EMAIL = "e2e-staff@toktickit.test";
 export const E2E_ADMIN_EMAIL = "e2e-admin@toktickit.test";
 // mustChangePassword: true on purpose — E2E-02's first-login flow.
@@ -53,6 +55,7 @@ const FIXTURE_ACCOUNTS: Array<{
   mustChangePassword: boolean;
 }> = [
   { email: E2E_REQUESTER_EMAIL, name: "E2E Fixture Requester", role: "REQUESTER", password: E2E_REQUESTER_PASSWORD, isActive: true, mustChangePassword: false },
+  { email: E2E_REQUESTER2_EMAIL, name: "E2E Second Requester", role: "REQUESTER", password: E2E_REQUESTER_PASSWORD, isActive: true, mustChangePassword: false },
   { email: E2E_STAFF_EMAIL, name: "E2E Fixture Staff", role: "IT_STAFF", password: E2E_REQUESTER_PASSWORD, isActive: true, mustChangePassword: false },
   { email: E2E_ADMIN_EMAIL, name: "E2E Fixture Admin", role: "ADMINISTRATOR", password: E2E_REQUESTER_PASSWORD, isActive: true, mustChangePassword: false },
   { email: E2E_FIRST_LOGIN_EMAIL, name: "E2E First Login", role: "REQUESTER", password: E2E_FIRST_LOGIN_DEFAULT_PASSWORD, isActive: true, mustChangePassword: true },
@@ -95,17 +98,6 @@ async function main() {
     });
   }
 
-  // Sweep users a previous run's admin spec created through the UI.
-  const leftovers = await prisma.user.findMany({
-    where: { email: { startsWith: E2E_CREATED_EMAIL_PREFIX } },
-    select: { id: true },
-  });
-  const leftoverIds = leftovers.map((u) => u.id);
-  if (leftoverIds.length > 0) {
-    await prisma.session.deleteMany({ where: { userId: { in: leftoverIds } } });
-    await prisma.user.deleteMany({ where: { id: { in: leftoverIds } } });
-  }
-
   // Fresh e2e tickets every run: remove every previous run's (and anything
   // hanging off them — comments, notes, attachment rows AND their files on
   // disk), then recreate the two seeded ones in a known state.
@@ -134,6 +126,19 @@ async function main() {
     await Promise.all(
       attachments.map((a) => unlink(path.join(UPLOAD_DIR, a.storedFilename)).catch(() => undefined))
     );
+  }
+
+  // Lab 4: after the tickets, because an Action Taken can name one of these users as its assignee and the
+  // foreign key restricts deleting a user that is still referenced.
+  // Sweep users a previous run's admin spec created through the UI.
+  const leftovers = await prisma.user.findMany({
+    where: { email: { startsWith: E2E_CREATED_EMAIL_PREFIX } },
+    select: { id: true },
+  });
+  const leftoverIds = leftovers.map((u) => u.id);
+  if (leftoverIds.length > 0) {
+    await prisma.session.deleteMany({ where: { userId: { in: leftoverIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: leftoverIds } } });
   }
 
   const requester = await prisma.user.findUniqueOrThrow({ where: { email: E2E_REQUESTER_EMAIL } });

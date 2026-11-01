@@ -201,18 +201,18 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC | What | File | Final |
 |---|---|---|---|---|
-| E2E-01 | AC-01 to AC-08, AC-40 to AC-42 | staff adds actions to one ticket (one Planned, one logged as Completed with a result), edits one, sees validation messages incl. inactive assignee; Requester sees every field read-only | `actions-taken-flow.spec.ts` | Planned |
-| E2E-02 | AC-15 to AC-20, AC-32 | gate blocks Resolved; finish the actions; resolve; Requester advisory leaves the status; two sessions edit, second sees the conflict banner | `ticket-resolution.spec.ts` | Planned |
-| E2E-03 | AC-23 to AC-31, AC-45 to AC-47 | each role's dashboard numbers match the database, including my open actions and my recent actions; drill-down lists match; navigation per role; Requester isolation | `dashboards.spec.ts` | Planned |
-| E2E-04 | AC-33, AC-34 | double click sends one request; failed submit keeps values; no console error during E2E-01 to 03 | `actions-taken-flow.spec.ts` | Planned |
-| E2E-05 | AC-43, AC-44 | an Administrator claims a ticket, adds and completes an action, resolves the ticket and closes it, posts a comment and a note, all through the UI | `ticket-resolution.spec.ts` | Planned |
+| E2E-01 | AC-01 to AC-08, AC-40 to AC-42 | staff adds actions to one ticket (one Planned, one logged as Completed with a result), edits one, sees validation messages incl. inactive assignee; Requester sees every field read-only | `actions-taken-flow.spec.ts` | Pass |
+| E2E-02 | AC-15 to AC-20, AC-32 | gate blocks Resolved; finish the actions; resolve; Requester advisory leaves the status; two sessions edit, second sees the conflict banner | `ticket-resolution.spec.ts` | Pass |
+| E2E-03 | AC-23 to AC-31, AC-45 to AC-47 | each role's dashboard numbers match the database, including my open actions and my recent actions; drill-down lists match; navigation per role; Requester isolation | `dashboards.spec.ts` | Pass |
+| E2E-04 | AC-33, AC-34 | double click sends one request; failed submit keeps values; no console error during E2E-01 to 03 | `actions-taken-flow.spec.ts` (Actions Taken flow) and `ticket-resolution.spec.ts` (two sessions) | Pass |
+| E2E-05 | AC-43, AC-44 | an Administrator claims a ticket, adds and completes an action, resolves the ticket and closes it, posts a comment and a note, all through the UI | `ticket-resolution.spec.ts` | Pass |
 
 ## 8. Regression
 
 | ID | AC | What | Expected | Final |
 |---|---|---|---|---|
-| REG-01 | AC-38 | full Lab 1 to 3 server, client and Playwright suites on `lab4-staging` and again on `main` | all pass | Planned |
-| REG-02 | AC-38 | the Lab 3 tests listed in §9, updated in the PR that forces the change | pass, each change recorded | Planned |
+| REG-01 | AC-38 | full Lab 1 to 3 server, client and Playwright suites on `lab4-staging` and again on `main` | all pass | Pass on `lab4-staging` plus F9 (server 536, client 291, Playwright 61); the run on `main` is part of the release PR (F11) |
+| REG-02 | AC-38 | the Lab 3 tests listed in §9, updated in the PR that forces the change | pass, each change recorded | Pass: every changed Lab 3 test is in the section 9 tables, each in the PR that forced it (F4, F6, F7, F8) |
 
 ## 9. Lab 3 tests expected to change (not "unmodified")
 
@@ -532,3 +532,41 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
   screenshots in `artifacts/lab-04/screenshots/` and the contrast measurement (F10).
 - Known limit, for the reviewer: the API has no total ticket count for a Requester, so "You have no tickets yet." is shown when
   nothing is open, nothing waits and both lists are empty; a Requester whose only tickets are older than seven days and closed sees it too.
+
+**F9 (E2E and regression), branch `feature/lab4-e2e-regression`**, 2026-11-01:
+
+- New Playwright specs in `e2e/lab-04/`, 23 tests: `actions-taken-flow.spec.ts` 8 (E2E-01, E2E-04), `ticket-resolution.spec.ts` 7
+  (E2E-02, E2E-05, and E2E-04's console check for that flow), `dashboards.spec.ts` 8 (E2E-03). They drive the screens as a person does;
+  the API is used only to put tickets into the starting state a scenario needs (`e2e/helpers/lab4.ts`).
+- E2E-01: Planned action with an assignee; one logged as Completed (the form refuses without a Result, then saves); an empty Description is
+  refused under the field; an edit and its History showing both revisions; an assignee deactivated after the form was opened is refused
+  under Assignee with the typed text kept; the Requester sees every field and has no Add, Edit or History.
+- E2E-02: Resolved is disabled with its reasons until there is an owner and a completed action and nothing is open (the gate clears
+  without a reload after the action is saved); the confirm step; on a Resolved ticket a new action can only be Completed; the Requester's
+  "Problem Appears Resolved" leaves the badge and the staff buttons as they were; two sessions on one ticket (the stale status change gets the
+  banner, Reload shows the other session's priority and the next change works) and two sessions editing one action (second Save gets the banner,
+  keeps the typed text, works after Reload).
+- E2E-03: the numbers come from `server/scripts/e2e-dashboard-truth.ts`, which reads the database without using `server/src/dashboard.ts`
+  (so a bug there cannot appear on both sides), and are compared with the screen for IT Staff (three cards, all eight statuses, the three
+  priorities, Recently updated in order, My recent actions with status) and for the Requester (both numbers and both lists); each drill-down
+  link opens a list whose size equals the number it counted, with its notice; the recent link's first five rows are the dashboard's five; the
+  Administrator's user line equals the database and IT Staff have none; navigation per role, `aria-current`, landing on the Dashboard, a
+  Requester or IT Staff typing an address they cannot use stays on the Dashboard; a second Requester's ticket is never on the first one's
+  dashboard or in My Tickets, and the second Requester sees theirs and none of the first's. No number is hard-coded because the database also
+  holds the seed and earlier specs' tickets; the scenario guarantees the IT Staff member owns tickets and holds open actions, so the checks are
+  not zeros agreeing with zeros.
+- E2E-04: a double click on Save sends one request (the test slows the request so a second click would land during it); a forced 500 keeps
+  the typed Description and Result and the retry saves them; no console error or uncaught exception in the watched sessions. Steps that are
+  supposed to fail are wrapped in `expecting(...)` so their expected "Failed to load resource" lines are dropped and every other console error
+  fails the test.
+- Fixture changes (`server/scripts/e2e-fixture.ts`): a second Requester account `e2e-requester2@toktickit.test`; the sweep of
+  `e2e-created-` users now runs after the ticket sweep, because an Action Taken can name such a user as assignee and the foreign key
+  restricts deleting a user still referenced. New script `npm run e2e:truth`.
+- Mutation checks, each made a spec fail and was reverted: the Requester dashboard not scoped to the Requester (E2E-03), Resolved not disabled
+  by the gate (E2E-02), conflicts not shown (E2E-02). The double-click test did NOT fail when only the in-flight guard was removed, because
+  the Save button is also disabled while saving, so one defence covers for the other; it fails when both are removed (two actions added),
+  so it can catch the bug it is for.
+- REG-01 on this branch (lab4-staging with F9): server 24 files 536 tests pass; client 20 files 291 pass; Playwright 61 pass (38 from Lab 2 and 3, 23
+  new), also 23 pass on two further consecutive runs of `e2e/lab-04` (the fixture leaves the database ready for the next run). Type checks of server
+  and client are clean. REG-02: no Lab 3 test is left in the state "expected to change" in section 9.
+- Not in this PR: the run on `main` (F11); accessibility, responsive and screenshot checks A11Y-01 to 04, RSP-01, RSP-02 (F10).

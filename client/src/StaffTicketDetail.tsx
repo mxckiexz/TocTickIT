@@ -42,6 +42,8 @@ const CONFIRMATION_REQUIRED_STATUSES = new Set<TicketStatus>([
 interface StaffTicketDetailProps {
   ticketId: number;
   onBack: () => void;
+  // Lab 4 F8: the dashboard's "My recent actions" rows open the ticket at its Actions Taken section.
+  scrollToActions?: boolean;
 }
 
 type LoadState = "loading" | "ready" | "error" | "forbidden";
@@ -51,7 +53,7 @@ type LoadState = "loading" | "ready" | "error" | "forbidden";
 // an Internal Notes panel alongside Public Comments. Attachments/comments/
 // notes all arrive bundled in one GET /api/staff/tickets/:id response — no
 // separate fetches the way the Requester screen needs.
-export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetailProps) {
+export default function StaffTicketDetail({ ticketId, onBack, scrollToActions }: StaffTicketDetailProps) {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [ticket, setTicket] = useState<StaffTicket | null>(null);
@@ -93,6 +95,14 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
   useEffect(() => {
     if (statusPendingTarget) confirmRef.current?.focus();
   }, [statusPendingTarget]);
+
+  // Once, when the ticket first appears: a later refresh must not pull the page away from where the user is working.
+  const scrolledToActionsRef = useRef(false);
+  useEffect(() => {
+    if (!scrollToActions || loadState !== "ready" || scrolledToActionsRef.current) return;
+    scrolledToActionsRef.current = true;
+    document.getElementById("actions-taken")?.scrollIntoView?.({ block: "start", behavior: "instant" });
+  }, [scrollToActions, loadState]);
 
   // The banner sits above the controls and the user may have scrolled past it: focusing it makes a screen reader
   // read it, and scrolling brings it into view for everyone else (focus alone does not scroll in every browser).

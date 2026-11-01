@@ -17,6 +17,7 @@ import {
   logout,
   runAdminIsolation,
 } from "../helpers/accounts";
+import { openPage } from "../helpers/accounts";
 
 // docs/lab-03/ui-spec.md §10 + tests.md RSP-01/RSP-02: desktop/tablet/mobile
 // evidence for every new Lab 3 screen, saved under
@@ -162,6 +163,7 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
 
     test("IT Staff Ticket Queue: table on desktop/tablet, stacked cards on mobile (RSP-01)", async ({ page }) => {
       await login(page, STAFF);
+      await openPage(page, "Ticket Queue");
       await expect(page.getByRole("heading", { name: "Ticket Queue" })).toBeVisible();
       await expect(page.getByRole("button", { name: /TKT-/ }).first()).toBeVisible();
 
@@ -186,6 +188,7 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
 
     test("IT Staff Ticket Detail: editable vs read-only fields, Internal Notes visually distinct", async ({ page }) => {
       await login(page, STAFF);
+      await openPage(page, "Ticket Queue");
       await page.locator('[aria-label="Search tickets"]:visible').fill(STAFF_FLOW_TICKET);
       await page.getByRole("button", { name: "TKT-E2E-000001" }).click();
       await expect(page.getByRole("heading", { name: "TKT-E2E-000001" })).toBeVisible();
@@ -204,6 +207,7 @@ for (const [viewportName, size] of Object.entries(VIEWPORTS)) {
     test("Administrator User Management: table on desktop/tablet, cards on mobile (RSP-02)", async ({ page }) => {
       runAdminIsolation("restore"); // no-op unless an earlier run crashed
       await login(page, ADMIN);
+      await openPage(page, "User Management");
       await expect(page.getByRole("heading", { name: "User Management" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Edit" }).first()).toBeVisible();
 

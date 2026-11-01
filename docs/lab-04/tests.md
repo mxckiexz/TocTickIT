@@ -174,13 +174,13 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-09 | BR-14 | confirm step for Resolved, Closed, Reopened, Cancelled; cancel sends nothing | `TicketWorkflow.test.tsx` | Pass |
 | UI-10 | AC-21, AC-32 | `409` shows the banner; success refreshes version, buttons, gate | `TicketWorkflow.test.tsx` | Pass |
 | UI-11 | AC-19 | "appears resolved" button; status badge unchanged | `ticket-detail.test.tsx` (Lab 2 file, Problem Appears Resolved block) | Pass |
-| UI-12 | AC-29, FR-17 | metric cards: numbers, drill-down links with accessible names and params | `StaffDashboard.test.tsx` | Planned |
-| UI-13 | AC-35 | staff dashboard zero, loading, error with Retry, forbidden | `StaffDashboard.test.tsx` | Planned |
-| UI-14 | AC-26 | Administrator sees user counts, IT Staff does not | `StaffDashboard.test.tsx` | Planned |
-| UI-15 | AC-24, AC-35 | Requester dashboard numbers, lists, empty state with New Ticket | `RequesterDashboard.test.tsx` | Planned |
-| UI-16 | AC-31 | navigation per role (Administrator: Dashboard, Ticket Queue, User Management), `aria-current` on the active item | `AppShell.test.tsx` (Lab 3 file, extended) | Planned |
-| UI-17 | AC-45, AC-47 | staff dashboard "Open actions assigned to me" card and "My recent actions" list: numbers, rows, link names and targets (`actionAssigneeId=me`, ticket detail at Actions Taken) | `StaffDashboard.test.tsx` | Planned |
-| UI-18 | AC-46 | my-actions zero state: `0` with "Nothing here", "You have not recorded any actions yet."; loading and error states cover the new card | `StaffDashboard.test.tsx` | Planned |
+| UI-12 | AC-29, FR-17 | metric cards: numbers, drill-down links with accessible names and params | `StaffDashboard.test.tsx`, `DrillDownLists.test.tsx`, `api-dashboard.test.ts` | Pass |
+| UI-13 | AC-35 | staff dashboard zero, loading, error with Retry, forbidden | `StaffDashboard.test.tsx`, `RequesterDashboard.test.tsx` (Requester states) | Pass |
+| UI-14 | AC-26 | Administrator sees user counts, IT Staff does not | `StaffDashboard.test.tsx` | Pass |
+| UI-15 | AC-24, AC-35 | Requester dashboard numbers, lists, empty state with New Ticket | `RequesterDashboard.test.tsx`, `DrillDownLists.test.tsx` | Pass |
+| UI-16 | AC-31 | navigation per role (Administrator: Dashboard, Ticket Queue, User Management), `aria-current` on the active item | `AppShell.test.tsx` (Lab 3 file, extended), `routes.test.ts` | Pass |
+| UI-17 | AC-45, AC-47 | staff dashboard "Open actions assigned to me" card and "My recent actions" list: numbers, rows, link names and targets (`actionAssigneeId=me`, ticket detail at Actions Taken) | `StaffDashboard.test.tsx` | Pass |
+| UI-18 | AC-46 | my-actions zero state: `0` with "Nothing here", "You have not recorded any actions yet."; loading and error states cover the new card | `StaffDashboard.test.tsx` | Pass |
 | UI-19 | AC-43, FR-25 | Administrator ticket detail shows the same enabled controls as IT Staff (claim or reassign, priority, status buttons, comment and note forms, Actions Taken create and edit); Requester sees none | `TicketWorkflow.test.tsx`, `ActionsTaken.test.tsx` | Pass |
 | UI-20 | AC-40, BR-06 | create Status select offers exactly Planned (default), In progress, Completed; choosing Completed marks Result required and blocks Save with the message | `ActionsTaken.test.tsx` | Pass |
 | UI-21 | AC-41, BR-06 | edit Status select offers only the current status and the moves allowed from it; no Delete button anywhere | `ActionsTaken.test.tsx` | Pass |
@@ -232,7 +232,7 @@ and F7 for the UI). The reason for each is written here:
 | every Lab 3 API test that calls claim, assign, priority, status or mark-resolved (`staff-ticket-detail.api.test.ts`, `requester-ticket-detail.api.test.ts`, `authorization.api.test.ts` role sweep, seed helpers) | `version` is now required (BR-17, D-4), so a call without it is `400` | send the ticket's current `version` through the shared helper; the role and validation assertions stay |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx`, `RequesterTicketDetail.test.tsx` request bodies | the client must send `version` on those writes | assert the body carries the loaded `version` |
 | `e2e/lab-03/staff-ticket-flow.spec.ts`, `e2e/lab-03/requester-ticket-flow.spec.ts` | they go through the UI, which now sends `version` | no assertion change expected; rerun to confirm |
-| `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation. **Done in F6** for Ticket Queue (the Administrator could not otherwise reach Actions Taken): the test now expects a "Main" navigation with Ticket Queue and User Management, `aria-current` on the current one, and that Ticket Queue opens the queue; the landing page stays User Management until the Dashboard exists (F8) |
+| `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation. **Done in F6** for Ticket Queue, and in F8 for the Dashboard (see the F8 table below). F6 text: (the Administrator could not otherwise reach Actions Taken): the test now expects a "Main" navigation with Ticket Queue and User Management, `aria-current` on the current one, and that Ticket Queue opens the queue; the landing page stays User Management until the Dashboard exists (F8) |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx` UI-08, UI-14 | status `<select>` becomes buttons | assertions move to the buttons. **Done in F7** (see the F7 table below) |
 | `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons. **Done in F7** |
 | `e2e/lab-03/user-administration.spec.ts`, `e2e/lab-03/accessibility.spec.ts` | assume the Administrator shell has one navigation item | adjust to the new navigation, keep every user-management assertion |
@@ -258,6 +258,18 @@ and F7 for the UI). The reason for each is written here:
 | `client/tests/lab-03/styleConformance.test.tsx` STY-02 Staff Ticket Detail | the staff ticket fixture carries `allowedTransitions` and `resolutionGate` | the screen now reads them; the real API always sends them |
 | `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 and E2E-05 (staff view) | status is changed with the buttons; the COMPLETED action is recorded through the Actions Taken form (it was an API call in F4) and the test checks Resolved is disabled with "Needs a completed action" before it and enabled after it; E2E-05 checks the status badge and the button group instead of the select value | the select is gone; the gate is now visible in the UI |
 | `client/tests/lab-02/ticket-detail.test.tsx` | two tests added to "Problem Appears Resolved" (UI-11, stale banner with Reload); nothing existing changed | Requester side of F7 |
+
+**What F8 actually changed in Lab 3 tests** (all in the F8 PR). The cause is one: every role now lands on its Dashboard
+instead of the Ticket Queue (IT Staff), User Management (Administrator) or an empty shell (Requester), so a test that logs in
+and expects a page must open it from the navigation, as a person would. No rule asserted by these tests changed.
+
+| File | Change | Reason |
+|---|---|---|
+| `client/tests/lab-03/AppShell.test.tsx` | the "role-scoped navigation" block is replaced: each role's items in order, landing on the Dashboard, `aria-current`, moving between pages, an address the role cannot use opens the Dashboard (UI-16); new block for dashboard links opening the list they count, a deep link opening a ticket at Actions Taken, a click on the current item returning from an open ticket to its list, and Log out forgetting the address. "Change password" Cancel and success, and the shell-width test, now expect the Dashboard | landing page and navigation (FR-19) |
+| `client/tests/lab-03/UserManagement.test.tsx`, `StaffTicketQueue.test.tsx` | the helpers that open the page now click its navigation item after the Dashboard has loaded (`tests/helpers/dashboards.ts`); the queue's "renders without any nav click" test is renamed "opens from the Ticket Queue item" | the pages are no longer the landing page |
+| `client/tests/lab-01/App.test.tsx` | mocks the two dashboard calls | the signed-in Requester lands on a dashboard that loads its own numbers; without the mock its error alert made `findByRole("alert")` ambiguous |
+| `client/tests/setup.ts` | clears the URL hash after every test | pages are addressed by the hash (`src/routes.ts`); jsdom keeps it between tests of a file |
+| `e2e/lab-03/staff-ticket-flow.spec.ts`, `staff-attachments-password.spec.ts`, `user-administration.spec.ts`, `responsive-screenshots.spec.ts` | `openPage(page, "Ticket Queue" or "User Management")` after login (helper in `e2e/helpers/accounts.ts`); assertions unchanged | the landing page |
 
 Everything else in Lab 1 to 3 stays unmodified, and the full suites run on `lab4-staging` and
 again on `main` (REG-01).
@@ -494,3 +506,29 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
   focus and is scrolled into view (instant, because the page uses smooth scrolling that cancelled a smooth scroll).
 - Not changed: the server (F4 already returns `allowedTransitions`, `resolutionGate` and the 409 codes). Not done here, by
   design: Playwright screenshots of the status buttons and conflict banner (F10).
+
+**F8 (Role dashboards UI), branch `feature/dashboards-ui`**, 2026-11-01:
+
+- New tests, `client/tests/lab-04/`: `routes.test.ts` 21 (the URL hash: parse, build, round trip, what each role may open, values it
+  drops), `api-dashboard.test.ts` 6 (query strings of the drill-down links and the two dashboard calls), `StaffDashboard.test.tsx` 18
+  (UI-12, UI-13, UI-14, UI-17, UI-18), `RequesterDashboard.test.tsx` 11 (UI-15 and its states), `DrillDownLists.test.tsx` 19 (the Ticket Queue
+  and My Tickets opened from a link: filters applied, the notice naming the filters that have no control, Clear, link filters ANDed
+  with the user's own, opening one ticket, scrolling to Actions Taken). UI-16 is in `AppShell.test.tsx`.
+- What the tests pin down: every drill-down is an `<a href>` with an accessible name that carries the number ("View 6 unassigned
+  tickets") and its href leads to the exact filter the API spec lists (`ownerId=unassigned&open=1`, `ownerId=me&open=1`,
+  `actionAssigneeId=me`, `currentStatus=S`, `itPriority=P&open=1`, `recent=1&sortBy=updatedAt`, and the Requester's four); a zero is
+  shown as `0` with "Nothing here" and keeps its link; the Administrator-only user line comes from the response (the server sends
+  `userCounts` to that role only); loading shows no numbers, error has Retry, 403 shows the forbidden panel; one `h2`, then `h3`.
+- Client suite: 20 files, 291 tests pass (was 15 files, 213). Full Playwright suite: 38 pass.
+- Mutation checks (each made tests fail, then reverted): the unassigned link without `open=1`; the role gate on addresses removed; the
+  queue not sending `open`; My Tickets not sending `recent`; Retry not returning to "Loading dashboard…" (this one survived the first
+  round of tests, so a test was added).
+- Checked in a real browser with the e2e accounts. Administrator: the Dashboard is the landing page; "View 9 unassigned tickets" opens
+  the queue with Owner = Unassigned, the notice "Open tickets only", and exactly 9 rows (the card said 9); the browser Back button
+  returns to the Dashboard; a Recently updated row opens the ticket; at 375 px the navigation wraps, cards stack and the page does not
+  scroll sideways. Requester: Dashboard with Open tickets 2 and the lists; "View 2 open tickets" opens My Tickets with 2 tickets and the notice;
+  a recent ticket opens straight to its detail.
+- Not done here, by design: Playwright coverage of the dashboards and the E2E-03 numbers-match-the-database check (F9);
+  screenshots in `artifacts/lab-04/screenshots/` and the contrast measurement (F10).
+- Known limit, for the reviewer: the API has no total ticket count for a Requester, so "You have no tickets yet." is shown when
+  nothing is open, nothing waits and both lists are empty; a Requester whose only tickets are older than seven days and closed sees it too.

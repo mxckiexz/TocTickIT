@@ -162,7 +162,7 @@ export interface Comment {
   createdAt: string;
 }
 
-export type TicketSortField = "createdAt" | "summary" | "requestedPriority";
+export type TicketSortField = "createdAt" | "updatedAt" | "summary" | "requestedPriority";
 export type SortDir = "asc" | "desc";
 
 export interface Pagination {
@@ -183,6 +183,9 @@ export interface FetchTicketsParams {
   relatedSystemId?: number;
   requestedPriority?: Priority;
   currentStatus?: TicketStatus;
+  // Lab 4 (api-spec.md "Dashboards"): the Requester dashboard's drill-downs.
+  open?: boolean;
+  recent?: boolean;
   sortBy?: TicketSortField;
   sortDir?: SortDir;
   page?: number;
@@ -253,6 +256,8 @@ export async function fetchTickets(params: FetchTicketsParams): Promise<TicketLi
   if (params.relatedSystemId) query.set("relatedSystemId", String(params.relatedSystemId));
   if (params.requestedPriority) query.set("requestedPriority", params.requestedPriority);
   if (params.currentStatus) query.set("currentStatus", params.currentStatus);
+  if (params.open) query.set("open", "1");
+  if (params.recent) query.set("recent", "1");
   if (params.sortBy) query.set("sortBy", params.sortBy);
   if (params.sortDir) query.set("sortDir", params.sortDir);
   if (params.page) query.set("page", String(params.page));
@@ -365,8 +370,12 @@ export interface FetchStaffTicketsParams {
   currentStatus?: TicketStatus;
   // 0 means "unassigned only" — a meaningful, distinct value from "no
   // filter", so every call site here must check `!== undefined`, never
-  // truthiness (0 is falsy but not absent).
-  ownerId?: number;
+  // truthiness (0 is falsy but not absent). Lab 4: "me" and "unassigned" are the readable forms the dashboards use.
+  ownerId?: number | "me" | "unassigned";
+  // Lab 4 (api-spec.md "GET /api/staff/tickets (extended filter)"): the dashboard drill-downs.
+  open?: boolean;
+  recent?: boolean;
+  actionAssigneeId?: "me";
   sortBy?: StaffTicketSortField;
   sortDir?: SortDir;
   page?: number;
@@ -381,6 +390,9 @@ export async function fetchStaffTickets(params: FetchStaffTicketsParams): Promis
   if (params.itPriority) query.set("itPriority", params.itPriority);
   if (params.currentStatus) query.set("currentStatus", params.currentStatus);
   if (params.ownerId !== undefined) query.set("ownerId", String(params.ownerId));
+  if (params.open) query.set("open", "1");
+  if (params.recent) query.set("recent", "1");
+  if (params.actionAssigneeId) query.set("actionAssigneeId", params.actionAssigneeId);
   if (params.sortBy) query.set("sortBy", params.sortBy);
   if (params.sortDir) query.set("sortDir", params.sortDir);
   if (params.page) query.set("page", String(params.page));
@@ -626,4 +638,59 @@ export async function fetchActionRevisions(ticketId: number, actionId: number): 
   const response = await apiFetch(`/api/tickets/${ticketId}/actions/${actionId}/revisions`);
   const body = await parseJsonOrThrow<{ revisions: ActionRevision[] }>(response, "Unable to load the history.");
   return body.revisions;
+}
+
+// ---------------------------------------------------------------------------
+// Lab 4 F8 — role dashboards (docs/lab-04/api-spec.md "Dashboards")
+// ---------------------------------------------------------------------------
+export interface TicketBrief {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  currentStatus: TicketStatus;
+  itPriority: Priority;
+  updatedAt: string;
+}
+
+export interface ActionBrief {
+  id: number;
+  ticketId: number;
+  ticketNumber: string;
+  status: ActionStatus;
+  actionAt: string;
+  // Already cut to 120 characters by the server.
+  description: string;
+}
+
+export interface RequesterDashboardData {
+  generatedAt: string;
+  timezone: string;
+  openTickets: number;
+  waitingForRequester: number;
+  recentlyUpdated: TicketBrief[];
+  recentlyResolved: TicketBrief[];
+}
+
+export interface StaffDashboardData {
+  generatedAt: string;
+  timezone: string;
+  unassigned: number;
+  assignedToMe: number;
+  ticketsWithMyOpenActions: number;
+  myRecentActions: ActionBrief[];
+  byStatus: Record<TicketStatus, number>;
+  byItPriority: Record<Priority, number>;
+  recentlyUpdated: TicketBrief[];
+  // Present for the Administrator only.
+  userCounts?: { total: number; active: number; byRole: Record<"REQUESTER" | "IT_STAFF" | "ADMINISTRATOR", number> };
+}
+
+export async function fetchRequesterDashboard(): Promise<RequesterDashboardData> {
+  const response = await apiFetch("/api/dashboard/requester");
+  return parseJsonOrThrow<RequesterDashboardData>(response, "Failed to load the dashboard");
+}
+
+export async function fetchStaffDashboard(): Promise<StaffDashboardData> {
+  const response = await apiFetch("/api/dashboard/staff");
+  return parseJsonOrThrow<StaffDashboardData>(response, "Failed to load the dashboard");
 }

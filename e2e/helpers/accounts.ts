@@ -31,6 +31,11 @@ export async function login(page: Page, account: { email: string; password: stri
   await page.getByRole("button", { name: /^Log in$/i }).click();
 }
 
+// Lab 4 F8: every role lands on its Dashboard; the other pages open from the navigation row, as a person would.
+export async function openPage(page: Page, name: "Dashboard" | "New Ticket" | "My Tickets" | "Ticket Queue" | "User Management") {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name }).click();
+}
+
 export async function logout(page: Page) {
   await page.getByRole("button", { name: "Log out" }).click();
   await page.getByRole("button", { name: /^Log in$/i }).waitFor();

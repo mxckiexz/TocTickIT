@@ -4,6 +4,7 @@ import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+import { mockDashboards, openFromNavigation } from "../helpers/dashboards.js";
 
 // Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
 // about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
@@ -54,7 +55,10 @@ function mockLookups() {
 // destination — a Requester or Administrator session never renders it.
 async function openQueue() {
   mockLoggedInUser({ id: 5, name: "Priya Nair", role: "IT_STAFF" });
+  mockDashboards();
   render(<App />);
+  // Lab 4 F8: IT Staff land on the Dashboard and open the Ticket Queue from the navigation.
+  await openFromNavigation("Ticket Queue");
   await screen.findByRole("heading", { name: "Ticket Queue" });
 }
 
@@ -63,7 +67,7 @@ describe("StaffTicketQueue", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders for an IT Staff session without any nav click needed", async () => {
+  it("opens from the Ticket Queue item of the IT Staff navigation", async () => {
     mockLookups();
     vi.spyOn(api, "fetchStaffTickets").mockResolvedValue({
       tickets: [],

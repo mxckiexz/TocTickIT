@@ -399,6 +399,22 @@ describe("ActionsTaken", () => {
       expect(update.mock.calls[1][3]).toBe(2);
     });
 
+    it("a conflict Reload also tells the screen around it (onChanged), since the gate may have moved", async () => {
+      mockLoad([action({ id: 4, version: 1 })]);
+      vi.spyOn(api, "updateAction").mockRejectedValue(new ApiError("Version mismatch.", 409, undefined, { code: "STALE_VERSION", currentVersion: 2 }));
+      const onChanged = vi.fn();
+      render(<ActionsTaken ticketId={7} ticketStatus="IN_PROGRESS" canWrite onChanged={onChanged} />);
+      fireEvent.click(await screen.findByRole("button", { name: /^edit/i }));
+      const form = await screen.findByRole("form", { name: "Edit action" });
+      fireEvent.change(within(form).getByLabelText(/Description/), { target: { value: "My edit" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      const banner = await screen.findByRole("alert");
+      expect(onChanged).not.toHaveBeenCalled();
+
+      fireEvent.click(within(banner).getByRole("button", { name: "Reload" }));
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    });
+
     it("an edit leaves assigneeId out of the request unless the assignee was changed, so an assignee who was deactivated since does not turn a description-only edit into a 400", async () => {
       // Person 9 is no longer active: not in the assignable list, but still the entry's assignee.
       mockLoad([action({ id: 4, version: 1, description: "Legacy action", assignee: { id: 9, name: "Retired Staff" } })]);

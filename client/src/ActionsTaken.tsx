@@ -471,6 +471,13 @@ export default function ActionsTaken({ ticketId, ticketStatus, canWrite, onChang
     void load();
   }, [load]);
 
+  // A conflict Reload refetches the list and tells the screen around it, since another editor's change can have
+  // moved what depends on the list (the resolution gate).
+  const reload = async () => {
+    await load();
+    onChanged?.();
+  };
+
   async function ensurePeople() {
     if (people !== null || !canWrite) return;
     try {
@@ -559,7 +566,7 @@ export default function ActionsTaken({ ticketId, ticketStatus, canWrite, onChang
                 onChanged?.();
               }}
               onCancel={() => setCreating(false)}
-              onReload={load}
+              onReload={reload}
             />
           )}
           {actions.length === 0 && !creating && <p className="text-muted mt-2">No actions recorded yet.</p>}
@@ -614,7 +621,7 @@ export default function ActionsTaken({ ticketId, ticketStatus, canWrite, onChang
                         onChanged?.();
                       }}
                       onCancel={() => setEditingId(null)}
-                      onReload={load}
+                      onReload={reload}
                     />
                   )}
                 </li>

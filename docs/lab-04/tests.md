@@ -494,3 +494,11 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
   focus and is scrolled into view (instant, because the page uses smooth scrolling that cancelled a smooth scroll).
 - Not changed: the server (F4 already returns `allowedTransitions`, `resolutionGate` and the 409 codes). Not done here, by
   design: Playwright screenshots of the status buttons and conflict banner (F10).
+
+**F7 self-review fixes**, 2026-11-01: (1) A refresh that failed after a successful write (a claim, a status change, a saved
+action) replaced the whole Ticket Detail with the "could not load" screen and dropped what the user had typed in the comment
+box, although the write had succeeded; it now keeps the page and shows "Could not refresh this ticket. What you see may be out
+of date." with Retry. A ticket that never loaded still gets the full error screen. (2) Reload in an Actions Taken conflict now
+also refreshes the ticket around it, since another editor's change can move the resolution gate. Three new tests in
+`TicketWorkflow.test.tsx` and one in `ActionsTaken.test.tsx`; breaking either fix makes them fail. Client suite: 15 files,
+213 tests pass.

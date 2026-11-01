@@ -86,6 +86,10 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
   const [statusError, setStatusError] = useState("");
   // A 409 from any ticket write (ui-spec.md §6). Shown once, above the controls, with a Reload button.
   const [conflict, setConflict] = useState("");
+  // A refresh after a write can fail while the page is already on screen: keep the page (and what the user typed)
+  // and say so, rather than replacing it with the error screen meant for a ticket that never loaded.
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const hasLoadedRef = useRef(false);
   const gateReasonsId = useId();
   const confirmRef = useRef<HTMLDivElement>(null);
   const conflictRef = useRef<HTMLDivElement>(null);
@@ -113,11 +117,17 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
       setAttachments(result.attachments);
       setComments(result.comments);
       setNotes(result.notes);
+      hasLoadedRef.current = true;
+      setRefreshFailed(false);
       setLoadState("ready");
     } catch (error) {
       console.error("Failed to load staff ticket detail:", error);
       if (error instanceof ApiError && error.status === 403) {
         setLoadState("forbidden");
+        return;
+      }
+      if (hasLoadedRef.current) {
+        setRefreshFailed(true);
         return;
       }
       setErrorMessage(error instanceof ApiError ? error.message : "Unable to load this ticket.");
@@ -357,6 +367,15 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
       </button>
 
       <h2 className="h5">{ticket.ticketNumber}</h2>
+
+      {refreshFailed && (
+        <div className="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2" role="alert">
+          <span>Could not refresh this ticket. What you see may be out of date.</span>
+          <button type="button" className="btn btn-outline-success btn-sm" onClick={() => void loadDetail()}>
+            Retry
+          </button>
+        </div>
+      )}
 
       {conflict && (
         <div ref={conflictRef} tabIndex={-1} className="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2" role="alert">

@@ -381,6 +381,64 @@ describe("TicketWorkflow: status buttons", () => {
   });
 });
 
+describe("TicketWorkflow: a refresh that fails after a write", () => {
+  const REFRESH_FAILED = "Could not refresh this ticket. What you see may be out of date.";
+
+  it("keeps the page and what the user typed, shows a notice with Retry, and Retry loads the new state", async () => {
+    const fetchSpy = vi
+      .spyOn(api, "fetchStaffTicketDetail")
+      .mockResolvedValueOnce(detail(staffTicket()))
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValue(detail(staffTicket({ version: 2, currentStatus: "WAITING_FOR_REQUESTER", allowedTransitions: ["IN_PROGRESS"] })));
+    const update = vi.spyOn(api, "updateTicketStatus").mockResolvedValue(staffTicket({ version: 2 }));
+    await renderDetail();
+    fireEvent.change(screen.getByLabelText("Add a comment"), { target: { value: "Half-written reply" } });
+
+    fireEvent.click(within(statusGroup()).getByRole("button", { name: "Waiting for Requester" }));
+
+    const notice = (await screen.findByText(REFRESH_FAILED)).closest("[role='alert']") as HTMLElement;
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("heading", { name: "TKT-2026-000001" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Add a comment")).toHaveValue("Half-written reply");
+    expect(screen.queryByText("Unable to load this ticket.")).not.toBeInTheDocument();
+
+    fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.queryByText(REFRESH_FAILED)).not.toBeInTheDocument());
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(statusButtons()).toEqual(["In Progress"]);
+    expect(screen.getByLabelText("Add a comment")).toHaveValue("Half-written reply");
+  });
+
+  it("the same holds after an action was saved", async () => {
+    vi.spyOn(api, "fetchStaffTicketDetail")
+      .mockResolvedValueOnce(detail(staffTicket()))
+      .mockRejectedValue(new Error("network down"));
+    vi.spyOn(api, "createAction").mockResolvedValue({
+      id: 9, ticketId: 1, performedBy: { id: 5, name: "Priya Nair" }, assignee: null, status: "PLANNED",
+      actionAt: "2026-10-08T03:15:00.000Z", description: "Check the dock", result: "", followUpRequired: false,
+      followUpNote: "", attachmentNotes: "", createdAt: "2026-10-08T03:15:00.000Z", updatedAt: "2026-10-08T03:15:00.000Z", version: 1,
+    });
+    await renderDetail();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add action" }));
+    const form = await screen.findByRole("form", { name: "Add action" });
+    fireEvent.change(within(form).getByLabelText(/Description/), { target: { value: "Check the dock" } });
+    fireEvent.click(within(form).getByRole("button", { name: /^Save/ }));
+
+    expect(await screen.findByText(REFRESH_FAILED)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "TKT-2026-000001" })).toBeInTheDocument();
+    expect(screen.getByText("Check the dock")).toBeInTheDocument();
+  });
+
+  it("a ticket that cannot be loaded the first time still shows the full error screen", async () => {
+    vi.spyOn(api, "fetchStaffTicketDetail").mockRejectedValue(new ApiError("Ticket not found.", 404));
+    render(<StaffTicketDetail ticketId={1} onBack={() => {}} />);
+
+    expect(await screen.findByText("Ticket not found.")).toBeInTheDocument();
+    expect(screen.queryByText(REFRESH_FAILED)).not.toBeInTheDocument();
+  });
+});
+
 describe("TicketWorkflow: versions on writes (UI-24, staff side)", () => {
   it("claim, assign, priority and status each send the version that was loaded", async () => {
     mockDetail(staffTicket({ version: 7, ownerId: null, ownerName: null, ownerEmail: null }));

@@ -428,11 +428,14 @@ interface ActionsTakenProps {
   ticketId: number;
   ticketStatus: TicketStatus;
   canWrite: boolean;
+  // Called after an action was created or edited, so the screen around it can refresh what depends on the list
+  // (the resolution gate).
+  onChanged?: () => void;
 }
 
 type LoadState = "loading" | "ready" | "error" | "forbidden";
 
-export default function ActionsTaken({ ticketId, ticketStatus, canWrite }: ActionsTakenProps) {
+export default function ActionsTaken({ ticketId, ticketStatus, canWrite, onChanged }: ActionsTakenProps) {
   const headingId = useId();
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadMessage, setLoadMessage] = useState("Unable to load actions.");
@@ -553,6 +556,7 @@ export default function ActionsTaken({ ticketId, ticketStatus, canWrite }: Actio
               onSaved={(saved) => {
                 setActions((current) => [...current, saved]);
                 setCreating(false);
+                onChanged?.();
               }}
               onCancel={() => setCreating(false)}
               onReload={load}
@@ -607,6 +611,7 @@ export default function ActionsTaken({ ticketId, ticketStatus, canWrite }: Actio
                       onSaved={(saved) => {
                         setActions((current) => current.map((x) => (x.id === saved.id ? saved : x)));
                         setEditingId(null);
+                        onChanged?.();
                       }}
                       onCancel={() => setEditingId(null)}
                       onReload={load}

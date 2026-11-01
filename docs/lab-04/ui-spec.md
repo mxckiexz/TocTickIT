@@ -118,7 +118,8 @@ never changes the status badge.
 
 On `409 STALE_VERSION` a banner (role `alert`) appears above the affected form or control:
 "Someone else changed this. Reload to see the latest, then try again." with a Reload button
-that refetches the record and keeps the user's unsaved input visible below it. A
+that refetches the record and keeps the user's unsaved input visible below it. The banner takes focus and is
+scrolled into view when it appears, so a user who has scrolled down still sees it. A
 `RESOLUTION_GATE` or `ILLEGAL_TRANSITION` conflict uses the same banner with the server's
 message.
 

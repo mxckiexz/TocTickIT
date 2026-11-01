@@ -105,6 +105,7 @@ describe("Zen Green conformance", () => {
       vi.spyOn(api, "fetchStaffTicketDetail").mockResolvedValue({
         ticket: {
           ...ticket(), requesterName: "R", requesterEmail: "r@x.test", ownerName: null, ownerEmail: null,
+          allowedTransitions: ["OPEN"], resolutionGate: { ok: false, unmet: ["NO_OWNER"] },
         } as api.StaffTicket,
         attachments: [], comments: [], notes: [],
       });

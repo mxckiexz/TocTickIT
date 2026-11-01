@@ -11,6 +11,7 @@ import {
   fetchRelatedSystems,
   fetchStaffTickets,
 } from "./api.js";
+import { QueueFilters, routeHref } from "./routes.js";
 import StaffTicketDetail from "./StaffTicketDetail.js";
 import { PriorityBadge, STATUS_OPTIONS, StatusBadge } from "./ticketBadges.js";
 
@@ -40,7 +41,14 @@ function sortIndicator(active: boolean, sortDir: "asc" | "desc") {
 // filtering here is limited to "All owners" / "Unassigned only": a full
 // per-staff-member picker needs GET /api/staff/assignable-users, which is
 // Feature 5's (IT Staff Ticket Detail & Workflow) job, not this screen's.
-export default function StaffTicketQueue() {
+interface StaffTicketQueueProps {
+  // Lab 4 F8: what a dashboard link asked for (routes.ts). Absent for the plain Ticket Queue.
+  initialFilters?: QueueFilters;
+  initialTicketId?: number;
+  scrollToActions?: boolean;
+}
+
+export default function StaffTicketQueue({ initialFilters = {}, initialTicketId, scrollToActions }: StaffTicketQueueProps = {}) {
   const [lookupState, setLookupState] = useState<LookupState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
   const [relatedSystems, setRelatedSystems] = useState<RelatedSystem[]>([]);
@@ -49,10 +57,17 @@ export default function StaffTicketQueue() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [relatedSystemId, setRelatedSystemId] = useState("");
-  const [itPriority, setItPriority] = useState("");
-  const [currentStatus, setCurrentStatus] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState<"" | "unassigned">("");
-  const [sortBy, setSortBy] = useState<StaffTicketSortField>("createdAt");
+  const [itPriority, setItPriority] = useState<string>(initialFilters.itPriority ?? "");
+  const [currentStatus, setCurrentStatus] = useState<string>(initialFilters.currentStatus ?? "");
+  const [ownerFilter, setOwnerFilter] = useState<"" | "unassigned" | "me">(initialFilters.ownerId ?? "");
+  // The three drill-down filters of api-spec.md have no control of their own, so the screen says when they are on and
+  // offers Clear (they are ANDed with everything the user picks).
+  const [drill, setDrill] = useState({
+    open: Boolean(initialFilters.open),
+    recent: Boolean(initialFilters.recent),
+    actionAssigneeId: Boolean(initialFilters.actionAssigneeId),
+  });
+  const [sortBy, setSortBy] = useState<StaffTicketSortField>(initialFilters.sortBy ?? "createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -65,10 +80,10 @@ export default function StaffTicketQueue() {
     totalItems: number;
     totalPages: number;
   } | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(initialTicketId ?? null);
 
   const filtersActive = Boolean(
-    search || categoryId || relatedSystemId || itPriority || currentStatus || ownerFilter
+    search || categoryId || relatedSystemId || itPriority || currentStatus || ownerFilter || drill.open || drill.recent || drill.actionAssigneeId
   );
 
   useEffect(() => {
@@ -98,7 +113,7 @@ export default function StaffTicketQueue() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, categoryId, relatedSystemId, itPriority, currentStatus, ownerFilter, sortBy, sortDir]);
+  }, [search, categoryId, relatedSystemId, itPriority, currentStatus, ownerFilter, drill, sortBy, sortDir]);
 
   useEffect(() => {
     if (lookupState !== "ready") return;
@@ -112,7 +127,10 @@ export default function StaffTicketQueue() {
       relatedSystemId: relatedSystemId ? Number(relatedSystemId) : undefined,
       itPriority: (itPriority as Priority) || undefined,
       currentStatus: (currentStatus as TicketStatus) || undefined,
-      ownerId: ownerFilter === "unassigned" ? 0 : undefined,
+      ownerId: ownerFilter === "unassigned" ? 0 : ownerFilter === "me" ? "me" : undefined,
+      open: drill.open || undefined,
+      recent: drill.recent || undefined,
+      actionAssigneeId: drill.actionAssigneeId ? "me" : undefined,
       sortBy,
       sortDir,
       page,
@@ -133,7 +151,7 @@ export default function StaffTicketQueue() {
     return () => {
       cancelled = true;
     };
-  }, [search, categoryId, relatedSystemId, itPriority, currentStatus, ownerFilter, sortBy, sortDir, page, lookupState]);
+  }, [search, categoryId, relatedSystemId, itPriority, currentStatus, ownerFilter, drill, sortBy, sortDir, page, lookupState]);
 
   function categoryName(id: number) {
     return categories.find((category) => category.id === id)?.name ?? `#${id}`;
@@ -141,6 +159,15 @@ export default function StaffTicketQueue() {
 
   function relatedSystemName(id: number) {
     return relatedSystems.find((system) => system.id === id)?.name ?? `#${id}`;
+  }
+
+  function handleBackFromTicket() {
+    setSelectedTicketId(null);
+    // A ticket opened from a link has its own address; going back to the list must not leave that address behind
+    // (a reload would reopen the ticket). replaceState does not fire hashchange, so nothing remounts.
+    if (initialTicketId !== undefined) {
+      window.history.replaceState(null, "", routeHref({ view: "queue", filters: initialFilters }));
+    }
   }
 
   function toggleSort(field: StaffTicketSortField) {
@@ -165,7 +192,13 @@ export default function StaffTicketQueue() {
   }
 
   if (selectedTicketId !== null) {
-    return <StaffTicketDetail ticketId={selectedTicketId} onBack={() => setSelectedTicketId(null)} />;
+    return (
+      <StaffTicketDetail
+        ticketId={selectedTicketId}
+        scrollToActions={scrollToActions && selectedTicketId === initialTicketId}
+        onBack={handleBackFromTicket}
+      />
+    );
   }
 
   if (listState === "forbidden") {
@@ -256,10 +289,11 @@ export default function StaffTicketQueue() {
           className="form-select"
           aria-label="Filter by owner"
           value={ownerFilter}
-          onChange={(event) => setOwnerFilter(event.target.value as "" | "unassigned")}
+          onChange={(event) => setOwnerFilter(event.target.value as "" | "unassigned" | "me")}
         >
           <option value="">All owners</option>
           <option value="unassigned">Unassigned</option>
+          <option value="me">Assigned to me</option>
         </select>
       </div>
     </div>
@@ -268,6 +302,28 @@ export default function StaffTicketQueue() {
   return (
     <div className="mt-4">
       <h2 className="h5">Ticket Queue</h2>
+
+      {(drill.open || drill.recent || drill.actionAssigneeId) && (
+        <div className="alert alert-info d-flex flex-wrap align-items-center gap-2 py-2" role="status">
+          <span>
+            Showing:{" "}
+            {[
+              drill.open && "Open tickets only",
+              drill.recent && "Updated in the last 7 days",
+              drill.actionAssigneeId && "Tickets with my open actions",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline-success btn-sm"
+            onClick={() => setDrill({ open: false, recent: false, actionAssigneeId: false })}
+          >
+            Clear dashboard filter
+          </button>
+        </div>
+      )}
 
       {/* Mobile: Filters disclosure button, then the always-visible search
           box, then the rest of the filter controls only when open. */}

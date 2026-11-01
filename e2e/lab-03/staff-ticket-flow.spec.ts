@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { REQUESTER, REQUESTER_RESOLVE_TICKET, STAFF, STAFF_FLOW_TICKET, login } from "../helpers/accounts";
+import { openPage } from "../helpers/accounts";
 
 const API = "http://localhost:3000";
 const STAFF_TICKET_NUMBER = "TKT-E2E-000001";
@@ -23,6 +24,7 @@ test("E2E-04: IT Staff searches the queue, claims, prioritizes, transitions, com
   const internalNote = `Staff internal note ${Date.now()}`;
 
   await login(page, STAFF);
+  await openPage(page, "Ticket Queue");
   await expect(page.getByRole("heading", { name: "Ticket Queue" })).toBeVisible();
 
   // Search finds exactly the fixture ticket, unassigned and New.
@@ -129,6 +131,7 @@ test("E2E-05 (staff view): the Requester's resolved signal is shown to IT Staff,
   page,
 }) => {
   await login(page, STAFF);
+  await openPage(page, "Ticket Queue");
   await searchFor(page, REQUESTER_RESOLVE_TICKET);
   await page.getByRole("row", { name: new RegExp(RESOLVE_TICKET_NUMBER) }).getByRole("button", { name: RESOLVE_TICKET_NUMBER }).click();
   await expect(page.getByText(/Requester marked this resolved on/)).toBeVisible();

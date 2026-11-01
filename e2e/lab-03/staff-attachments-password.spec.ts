@@ -9,6 +9,7 @@ import {
   login,
   logout,
 } from "../helpers/accounts";
+import { openPage } from "../helpers/accounts";
 
 const API = "http://localhost:3000";
 const STAFF_TICKET_NUMBER = "TKT-E2E-000001";
@@ -23,6 +24,7 @@ test("E2E-07: IT Staff see the Category and Related System and open the ticket's
   context,
 }) => {
   await login(page, STAFF);
+  await openPage(page, "Ticket Queue");
   await expect(page.getByRole("heading", { name: "Ticket Queue" })).toBeVisible();
   await page.locator('[aria-label="Search tickets"]:visible').fill(STAFF_FLOW_TICKET);
   await page.getByRole("row", { name: new RegExp(STAFF_TICKET_NUMBER) }).getByRole("button", { name: STAFF_TICKET_NUMBER }).click();

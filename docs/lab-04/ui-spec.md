@@ -19,6 +19,13 @@ The Administrator opens the same Ticket Queue and Ticket Detail screens as IT St
 control enabled (claim, reassign, IT priority, status, comments, notes, Actions Taken); there is
 no separate or read-only Administrator ticket screen.
 
+Pages are addressed by the URL hash, so every card, count and row of a dashboard is a real link that works in a new tab and
+with the Back button: `#/dashboard`, `#/new-ticket`, `#/users`, `#/queue?ownerId=unassigned&open=1`, `#/queue/12?section=actions-taken`,
+`#/my-tickets?currentStatus=RESOLVED&recent=1`, `#/my-tickets/5`. A value the client does not know is dropped, and a page the role
+cannot use opens the Dashboard (the API still answers `403`). A list opened from a link shows a notice ("Showing: Open tickets
+only", "Updated in the last 7 days", "Tickets with my open actions") with "Clear dashboard filter", because those three filters have no control
+of their own. Clicking the item of the page you are already on starts it over (back from an open ticket to its list).
+
 The landing page after login is the Dashboard of the role. An item the role cannot use is not
 rendered; the API still answers `403` (Lab 3 FR-07).
 

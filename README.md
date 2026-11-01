@@ -295,7 +295,7 @@ Lab 3 เปลี่ยนจาก dev-selector ของ Lab 2 เป็น�
 |---|---|
 | **Requester** | สร้าง/ดู ticket ของตัวเอง, คอมเมนต์, กด "Problem Appears Resolved" |
 | **IT Staff** | ดู Ticket Queue, claim/assign, ตั้ง IT Priority, เปลี่ยนสถานะ, คอมเมนต์ และเขียน Internal Note |
-| **Administrator** | จัดการผู้ใช้ (สร้าง/แก้ไข/ระงับ/รีเซ็ตรหัสผ่าน), **ดู** ticket ได้อย่างเดียว (read-only) |
+| **Administrator** | จัดการผู้ใช้ (สร้าง/แก้ไข/ระงับ/รีเซ็ตรหัสผ่าน), **ดู** ticket ได้อย่างเดียว (read-only) — **เปลี่ยนใน Lab 4:** ทำกับ ticket ได้เหมือน IT Staff ดูหัวข้อ Lab 4 |
 
 ### บัญชีสำหรับทดลอง (Seed accounts)
 
@@ -342,6 +342,24 @@ npm run test:e2e              # Playwright (รันจากโฟลเดอ
 
 ---
 
+# 🧭 Lab 4 — Actions Taken, Workflow และ Dashboard
+
+Lab 4 เพิ่ม 3 อย่างโดยที่ Lab 1 ถึง 3 ยังทำงานครบ และอยู่ใต้ธีม Zen Green เดิม:
+
+| ส่วน | สิ่งที่ได้ |
+|---|---|
+| **Actions Taken** | บันทึกสิ่งที่ทำกับ ticket ได้หลายรายการ (สถานะ Planned / In progress / Completed / Cancelled, ผู้รับผิดชอบ, ผลลัพธ์, follow-up) แก้ได้แต่ลบไม่ได้ ทุกการแก้เก็บเป็น revision (append-only) Requester เห็นแบบอ่านอย่างเดียว |
+| **Ticket workflow** | ตารางสถานะ 8 สถานะและ **resolution gate** บังคับที่ backend (Resolved ต้องมี owner, มี action ที่ Completed อย่างน้อย 1 รายการ และไม่มี action ที่ยัง Planned / In progress) ปุ่มสถานะแสดงเฉพาะที่ย้ายได้ และมี optimistic locking ด้วย `version` (ส่ง version เก่า = `409`, UI ขึ้นแบนเนอร์ + ปุ่ม Reload) |
+| **Dashboard ตามบทบาท** | Requester: ticket ที่เปิดอยู่ / รอคุณ / อัปเดตล่าสุด / แก้แล้วล่าสุด · IT Staff และ Administrator: Unassigned, Assigned to me, Open actions assigned to me, ตามสถานะ, ตาม IT priority, ล่าสุด, My recent actions (Administrator เห็นจำนวนผู้ใช้เพิ่ม) ทุกตัวเลขเป็นลิงก์ไปรายการที่นับ (เวลา Asia/Bangkok, 7 วันล่าสุด) |
+
+**สิ่งที่เปลี่ยนจาก Lab 3:** ทุกบทบาทเข้าหน้า **Dashboard** ก่อน เมนูหลักมีแถวเดียวตามบทบาท (Requester: Dashboard, New Ticket, My Tickets · IT Staff: Dashboard, Ticket Queue · Administrator: Dashboard, Ticket Queue, User Management) และ **Administrator ทำกับ ticket ได้เหมือน IT Staff** (claim, assign, priority, สถานะ, คอมเมนต์, note, Actions Taken) แต่ยังเป็นคนเดียวที่จัดการผู้ใช้ได้ หน้าต่าง ๆ อยู่ใน URL hash เช่น `#/queue?ownerId=unassigned&open=1` จึงเปิดในแท็บใหม่และกดปุ่ม Back ได้
+
+### ลองใช้ (demo)
+
+ใช้บัญชี seed ของ Lab 3 ด้านบน (รหัสผ่านเริ่มต้นเปลี่ยนตอน Login ครั้งแรก) หลัง `npm run prisma:seed` จะมี Actions Taken ตัวอย่างบน `TKT-SEED-002` ถึง `011` ครบทั้ง 0 / 1 / หลายรายการ และมี action ที่ยังเปิดอยู่ที่มอบหมายให้ **Marcus Chen** กับ **Olivia Martinez** — Login ด้วย `marcus.chen@toktickit.test` แล้วการ์ด "Open actions assigned to me" จะไม่เป็นศูนย์ ส่วน `priya.nair@toktickit.test` การ์ดนี้ยังเป็นศูนย์พร้อมข้อความ "Nothing here"
+
+ลำดับที่แนะนำ: IT Staff เปิด ticket → เพิ่ม Actions Taken (ลองบันทึก Completed โดยไม่ใส่ Result เพื่อดู validation) → ลองกด Resolved ตอนยังมี action ค้าง (ปุ่มถูกปิดพร้อมเหตุผล) → ทำ action ให้เสร็จ → Resolved → Requester Login ดู ticket เดียวกัน (อ่านอย่างเดียว) และกด "Problem Appears Resolved" (สถานะไม่เปลี่ยน)
+
 # 🧰 Lab 4 — Actions Taken: Migration, Rollback และ Seed
 
 Migration `20261012090000_lab4_actions_taken` เป็นแบบ **เพิ่มอย่างเดียว** (additive): เพิ่ม enum `ActionStatus`, ตาราง `ActionTaken` และ `ActionTakenRevision`, และคอลัมน์ `Ticket.version` (default 1) ไม่แก้และไม่ลบอะไรของ Lab 1 ถึง 3
@@ -384,6 +402,36 @@ cd server && npx vitest run tests/lab-04/migration.api.test.ts tests/lab-04/seed
 
 ---
 
+### รันเทสต์ทั้งหมด (Lab 1 ถึง 4)
+
+รันทีละชุด **ห้ามรันพร้อมกัน** เพราะทุกชุดใช้ฐานข้อมูล PostgreSQL ตัวเดียวกัน (Playwright ก็ใช้ฐานข้อมูลเดียวกันและรีเซ็ต fixture ให้เองก่อนรัน):
+
+```bash
+cd server && npm test           # Vitest + Supertest: API, authorization, migration, seed, concurrency (24 ไฟล์, 536 เทสต์)
+cd client && npm test           # Vitest + React Testing Library (20 ไฟล์, 291 เทสต์)
+npm run test:e2e                # Playwright จาก root, เปิด server + client ให้เอง (102 เทสต์)
+npx playwright test e2e/lab-04  # เฉพาะ Lab 4: Actions Taken, resolution, dashboards, a11y, responsive (64 เทสต์)
+```
+
+หมายเหตุ:
+
+* Playwright เรียก `server/scripts/e2e-fixture.ts` ให้เองก่อนรัน: สร้างบัญชีทดสอบ `e2e-*@toktickit.test` (รหัสผ่านทดสอบอยู่ในสคริปต์นั้น ใช้ local เท่านั้น) และลบ ticket ที่ขึ้นต้นด้วย `[e2e]` ของรอบก่อน จึงรันซ้ำได้
+* ตัวเลขใน dashboard ถูกเทียบกับฐานข้อมูลด้วย `npm run e2e:truth -- <อีเมล>` (ใน `server/`) ซึ่งคำนวณจาก SQL เอง ไม่ใช้โค้ด dashboard
+* Playwright เขียนภาพ screenshot ใหม่ทุกครั้งที่รัน (`artifacts/lab-02`, `lab-03`, `lab-04`) ภาพมีเวลาอยู่ในหน้าจอ จึงเปลี่ยนทุกรอบ ถ้าไม่ได้ตั้งใจอัปเดตหลักฐาน ให้ `git checkout -- artifacts` ก่อน commit
+* ยังไม่มี CI: ผลทดสอบทุกตัวมาจากการรันบนฐานข้อมูล local
+
+### เอกสารและหลักฐานของ Lab 4
+
+| อะไร | อยู่ที่ไหน |
+|---|---|
+| Specification, API, UI, Test plan (ตารางตาม AC / BR / FR) | `docs/lab-04/specification.md`, `api-spec.md`, `ui-spec.md`, `tests.md` |
+| บันทึกรีวิว PR ทุกตัว (ข้อความจริงจาก GitHub) | `docs/lab-04/reviewer.md` |
+| การใช้ AI (prompts + My Reflection) | `docs/lab-04/ai-use.md` |
+| Screenshot 3 ขนาด (1280 / 768 / 375): staff-dashboard, requester-dashboard, actions-taken | `artifacts/lab-04/screenshots/` |
+| Output ของเทสต์ | `docs/lab-04/test-output/` |
+
+---
+
 # 🌿 Git & Branching
 
 โปรเจกต์ใช้ Branch แยกตาม Issue / Feature
@@ -422,6 +470,12 @@ git checkout -b feature/2-health-check
 
 ---
 
+### Lab 4
+
+Lab 4 ใช้ `feature/*` → PR → **`lab4-staging`** → (เมื่อเทสต์ผ่านทั้งหมด) PR `release/lab4` → **`main`** ไม่ push ตรงเข้า `main` ทุก PR ใส่ `Closes #<issue>` และผ่านการรีวิว (บันทึกใน `docs/lab-04/reviewer.md`)
+
+---
+
 # ✅ Current Project Status
 
 ตอนนี้ Project Foundation พร้อมใช้งานแล้ว:
@@ -437,6 +491,7 @@ git checkout -b feature/2-health-check
 * `.gitignore`
 * Frontend และ Backend แยกโฟลเดอร์เรียบร้อย
 * Lab 3: Login จริง, 3 บทบาท (Requester / IT Staff / Administrator), Ticket Queue และ Workflow ของ IT Staff, User Management ของ Administrator — ดูหัวข้อ "Lab 3" ด้านบน
+* Lab 4: Actions Taken, status matrix + resolution gate, optimistic locking, Dashboard ตามบทบาท, a11y และ responsive 375 / 768 / 1280 — ดูหัวข้อ "Lab 4" ด้านบน
 
 ---
 

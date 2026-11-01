@@ -186,16 +186,16 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | UI-21 | AC-41, BR-06 | edit Status select offers only the current status and the moves allowed from it; no Delete button anywhere | `ActionsTaken.test.tsx` | Pass |
 | UI-22 | AC-42, D-5 | Requester view shows every field of an entry (performer, assignee, result, follow-up note, attachment notes) read-only | `ActionsTaken.test.tsx` | Pass |
 
-## 6. Accessibility, responsive, style (Playwright, `e2e/lab-04/`)
+## 6. Accessibility, responsive, style (Playwright, `e2e/lab-04/accessibility.spec.ts` and `responsive-screenshots.spec.ts`)
 
 | ID | AC | What | Expected | Final |
 |---|---|---|---|---|
-| A11Y-01 | AC-36 | keyboard only: add an action, change a status | completes without a mouse | Planned |
-| A11Y-02 | AC-36 | focus ring on every new control | visible ring (outline or shadow) | Planned |
-| A11Y-03 | AC-36, FR-22 | contrast of badges, buttons, banners on new screens, measured in the browser | at least 4.5:1 | Planned |
-| A11Y-04 | AC-36 | status, priority and follow-up have text, not colour only | text present in the DOM | Planned |
-| RSP-01 | AC-37 | dashboards at 375, 768, 1280 | no horizontal overflow, no overlap, select labels not truncated | Planned |
-| RSP-02 | AC-37 | Ticket Detail with Actions Taken and status buttons at the three widths | same | Planned |
+| A11Y-01 | AC-36 | keyboard only: add an action, change a status | completes without a mouse | Pass |
+| A11Y-02 | AC-36 | focus ring on every new control | visible ring (outline or shadow) | Pass |
+| A11Y-03 | AC-36, FR-22 | contrast of badges, buttons, banners on new screens, measured in the browser | at least 4.5:1 | Pass |
+| A11Y-04 | AC-36 | status, priority and follow-up have text, not colour only | text present in the DOM | Pass |
+| RSP-01 | AC-37 | dashboards at 375, 768, 1280 | no horizontal overflow, no overlap, select labels not truncated | Pass |
+| RSP-02 | AC-37 | Ticket Detail with Actions Taken and status buttons at the three widths | same | Pass |
 
 ## 7. End-to-end (`e2e/lab-04/`)
 
@@ -570,3 +570,35 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
   new), also 23 pass on two further consecutive runs of `e2e/lab-04` (the fixture leaves the database ready for the next run). Type checks of server
   and client are clean. REG-02: no Lab 3 test is left in the state "expected to change" in section 9.
 - Not in this PR: the run on `main` (F11); accessibility, responsive and screenshot checks A11Y-01 to 04, RSP-01, RSP-02 (F10).
+
+**F10 (Hardening and polish), branch `feature/lab4-hardening`**, 2026-11-02:
+
+- New Playwright specs, 41 tests: `e2e/lab-04/accessibility.spec.ts` 14 (A11Y-01 to A11Y-04 and two style checks) and
+  `e2e/lab-04/responsive-screenshots.spec.ts` 27 (RSP-01, RSP-02 at 1280, 800 and 375, nine tests per width). Helpers in
+  `e2e/helpers/layout.ts`. Full Playwright suite: 102 pass (38 Lab 2 and 3, 23 F9, 41 new). Client suite 291 and server suite 536 unchanged
+  and pass.
+- A11Y-01: the keyboard alone (Tab, typing, Enter) adds a Completed action, finishes two open ones by editing them, and resolves the
+  ticket through the confirm step, which takes focus. A11Y-02: Tab through every control on the staff dashboard, the Requester dashboard
+  and the staff Ticket Detail with the Add action form open; each shows a ring (outline or shadow) once the 150ms fade has settled, and none is
+  Bootstrap's blue. A11Y-03: the contrast of every piece of text, measured in the browser against the background really drawn (translucent fills
+  composited), at least 4.5:1, or 3:1 for large text, on both dashboards, the staff Ticket Detail with its form, validation message, status
+  buttons and gate message, the conflict banner, and the Requester's read-only view. The only text allowed below the limit is the disabled
+  Resolved button (WCAG 1.4.3 exempts disabled controls). A11Y-04: every badge has text; each action's status, the follow-up and the priority
+  are words; the by-status counts carry the status name.
+- RSP-01, RSP-02 at each width: no horizontal overflow; no control overlaps another or leaves the screen; no dropdown label truncated; the
+  headline cards go 3, 2, 1 across (ui-spec.md section 7 said 4, 2, 1: five cards do not make four columns, so the spec was corrected to what
+  is built); status buttons wrap and each is fully inside the screen; the Add action form uses the width it has and stacks on a phone; the
+  Administrator's Ticket Detail has the same enabled controls as IT Staff; the Requester's has no button in Actions Taken; the conflict banner and
+  the status buttons it is about are on one screen.
+- Defects found and fixed (the specs were written first and failed): (1) the Follow-up required checkbox drew Bootstrap's blue focus ring and a
+  blue tick (the theme only overrode text fields, selects and buttons); (2) "Back to Ticket Queue" and "Reassign", Lab 3's text buttons, were
+  Bootstrap blue links among green ones, found by opening the screenshots and then pinned by a colour scan of every colour the screens draw.
+  Both are fixed in `client/src/theme.css`. Two false alarms came from the tests, not the app, and were fixed in the tests: contrast read halfway
+  through a 150ms button fade, and the keyboard stop on a date field's calendar button.
+- Mutation checks, each made a spec fail and was reverted: muted text made too light (A11Y-03), a card forced wider than a phone (RSP-01), the focus
+  ring removed from buttons (A11Y-02); the two defects above failed their tests before they were fixed.
+- Screenshots in `artifacts/lab-04/screenshots/`: `staff-dashboard/`, `requester-dashboard/` and `actions-taken/`, each with `desktop.png`,
+  `tablet.png` and `mobile.png`, plus `administrator-zero-*` (the zero state), `add-form-*`, `gate-message-*`, `conflict-banner-*`,
+  `administrator-*` and `requester-readonly-*`. The visual checklist of ui-spec.md section 9 was filled in by opening these images.
+- No console error or uncaught exception in any watched session; a search of `client/src` finds no TODO, FIXME, lorem, "coming soon" or
+  `console.log`; the four `placeholder` attributes are real input hints.

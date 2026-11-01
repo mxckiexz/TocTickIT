@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
@@ -127,15 +127,47 @@ describe("App Shell", () => {
       expect(screen.queryByRole("heading", { name: "User Management" })).not.toBeInTheDocument();
     });
 
-    it("Administrator: User Management — never Requester navigation or the queue", async () => {
+    // Lab 4 (docs/lab-04/ui-spec.md §1, specification D-2, D-6): the Administrator works on tickets like IT
+    // Staff, so the navigation gains Ticket Queue next to User Management (Dashboard arrives with F8). Until then
+    // the landing page stays User Management.
+    it("Administrator: Ticket Queue and User Management, never Requester navigation", async () => {
       mockScreens();
       mockLoggedInUser({ name: "Grace Thompson", role: "ADMINISTRATOR" });
       render(<App />);
 
       expect(await screen.findByRole("heading", { name: "User Management" })).toBeInTheDocument();
+      const nav = screen.getByRole("navigation", { name: "Main" });
+      expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Ticket Queue", "User Management"]);
+      expect(within(nav).getByRole("button", { name: "User Management" })).toHaveAttribute("aria-current", "page");
+      expect(within(nav).getByRole("button", { name: "Ticket Queue" })).not.toHaveAttribute("aria-current");
       expect(screen.queryByRole("button", { name: "New Ticket" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "My Tickets" })).not.toBeInTheDocument();
+    });
+
+    it("Administrator: opens the Ticket Queue and returns to User Management, marking the current page", async () => {
+      mockScreens();
+      mockLoggedInUser({ name: "Grace Thompson", role: "ADMINISTRATOR" });
+      render(<App />);
+
+      await screen.findByRole("heading", { name: "User Management" });
+      const nav = screen.getByRole("navigation", { name: "Main" });
+      fireEvent.click(within(nav).getByRole("button", { name: "Ticket Queue" }));
+      expect(await screen.findByRole("heading", { name: "Ticket Queue" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "User Management" })).not.toBeInTheDocument();
+      expect(within(nav).getByRole("button", { name: "Ticket Queue" })).toHaveAttribute("aria-current", "page");
+      expect(within(nav).getByRole("button", { name: "User Management" })).not.toHaveAttribute("aria-current");
+
+      fireEvent.click(within(nav).getByRole("button", { name: "User Management" }));
+      expect(await screen.findByRole("heading", { name: "User Management" })).toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Ticket Queue" })).not.toBeInTheDocument();
+    });
+
+    it("IT Staff and Requester get no User Management item", async () => {
+      mockScreens();
+      mockLoggedInUser({ name: "Priya Nair", role: "IT_STAFF" });
+      render(<App />);
+      await screen.findByRole("heading", { name: "Ticket Queue" });
+      expect(screen.queryByRole("button", { name: "User Management" })).not.toBeInTheDocument();
     });
   });
 

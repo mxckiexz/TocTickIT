@@ -232,7 +232,7 @@ and F7 for the UI). The reason for each is written here:
 | every Lab 3 API test that calls claim, assign, priority, status or mark-resolved (`staff-ticket-detail.api.test.ts`, `requester-ticket-detail.api.test.ts`, `authorization.api.test.ts` role sweep, seed helpers) | `version` is now required (BR-17, D-4), so a call without it is `400` | send the ticket's current `version` through the shared helper; the role and validation assertions stay |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx`, `RequesterTicketDetail.test.tsx` request bodies | the client must send `version` on those writes | assert the body carries the loaded `version` |
 | `e2e/lab-03/staff-ticket-flow.spec.ts`, `e2e/lab-03/requester-ticket-flow.spec.ts` | they go through the UI, which now sends `version` | no assertion change expected; rerun to confirm |
-| `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation |
+| `client/tests/lab-03/AppShell.test.tsx` "Administrator: User Management, never the queue" | Administrator navigation gains Dashboard and Ticket Queue (D-6) | assert the new navigation. **Done in F6** for Ticket Queue (the Administrator could not otherwise reach Actions Taken): the test now expects a "Main" navigation with Ticket Queue and User Management, `aria-current` on the current one, and that Ticket Queue opens the queue; the landing page stays User Management until the Dashboard exists (F8) |
 | `client/tests/lab-03/StaffTicketDetail.test.tsx` UI-08, UI-14 | status `<select>` becomes buttons | assertions move to the buttons |
 | `e2e/lab-03/staff-ticket-flow.spec.ts` E2E-04 | resolves a claimed ticket with no actions; uses the status `<select>` | add a completed action; use the status buttons |
 | `e2e/lab-03/user-administration.spec.ts`, `e2e/lab-03/accessibility.spec.ts` | assume the Administrator shell has one navigation item | adjust to the new navigation, keep every user-management assertion |
@@ -448,4 +448,13 @@ composes with `open=1` and `ownerId=me` on both lists (an 8-day-old open ticket 
 - Not done here, by design: the Playwright screenshots for `artifacts/lab-04/screenshots/actions-taken/` and the visual
   checklist belong to F10 (ui-spec.md section 9); the dashboard "My recent actions" links that open this section (the
   section has the anchor `#actions-taken`) belong to F8.
+
+**F6 review fixes**, 2026-11-01: (1) `App.tsx` rendered only User Management for the Administrator, so they had no way to
+reach the Ticket Queue or Ticket Detail; it now has a "Main" navigation with Ticket Queue and User Management (current page
+marked with `aria-current`), AppShell tests cover it, and I checked it in a browser with the e2e Administrator account (queue,
+ticket, an action saved as "Performed by E2E Fixture Admin" with Edit and History). (2) An edit sent `assigneeId` every
+time, so a legacy action whose assignee was deactivated since could not be saved by the form (the server re-checks an
+assignee only when one is sent); an edit now sends it only when the selection changed (create always sends it, null for
+nobody). Four new tests: legacy inactive assignee description-only edit, changed and cleared assignee, people list failed,
+create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
 

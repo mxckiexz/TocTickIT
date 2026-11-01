@@ -120,6 +120,7 @@ function ActionForm({ mode, ticketId, ticketStatus, action, people, peopleFailed
   const inFlight = useRef(false);
 
   const originalActionAt = useRef(action?.actionAt);
+  const initialAssigneeId = action?.assignee ? String(action.assignee.id) : "";
   const originalLocal = action ? toLocalInput(new Date(action.actionAt)) : "";
   // The entry changed under the editor and is now final: nothing more can be saved.
   const becameFinal = mode === "edit" && !!action && isFinal(action.status);
@@ -156,7 +157,6 @@ function ActionForm({ mode, ticketId, ticketStatus, action, people, peopleFailed
       description: values.description.trim(),
       status: values.status,
       result: values.result.trim(),
-      assigneeId: values.assigneeId ? Number(values.assigneeId) : null,
       followUpRequired: values.followUpRequired,
       followUpNote: values.followUpRequired ? values.followUpNote.trim() : "",
       attachmentNotes: values.attachmentNotes.trim(),
@@ -165,6 +165,11 @@ function ActionForm({ mode, ticketId, ticketStatus, action, people, peopleFailed
           ? originalActionAt.current
           : new Date(values.actionAt).toISOString(),
     };
+    // The server re-checks an assignee only when one is sent (BR-07). On an edit, send it only when the user
+    // changed it: an assignee who was deactivated since must not turn an unrelated edit into a 400.
+    if (mode === "create" || values.assigneeId !== initialAssigneeId) {
+      input.assigneeId = values.assigneeId ? Number(values.assigneeId) : null;
+    }
 
     inFlight.current = true;
     setSaving(true);

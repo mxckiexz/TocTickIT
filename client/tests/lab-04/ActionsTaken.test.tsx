@@ -399,6 +399,74 @@ describe("ActionsTaken", () => {
       expect(update.mock.calls[1][3]).toBe(2);
     });
 
+    it("an edit leaves assigneeId out of the request unless the assignee was changed, so an assignee who was deactivated since does not turn a description-only edit into a 400", async () => {
+      // Person 9 is no longer active: not in the assignable list, but still the entry's assignee.
+      mockLoad([action({ id: 4, version: 1, description: "Legacy action", assignee: { id: 9, name: "Retired Staff" } })]);
+      const update = vi.spyOn(api, "updateAction").mockResolvedValue(action({ id: 4, version: 2, description: "Legacy action, edited", assignee: { id: 9, name: "Retired Staff" } }));
+      renderStaff();
+      fireEvent.click(await screen.findByRole("button", { name: /^edit/i }));
+      const form = await screen.findByRole("form", { name: "Edit action" });
+      await waitFor(() => expect(within(form).getByLabelText("Assignee")).toBeEnabled());
+      // The current assignee is still shown and selected, even though they are not in the list.
+      expect(within(form).getByLabelText("Assignee")).toHaveValue("9");
+      expect(optionTexts(within(form).getByLabelText("Assignee"))).toContain("Retired Staff");
+      fireEvent.change(within(form).getByLabelText(/Description/), { target: { value: "Legacy action, edited" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await screen.findByText("Legacy action, edited");
+      expect(update).toHaveBeenCalledTimes(1);
+      const body = update.mock.calls[0][2];
+      expect(body).toMatchObject({ description: "Legacy action, edited" });
+      expect(Object.prototype.hasOwnProperty.call(body, "assigneeId")).toBe(false);
+    });
+
+    it("an edit still sends assigneeId when the user picks another person, and null when they clear it", async () => {
+      mockLoad([action({ id: 4, version: 1, assignee: { id: 5, name: "Marcus Chen" } })]);
+      const update = vi
+        .spyOn(api, "updateAction")
+        .mockResolvedValueOnce(action({ id: 4, version: 2, assignee: { id: 3, name: "Priya Nair" } }))
+        .mockResolvedValueOnce(action({ id: 4, version: 3, assignee: null }));
+      renderStaff();
+      fireEvent.click(await screen.findByRole("button", { name: /^edit/i }));
+      let form = await screen.findByRole("form", { name: "Edit action" });
+      await waitFor(() => expect(within(form).getByLabelText("Assignee")).toBeEnabled());
+      fireEvent.change(within(form).getByLabelText("Assignee"), { target: { value: "3" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      expect(update.mock.calls[0][2]).toMatchObject({ assigneeId: 3 });
+
+      fireEvent.click(await screen.findByRole("button", { name: /^edit/i }));
+      form = await screen.findByRole("form", { name: "Edit action" });
+      fireEvent.change(within(form).getByLabelText("Assignee"), { target: { value: "" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[1][2]).toHaveProperty("assigneeId", null);
+    });
+
+    it("when the list of people cannot be loaded, an edit that does not touch the assignee still saves, without assigneeId", async () => {
+      vi.spyOn(api, "fetchActions").mockResolvedValue([action({ id: 4, version: 1, assignee: { id: 5, name: "Marcus Chen" } })]);
+      vi.spyOn(api, "fetchAssignableUsers").mockRejectedValue(new Error("down"));
+      const update = vi.spyOn(api, "updateAction").mockResolvedValue(action({ id: 4, version: 2, description: "Renamed" }));
+      renderStaff();
+      fireEvent.click(await screen.findByRole("button", { name: /^edit/i }));
+      const form = await screen.findByRole("form", { name: "Edit action" });
+      expect(await within(form).findByText(/You can still save without changing the assignee/)).toBeInTheDocument();
+      fireEvent.change(within(form).getByLabelText(/Description/), { target: { value: "Renamed" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      expect(Object.prototype.hasOwnProperty.call(update.mock.calls[0][2], "assigneeId")).toBe(false);
+    });
+
+    it("creating always sends assigneeId (null when nobody is chosen)", async () => {
+      mockLoad([]);
+      const create = vi.spyOn(api, "createAction").mockResolvedValue(action({ id: 8, description: "New one" }));
+      renderStaff();
+      const form = await openCreate();
+      fireEvent.change(within(form).getByLabelText(/Description/), { target: { value: "New one" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await screen.findByText("New one");
+      expect(create.mock.calls[0][1]).toHaveProperty("assigneeId", null);
+    });
+
     it("UI-03: if the entry became final while editing, Reload says it can no longer be edited and Save stays disabled", async () => {
       const fetchSpy = mockLoad([action({ id: 4, version: 1 })]);
       vi.spyOn(api, "updateAction").mockRejectedValue(new ApiError("stale", 409, undefined, { code: "STALE_VERSION", currentVersion: 2 }));

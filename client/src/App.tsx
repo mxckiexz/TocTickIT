@@ -20,6 +20,9 @@ export default function App() {
   const [shellState, setShellState] = useState<ShellState>("loading");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [ticketView, setTicketView] = useState<TicketView>("none");
+  // Lab 4 (ui-spec.md §1, D-2, D-6): the Administrator works on tickets like IT Staff, so besides User Management
+  // they open the same Ticket Queue and Ticket Detail. The landing page becomes the Dashboard with F8.
+  const [adminView, setAdminView] = useState<"queue" | "users">("users");
   // Voluntary Change Password (ui-spec.md §4.1): opened from the shell header,
   // as opposed to the forced first-login gate, which is its own ShellState.
   const [changingPassword, setChangingPassword] = useState(false);
@@ -232,7 +235,32 @@ export default function App() {
 
         {currentUser.role === "IT_STAFF" && <StaffTicketQueue />}
 
-        {currentUser.role === "ADMINISTRATOR" && <UserManagement />}
+        {currentUser.role === "ADMINISTRATOR" && (
+          <div>
+            <nav aria-label="Main" className="mb-3">
+              <div className="btn-group btn-group-sm" role="group">
+                <button
+                  type="button"
+                  className={`btn ${adminView === "queue" ? "btn-success" : "btn-outline-success"}`}
+                  aria-current={adminView === "queue" ? "page" : undefined}
+                  onClick={() => setAdminView("queue")}
+                >
+                  Ticket Queue
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${adminView === "users" ? "btn-success" : "btn-outline-success"}`}
+                  aria-current={adminView === "users" ? "page" : undefined}
+                  onClick={() => setAdminView("users")}
+                >
+                  User Management
+                </button>
+              </div>
+            </nav>
+            {adminView === "queue" && <StaffTicketQueue />}
+            {adminView === "users" && <UserManagement />}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -68,6 +68,28 @@ a:focus {
   box-shadow: 0 0 0 0.25rem rgba(11, 122, 70, 0.25);
 }
 
+/* Lab 4 F10: text-style buttons ("Back to Ticket Queue", "Reassign") are links, so they take the link colours of the
+   theme instead of Bootstrap's blue (found by looking at the screenshots and by the colour scan in
+   e2e/lab-04/accessibility.spec.ts). */
+.btn-link {
+  --bs-btn-color: var(--zg-secondary-green);
+  --bs-btn-hover-color: var(--zg-primary-green);
+  --bs-btn-active-color: var(--zg-primary-green);
+  --bs-btn-focus-shadow-rgb: 11, 122, 70;
+}
+
+/* Lab 4 F10: the Follow-up required checkbox (and any checkbox or radio after it) is a form control too, so its
+   ring and its ticked fill are Zen Green. Without this Bootstrap's own blue showed up in the one place the
+   Actions Taken form has a checkbox (found by the keyboard walk in e2e/lab-04/accessibility.spec.ts). */
+.form-check-input:focus {
+  border-color: var(--zg-secondary-green);
+  box-shadow: 0 0 0 0.25rem rgba(11, 122, 70, 0.25);
+}
+.form-check-input:checked {
+  background-color: var(--zg-primary-green);
+  border-color: var(--zg-primary-green);
+}
+
 /* Success confirmations: pale-green surface, primary-green text — readable
    without relying on color alone (an icon/label always accompanies it). */
 .alert-success {

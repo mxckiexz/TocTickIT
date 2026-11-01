@@ -67,7 +67,16 @@ export async function staffWrite(
 export async function recordAction(
   request: APIRequestContext,
   ticketId: number,
-  action: { description: string; status?: string; result?: string; assigneeId?: number | null; actionAt?: string }
+  action: {
+    description: string;
+    status?: string;
+    result?: string;
+    assigneeId?: number | null;
+    actionAt?: string;
+    followUpRequired?: boolean;
+    followUpNote?: string;
+    attachmentNotes?: string;
+  }
 ) {
   const response = await request.post(`/api/tickets/${ticketId}/actions`, { data: action });
   expect(response.status(), "record action").toBe(201);
@@ -83,6 +92,33 @@ export async function currentUserId(request: APIRequestContext): Promise<number>
 export function dashboardTruth(email: string): Record<string, any> {
   const output = execSync(`npx tsx scripts/e2e-dashboard-truth.ts ${email}`, { cwd: path.join(process.cwd(), "server"), encoding: "utf8" });
   return JSON.parse(output.trim().split("\n").pop()!);
+}
+
+// A ticket that shows every part of the Lab 4 screens at once: In Progress, High priority, owned by the fixture IT
+// Staff member, with a Completed action (result and follow-up), a Planned one assigned to them and an In progress one
+// with attachment notes. Open work is left, so the resolution gate has a message to show.
+export async function seedHardeningTicket(playwright: PlaywrightWorkerArgs["playwright"], label: string) {
+  const requesterApi = await apiSession(playwright, { email: "e2e-requester@toktickit.test", password: "E2E-Fixture-Pass1" });
+  const ticket = await createTicket(requesterApi, uniqueSummary(label));
+  await requesterApi.dispose();
+  const staffApi = await apiSession(playwright, { email: "e2e-staff@toktickit.test", password: "E2E-Fixture-Pass1" });
+  const staffId = await currentUserId(staffApi);
+  await staffWrite(staffApi, ticket.id, { claim: true });
+  await staffWrite(staffApi, ticket.id, { status: "IN_PROGRESS" });
+  await staffWrite(staffApi, ticket.id, { priority: "HIGH" });
+  await recordAction(staffApi, ticket.id, {
+    description: "Replaced the faulty docking station",
+    status: "COMPLETED",
+    result: "Both monitors work again",
+    followUpRequired: true,
+    followUpNote: "Check again after the next firmware update",
+    attachmentNotes: "Photo of the old dock kept in the IT cupboard",
+    assigneeId: staffId,
+  });
+  await recordAction(staffApi, ticket.id, { description: "Order a spare docking station", status: "PLANNED", assigneeId: staffId });
+  await recordAction(staffApi, ticket.id, { description: "Update the dock firmware", status: "IN_PROGRESS", attachmentNotes: "Vendor notes saved in the shared folder" });
+  await staffApi.dispose();
+  return ticket;
 }
 
 // Opens a ticket from the Ticket Queue by searching for its summary, the way staff do.

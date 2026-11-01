@@ -24,6 +24,15 @@ export const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
 } as const;
 
+// Lab 4 (specification.md FR-23 and AC-37, ui-spec.md sections 7 and 9) fixes the three widths at 1280, 768 and 375.
+// Lab 3's own contract uses 800 for the tablet, and its committed screenshots were taken at that width, so
+// VIEWPORTS above stays as it is and Lab 4 has its own set.
+export const LAB4_VIEWPORTS = {
+  desktop: { width: 1280, height: 900 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 375, height: 812 },
+} as const;
+
 export async function login(page: Page, account: { email: string; password: string }) {
   await page.goto("/");
   await page.getByLabel(/^Email/i).fill(account.email);

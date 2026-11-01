@@ -134,7 +134,7 @@ message.
 
 Checked at 375, 768 and 1280 px: no horizontal page scroll, no overlap, no clipped label.
 Actions entries stack their fields on mobile; status buttons wrap to several lines; dashboard
-cards go 4 → 2 → 1 columns. Tables (if any) keep their wrapper; the test measures the wrapper,
+the headline cards go 3 → 2 → 1 columns (five cards do not make four). Tables (if any) keep their wrapper; the test measures the wrapper,
 not only the page.
 
 ## 8. Accessibility checklist (FR-22)
@@ -155,13 +155,13 @@ Stored at `artifacts/lab-04/screenshots/{staff-dashboard,requester-dashboard,act
 as `desktop.png`, `tablet.png`, `mobile.png` (1280 / 768 / 375), plus the conflict banner and the
 gate message. Checklist, filled in during F10 by opening each screenshot:
 
-- [ ] Only Zen Green tokens; no stray colour.
-- [ ] Role navigation shows only usable items, current page marked.
-- [ ] Badges carry text; priority and status colours match Lab 3.
-- [ ] Editable and read-only fields are distinct (Requester sees Actions Taken read-only).
-- [ ] The Administrator sees the same enabled ticket controls as IT Staff.
-- [ ] Open actions assigned to me card and My recent actions list, with zero and non-zero data.
-- [ ] Error messages under fields; banners above forms.
-- [ ] Focus visible on every new control.
-- [ ] No clipping, overlap or horizontal scroll at the three widths.
-- [ ] No console error, placeholder text or temporary UI.
+- [x] Only Zen Green tokens; no stray colour. (Two stray blues found and fixed: the checkbox and the text buttons.)
+- [x] Role navigation shows only usable items, current page marked. (Seen for Requester, IT Staff and Administrator.)
+- [x] Badges carry text; priority and status colours match Lab 3.
+- [x] Editable and read-only fields are distinct (Requester sees Actions Taken read-only). (`actions-taken/requester-readonly-*.png`.)
+- [x] The Administrator sees the same enabled ticket controls as IT Staff. (`actions-taken/administrator-*.png`, and asserted at each width.)
+- [x] Open actions assigned to me card and My recent actions list, with zero and non-zero data. (`staff-dashboard/desktop.png` and `administrator-zero-desktop.png`.)
+- [x] Error messages under fields; banners above forms. (`actions-taken/add-form-*.png`, `conflict-banner-*.png`.)
+- [x] Focus visible on every new control. (Keyboard walk in `accessibility.spec.ts`.)
+- [x] No clipping, overlap or horizontal scroll at the three widths.
+- [x] No console error, placeholder text or temporary UI.

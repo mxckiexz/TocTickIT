@@ -4,7 +4,7 @@ Raw output of the three suites, stripped of colour, each file starting with the 
 
 | File | Command | Result |
 |---|---|---|
-| `server-vitest.txt` | `cd server && npx vitest run` | 24 files, 536 tests pass |
+| `server-vitest.txt` | `cd server && npx vitest run` | 26 files, 553 tests pass |
 | `client-vitest.txt` | `cd client && npx vitest run` | 20 files, 291 tests pass |
 | `playwright.txt` | `npx playwright test` (repository root) | 102 tests pass |
 

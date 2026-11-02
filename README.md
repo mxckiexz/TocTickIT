@@ -407,7 +407,7 @@ cd server && npx vitest run tests/lab-04/migration.api.test.ts tests/lab-04/seed
 รันทีละชุด **ห้ามรันพร้อมกัน** เพราะทุกชุดใช้ฐานข้อมูล PostgreSQL ตัวเดียวกัน (Playwright ก็ใช้ฐานข้อมูลเดียวกันและรีเซ็ต fixture ให้เองก่อนรัน):
 
 ```bash
-cd server && npm test           # Vitest + Supertest: API, authorization, migration, seed, concurrency (24 ไฟล์, 536 เทสต์)
+cd server && npm test           # Vitest + Supertest: API, authorization, migration, seed, concurrency (26 ไฟล์, 553 เทสต์)
 cd client && npm test           # Vitest + React Testing Library (20 ไฟล์, 291 เทสต์)
 npm run test:e2e                # Playwright จาก root, เปิด server + client ให้เอง (102 เทสต์)
 npx playwright test e2e/lab-04  # เฉพาะ Lab 4: Actions Taken, resolution, dashboards, a11y, responsive (64 เทสต์)
@@ -429,6 +429,7 @@ npx playwright test e2e/lab-04  # เฉพาะ Lab 4: Actions Taken, resoluti
 | การใช้ AI (prompts + My Reflection) | `docs/lab-04/ai-use.md` |
 | Screenshot 3 ขนาด (1280 / 768 / 375): staff-dashboard, requester-dashboard, actions-taken | `artifacts/lab-04/screenshots/` |
 | Output ของเทสต์ | `docs/lab-04/test-output/` |
+| แผนที่หลักฐานเทียบกับใบงาน (Part 1 ถึง 9 และสิ่งที่ยังเปิดอยู่) | `docs/lab-04/evidence.md` |
 
 ---
 

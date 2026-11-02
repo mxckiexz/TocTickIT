@@ -379,6 +379,23 @@ real on a scratch copy): restore from the `pg_dump` taken before the migration, 
 inverse SQL (`DROP TABLE "ActionTakenRevision"; DROP TABLE "ActionTaken"; DROP TYPE "ActionStatus"; ALTER TABLE "Ticket" DROP
 COLUMN "version"`) which is only safe before Action Taken data has been written.
 
+### 7.4a Legacy tickets and backfill (worksheet 5.2)
+
+No backfill is run: the migration creates no `ActionTaken` row for a ticket that already exists, and gives every existing
+ticket `version` 1 (the column default), so the optimistic lock works on old and new tickets alike. How old data behaves:
+
+- A ticket with no Actions Taken is a normal ticket: its Actions Taken area says "No actions recorded yet." (staff also see
+  Add action), and a Requester sees the same message.
+- The resolution gate applies from now on, to every ticket that is not yet Resolved: an old ticket In Progress needs an owner
+  and a Completed action (BR-12) before it can be Resolved, which is the intended effect of the rule, not an exception for old data.
+  A ticket that is already Resolved, Closed or Cancelled is left as it is; nothing is re-checked retroactively, and its next moves
+  (Closed, Reopened) follow the matrix.
+- Dashboards count tickets from the `Ticket` table (status, owner, IT priority, `updatedAt`), so old tickets are counted exactly
+  like new ones. Only "Open actions assigned to me" and "My recent actions" read `ActionTaken`, and an old ticket contributes zero
+  to them. The seven-day windows use `updatedAt`, which the migration does not touch.
+- Tested on a copy of a Lab 3 database (23 tickets before and after the migration, `version` 1 on every row, rollback and restore:
+  README, "Lab 4 — Migration, Rollback"), and by `server/tests/lab-04/migration.api.test.ts` and `seed.api.test.ts`.
+
 ### 7.5 Seed
 
 Idempotent upsert, keyed on stable identifiers. Covers every status and priority, tickets with

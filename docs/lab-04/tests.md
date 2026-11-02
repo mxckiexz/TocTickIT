@@ -142,9 +142,9 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC / BR | What | Expected | Final |
 |---|---|---|---|---|
-| SEC-01 | AC-02, AC-14, AC-28, AC-43 | role × route sweep including all new routes and the Lab 3 staff routes whose role set changed (BR-26), no session, forged Origin | each role gets 403 outside its set (Administrator now inside the IT Staff set), 401 with no session, 403 on forged Origin | Planned |
+| SEC-01 | AC-02, AC-14, AC-28, AC-43 | role × route sweep including all new routes and the Lab 3 staff routes whose role set changed (BR-26), no session, forged Origin | each role gets 403 outside its set (Administrator now inside the IT Staff set), 401 with no session, 403 on forged Origin | Pass (`authorization-sweep.api.test.ts`) |
 | SEC-02 | AC-08, BR-24 | Requester A reaches for B's ticket's actions | `404`, never `403` or data | Pass |
-| SEC-03 | BR-14 | two failures at once on the new routes | the earlier rung of the ladder wins | Planned |
+| SEC-03 | BR-14 | two failures at once on the new routes | the earlier rung of the ladder wins | Pass (`authorization-sweep.api.test.ts`) |
 
 ## 4. Migration and seed (`server/tests/lab-04/migration.api.test.ts`, `seed.api.test.ts`)
 
@@ -196,6 +196,22 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 | A11Y-04 | AC-36 | status, priority and follow-up have text, not colour only | text present in the DOM | Pass |
 | RSP-01 | AC-37 | dashboards at 375, 768, 1280 | no horizontal overflow, no overlap, select labels not truncated | Pass |
 | RSP-02 | AC-37 | Ticket Detail with Actions Taken and status buttons at the three widths | same | Pass |
+| STY-L4-01 | AC-36, FR-22 | no colour on the new screens is Bootstrap's own blue (text, fills, borders, rings) | none found on both dashboards and both Ticket Details | Pass (`accessibility.spec.ts`; two blues were found and fixed in F10) |
+| STY-L4-02 | AC-36, FR-22 | a ticked checkbox in the action form is Zen Green | fill and border equal `--zg-primary-green` | Pass (`accessibility.spec.ts`) |
+
+## 6a. Performance smoke (`server/tests/lab-04/performance-smoke.api.test.ts`)
+
+A smoke layer, not a benchmark (worksheet section 10 asks for it): the test adds 400 tickets and about 600 actions, then checks the
+endpoints Lab 4 added still answer fast and the dashboards stay concise (FR-18). The limits are generous on purpose, so they fail on a
+real regression (a query per row, an unbounded list), not on a slow machine. A deliberately broken `RECENT_LIMIT` (5 changed to 300)
+made PERF-01 and PERF-02 fail.
+
+| ID | AC | What | Expected | Final |
+|---|---|---|---|---|
+| PERF-01 | FR-18, AC-29 | staff dashboard with 400 extra tickets and their actions | `200` in under 1500ms, at most 5 rows in each list, body under 8 KB, real (non-zero) numbers | Pass |
+| PERF-02 | FR-18, AC-24 | Requester dashboard with 400 tickets of their own | `200` in under 1000ms, at most 5 rows in each list, body under 5 KB | Pass |
+| PERF-03 | AC-01, BR-09 | one ticket with 200 Actions Taken | all 200 listed in `actionAt` order, in under 1000ms | Pass |
+| PERF-04 | AC-31 | Ticket Queue over 400+ tickets, plain and with `actionAssigneeId=me&open=1&recent=1` | one page only, in under 1500ms each | Pass |
 
 ## 7. End-to-end (`e2e/lab-04/`)
 
@@ -211,7 +227,7 @@ development database accumulates rows); to test time windows, `updatedAt` is set
 
 | ID | AC | What | Expected | Final |
 |---|---|---|---|---|
-| REG-01 | AC-38 | full Lab 1 to 3 server, client and Playwright suites on `lab4-staging` and again on `main` | all pass | Pass on `lab4-staging` plus F9 (server 536, client 291, Playwright 61); the run on `main` is part of the release PR (F11) |
+| REG-01 | AC-38 | full Lab 1 to 3 server, client and Playwright suites on `lab4-staging` and again on `main` | all pass | Pass on `lab4-staging` plus F9 (server 536, client 291, Playwright 61 at F9; final numbers in the F11 entry); the run on `main` is part of the release PR (F11) |
 | REG-02 | AC-38 | the Lab 3 tests listed in §9, updated in the PR that forces the change | pass, each change recorded | Pass: every changed Lab 3 test is in the section 9 tables, each in the PR that forced it (F4, F6, F7, F8) |
 
 ## 9. Lab 3 tests expected to change (not "unmodified")
@@ -278,7 +294,7 @@ again on `main` (REG-01).
 
 - Lab 3 had accessibility checks on Login only; A11Y-01 to A11Y-04 cover every new screen.
 - Lab 3 had no time-window test; API-44 and UNIT-04 add one (fixed instants, raw SQL).
-- Not covered: load and performance (out of scope); visual regression by pixel comparison
+- Not covered: load and stress testing (only the smoke layer of section 6a); visual regression by pixel comparison
   (screenshots are inspected by eye, as in Lab 3).
 
 ## 11. Traceability: acceptance criteria → tests
@@ -602,3 +618,15 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
   `administrator-*` and `requester-readonly-*`. The visual checklist of ui-spec.md section 9 was filled in by opening these images.
 - No console error or uncaught exception in any watched session; a search of `client/src` finds no TODO, FIXME, lorem, "coming soon" or
   `console.log`; the four `placeholder` attributes are real input hints.
+
+**F11 (Release), branch `release/lab4`**, 2026-11-02, a check of the whole contract against the worksheet (`SE+Lab+4.pdf`):
+
+- Gaps found and closed in this PR: (1) the worksheet asks for performance-smoke coverage (section 10) and the plan said "not covered"; added
+  `performance-smoke.api.test.ts`, PERF-01 to PERF-04, section 6a (400 extra tickets and about 600 actions; a deliberately broken
+  `RECENT_LIMIT` fails it). (2) SEC-01 and SEC-03 were still `Planned`: the role-by-route sweep only existed for Lab 3 routes; added
+  `authorization-sweep.api.test.ts`, 13 tests: every Lab 4 route called as the ticket's own Requester, another Requester, IT Staff, Administrator and with no
+  session, the forged and missing Origin, and the order of checks 401, 403, 400, 404, 409 with two failures at once (removing the role gate of POST
+  actions fails two of them). (3) Worksheet 5.2 asks how legacy tickets and existing records behave; added specification section 7.4a. (4) The
+  style layer was only in prose; added STY-L4-01 and STY-L4-02 to section 6 (they run in `accessibility.spec.ts`). Every row of this plan is now `Pass`.
+- Every AC of `specification.md` (50) has a row in the traceability table; checked by script, none missing.
+- Server suite: 26 files, 553 tests pass (536 + 4 + 13). Client suite 20 files, 291. Playwright 102. Output in `test-output/`.

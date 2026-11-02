@@ -227,7 +227,8 @@ made PERF-01 and PERF-02 fail.
 
 | ID | AC | What | Expected | Final |
 |---|---|---|---|---|
-| REG-01 | AC-38 | full Lab 1 to 3 server, client and Playwright suites on `lab4-staging` and again on `main` | all pass | Pass on `lab4-staging` plus F9 (server 536, client 291, Playwright 61 at F9; final numbers in the F11 entry); the run on `main` is part of the release PR (F11) |
+| REG-01a | AC-38 | full Lab 1 to 3 and Lab 4 server, client and Playwright suites on the release candidate (`release/lab4`, which is `lab4-staging` plus the release documentation) | all pass | Pass on the release candidate: server 26 files 553, client 20 files 291, Playwright 102; raw output with the commit and time in `test-output/` |
+| REG-01b | AC-38 | the same three suites on `main` after the release pull request is merged | all pass, output kept | **Pending**: `main` does not contain Lab 4 yet; the output is added in a follow-up pull request after the merge |
 | REG-02 | AC-38 | the Lab 3 tests listed in §9, updated in the PR that forces the change | pass, each change recorded | Pass: every changed Lab 3 test is in the section 9 tables, each in the PR that forced it (F4, F6, F7, F8) |
 
 ## 9. Lab 3 tests expected to change (not "unmodified")
@@ -288,7 +289,7 @@ and expects a page must open it from the navigation, as a person would. No rule 
 | `e2e/lab-03/staff-ticket-flow.spec.ts`, `staff-attachments-password.spec.ts`, `user-administration.spec.ts`, `responsive-screenshots.spec.ts` | `openPage(page, "Ticket Queue" or "User Management")` after login (helper in `e2e/helpers/accounts.ts`); assertions unchanged | the landing page |
 
 Everything else in Lab 1 to 3 stays unmodified, and the full suites run on `lab4-staging` and
-again on `main` (REG-01).
+again on `main` (REG-01a and REG-01b).
 
 ## 10. Gaps this plan closes or leaves
 
@@ -339,7 +340,7 @@ again on `main` (REG-01).
 | AC-35 | UI-01, UI-13, UI-15 |
 | AC-36 | A11Y-01, A11Y-02, A11Y-03, A11Y-04 |
 | AC-37 | RSP-01, RSP-02 |
-| AC-38 | REG-01, REG-02 |
+| AC-38 | REG-01a, REG-01b, REG-02 |
 | AC-39 | MIG-01, MIG-02, MIG-03 |
 | AC-40 | API-46, UI-02, UI-20, E2E-01 |
 | AC-41 | API-13, API-14, UI-21, UNIT-01 |
@@ -387,7 +388,7 @@ again on `main` (REG-01).
 | FR-09 | API-20, API-21, API-22 | FR-21 | UI-02, UI-06, E2E-04 |
 | FR-10 | API-23, API-24, API-25 | FR-22 | A11Y-01 to A11Y-04 |
 | FR-11 | API-10, API-28 | FR-23 | RSP-01, RSP-02 |
-| FR-12 | API-29, API-31 | FR-24 | REG-01, REG-02 | FR-25 | API-50, API-51, UI-19, E2E-05 |
+| FR-12 | API-29, API-31 | FR-24 | REG-01a, REG-01b, REG-02 | FR-25 | API-50, API-51, UI-19, E2E-05 |
 | FR-26 | API-60, API-62, UI-23 | | |
 
 ## 13. What has actually been run
@@ -627,6 +628,6 @@ create. Client suite: 14 files, 180 tests pass. Full Playwright suite: 38 pass.
   `authorization-sweep.api.test.ts`, 13 tests: every Lab 4 route called as the ticket's own Requester, another Requester, IT Staff, Administrator and with no
   session, the forged and missing Origin, and the order of checks 401, 403, 400, 404, 409 with two failures at once (removing the role gate of POST
   actions fails two of them). (3) Worksheet 5.2 asks how legacy tickets and existing records behave; added specification section 7.4a. (4) The
-  style layer was only in prose; added STY-L4-01 and STY-L4-02 to section 6 (they run in `accessibility.spec.ts`). Every row of this plan is now `Pass`.
+  style layer was only in prose; added STY-L4-01 and STY-L4-02 to section 6 (they run in `accessibility.spec.ts`). Every row of this plan is `Pass` except REG-01b, which cannot pass before the merge (the run on `main`).
 - Every AC of `specification.md` (50) has a row in the traceability table; checked by script, none missing.
 - Server suite: 26 files, 553 tests pass (536 + 4 + 13). Client suite 20 files, 291. Playwright 102. Output in `test-output/`.

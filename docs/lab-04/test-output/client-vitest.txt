@@ -1,43 +1,9 @@
 # client: npx vitest run   (cd client)
-# branch release/lab4 @ 06dc7a1, 2026-11-02 03:19 UTC
+# commit under test: 82ec2002f4ae2d5922e8c5f105ec5aed7409ebdd (branch release/lab4)
+# run set started: 2026-11-02 05:10:32 UTC; suites run one after another on the author's local development database
+# this suite started: 2026-11-02 05:12:37 UTC
 
  RUN  v2.1.9 /Users/aphisamai/Downloads/toktickit/client
-
-stderr | tests/lab-03/StaffTicketDetail.test.tsx > StaffTicketDetail > shows a 'Ticket not found.' error for a 404
-Failed to load staff ticket detail: ApiError: Ticket not found.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketDetail.test.tsx:119:63
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
-  status: 404,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
-
-stderr | tests/lab-03/StaffTicketDetail.test.tsx > StaffTicketDetail > shows the Forbidden panel on a 403
-Failed to load staff ticket detail: ApiError: You do not have permission to perform this action.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketDetail.test.tsx:127:7
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
-  status: 403,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
 
 stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > list and states (UI-01) > shows 'Unable to load actions.' with a Retry that loads again
 Failed to load actions: Error: boom
@@ -88,25 +54,43 @@ Failed to load actions: ApiError: You do not have permission to perform this act
   currentVersion: undefined
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > opens the detail screen and shows the ticket's full fields
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
+stderr | tests/lab-03/StaffTicketDetail.test.tsx > StaffTicketDetail > shows a 'Ticket not found.' error for a 404
+Failed to load staff ticket detail: ApiError: Ticket not found.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketDetail.test.tsx:119:63
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
+  status: 404,
+  fieldErrors: undefined,
+  code: undefined,
+  currentVersion: undefined
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows the ticket's attachments with a link to view/download each one
+stderr | tests/lab-03/StaffTicketDetail.test.tsx > StaffTicketDetail > shows the Forbidden panel on a 403
+Failed to load staff ticket detail: ApiError: You do not have permission to perform this action.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketDetail.test.tsx:127:7
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
+  status: 403,
+  fieldErrors: undefined,
+  code: undefined,
+  currentVersion: undefined
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > opens the detail screen and shows the ticket's full fields
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -129,6 +113,16 @@ Failed to load assignable users: Error: down
     at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
     at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
 
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > opens the detail screen and shows the ticket's full fields
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
 stderr | tests/lab-04/StaffDashboard.test.tsx > StaffDashboard: zero, loading, error, forbidden (UI-13, UI-18) > shows 'Unable to load the dashboard.' with Retry, and Retry loads it again without stale numbers
 Failed to load the dashboard: ApiError: Failed to load the dashboard
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/StaffDashboard.test.tsx:222:30
@@ -145,16 +139,6 @@ Failed to load the dashboard: ApiError: Failed to load the dashboard
   fieldErrors: undefined,
   code: undefined,
   currentVersion: undefined
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an empty-state message when the ticket has no attachments
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
 }
 
 stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > create mode (UI-02, UI-20, UI-25) > UI-02: server field errors land under their own fields and everything typed stays
@@ -177,6 +161,30 @@ Failed to save the action: ApiError: Please correct the highlighted fields.
   currentVersion: undefined
 }
 
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows the ticket's attachments with a link to view/download each one
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+ ✓ tests/lab-04/DrillDownLists.test.tsx (19 tests) 574ms
+stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > create mode (UI-02, UI-20, UI-25) > UI-02: a request failure shows a banner above the form and keeps the typed values
+Failed to save the action: Error: network down
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/ActionsTaken.test.tsx:282:55
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+
 stderr | tests/lab-04/StaffDashboard.test.tsx > StaffDashboard: zero, loading, error, forbidden (UI-13, UI-18) > Retry goes back to 'Loading dashboard…' while the new request runs, not to the old error
 Failed to load the dashboard: ApiError: Failed to load the dashboard
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/StaffDashboard.test.tsx:237:30
@@ -195,32 +203,6 @@ Failed to load the dashboard: ApiError: Failed to load the dashboard
   currentVersion: undefined
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an attachments error without hiding the rest of the ticket's fields
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-Failed to load ticket attachments: ApiError: You do not have permission to view this ticket's attachments.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:143:7
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at listOnTimeout (node:internal/timers:597:9)
-    at processTimers (node:internal/timers:571:7)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
-  status: 403,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
-
 stderr | tests/lab-04/StaffDashboard.test.tsx > StaffDashboard: zero, loading, error, forbidden (UI-13, UI-18) > shows the forbidden panel on a 403
 Failed to load the dashboard: ApiError: Forbidden
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/StaffDashboard.test.tsx:249:60
@@ -228,32 +210,18 @@ Failed to load the dashboard: ApiError: Forbidden
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
     at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
     at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at processTimers (node:internal/timers:568:9)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5) {
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
   status: 403,
   fieldErrors: undefined,
   code: undefined,
   currentVersion: undefined
 }
 
- ✓ tests/lab-04/DrillDownLists.test.tsx (19 tests) 448ms
-stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > create mode (UI-02, UI-20, UI-25) > UI-02: a request failure shows a banner above the form and keeps the typed values
-Failed to save the action: Error: network down
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/ActionsTaken.test.tsx:282:55
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > keeps the previous search/filter/sort state after Back is clicked
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an empty-state message when the ticket has no attachments
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -281,8 +249,44 @@ Failed to save the action: ApiError: Reopen the ticket before adding open work.
   currentVersion: undefined
 }
 
- ✓ tests/lab-04/StaffDashboard.test.tsx (18 tests) 570ms
- ✓ tests/lab-03/StaffTicketDetail.test.tsx (23 tests) 580ms
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an attachments error without hiding the rest of the ticket's fields
+Failed to load ticket attachments: ApiError: You do not have permission to view this ticket's attachments.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:143:7
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at processTimers (node:internal/timers:568:9)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
+  status: 403,
+  fieldErrors: undefined,
+  code: undefined,
+  currentVersion: undefined
+}
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+ ✓ tests/lab-03/StaffTicketDetail.test.tsx (23 tests) 937ms
+ ✓ tests/lab-04/StaffDashboard.test.tsx (18 tests) 956ms
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > keeps the previous search/filter/sort state after Back is clicked
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
 stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > edit mode (UI-03, UI-21) > UI-03: a 409 STALE_VERSION shows the conflict banner above the form with Reload, keeping the typed input; Reload refetches and the next Save sends the latest version
 Failed to save the action: ApiError: This record was changed by someone else. Reload and try again.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/ActionsTaken.test.tsx:380:32
@@ -351,16 +355,6 @@ Failed to load assignable users: Error: down
     at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
 
 stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when the detail request is rejected (e.g. ownership)
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when the detail request is rejected (e.g. ownership)
 Failed to load ticket detail: ApiError: Ticket not found.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:201:7
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
@@ -378,43 +372,17 @@ Failed to load ticket detail: ApiError: Ticket not found.
   currentVersion: undefined
 }
 
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when the detail request is rejected (e.g. ownership)
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
 stderr | tests/lab-04/TicketWorkflow.test.tsx > TicketWorkflow: status buttons > UI-10: conflicts and refresh > Reload refetches the ticket, clears the banner, and the next change carries the fresh version
-Failed to update status: ApiError: Version mismatch.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/TicketWorkflow.test.tsx:73:15
-    at processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at VitestExecutor.runModule (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:399:5)
-    at VitestExecutor.directRequest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:381:5)
-    at VitestExecutor.cachedRequest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:206:14)
-    at VitestExecutor.executeId (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:173:12)
-    at collectTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:851:7)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1268:17)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
-    at withEnv (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:90:5) {
-  status: 409,
-  fieldErrors: undefined,
-  code: 'STALE_VERSION',
-  currentVersion: 2
-}
-
-stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > edit mode (UI-03, UI-21) > UI-03: if the entry became final while editing, Reload says it can no longer be edited and Save stays disabled
-Failed to save the action: ApiError: stale
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/ActionsTaken.test.tsx:472:55
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
-  status: 409,
-  fieldErrors: undefined,
-  code: 'STALE_VERSION',
-  currentVersion: 2
-}
-
-stderr | tests/lab-04/TicketWorkflow.test.tsx > TicketWorkflow: status buttons > UI-10: conflicts and refresh > the confirm step is closed when the change is rejected, so a retry starts from the fresh state
 Failed to update status: ApiError: Version mismatch.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/TicketWorkflow.test.tsx:73:15
     at processTicksAndRejections (node:internal/process/task_queues:104:5)
@@ -442,6 +410,24 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
+stderr | tests/lab-04/TicketWorkflow.test.tsx > TicketWorkflow: status buttons > UI-10: conflicts and refresh > the confirm step is closed when the change is rejected, so a retry starts from the fresh state
+Failed to update status: ApiError: Version mismatch.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/TicketWorkflow.test.tsx:73:15
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at VitestExecutor.runModule (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:399:5)
+    at VitestExecutor.directRequest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:381:5)
+    at VitestExecutor.cachedRequest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:206:14)
+    at VitestExecutor.executeId (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vite-node/dist/client.mjs:173:12)
+    at collectTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:851:7)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1268:17)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+    at withEnv (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:90:5) {
+  status: 409,
+  fieldErrors: undefined,
+  code: 'STALE_VERSION',
+  currentVersion: 2
+}
+
 stderr | tests/lab-04/TicketWorkflow.test.tsx > TicketWorkflow: status buttons > UI-10: conflicts and refresh > RESOLUTION_GATE uses the same banner with the server's message
 Failed to update status: ApiError: The resolution conditions are not met.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/TicketWorkflow.test.tsx:320:61
@@ -460,6 +446,25 @@ Failed to update status: ApiError: The resolution conditions are not met.
   currentVersion: undefined
 }
 
+stderr | tests/lab-04/ActionsTaken.test.tsx > ActionsTaken > edit mode (UI-03, UI-21) > UI-03: if the entry became final while editing, Reload says it can no longer be edited and Save stays disabled
+Failed to save the action: ApiError: stale
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/ActionsTaken.test.tsx:472:55
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
+  status: 409,
+  fieldErrors: undefined,
+  code: 'STALE_VERSION',
+  currentVersion: 2
+}
+
+ ✓ tests/lab-03/AppShell.test.tsx (24 tests) 1728ms
 stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > uploads a new attachment and refreshes the attachments list
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
@@ -529,7 +534,7 @@ Failed to load the history: Error: x
     at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
     at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
 
- ✓ tests/lab-04/ActionsTaken.test.tsx (33 tests) 1199ms
+ ✓ tests/lab-04/ActionsTaken.test.tsx (33 tests) 2076ms
 stderr | tests/lab-04/TicketWorkflow.test.tsx > TicketWorkflow: status buttons > UI-10: conflicts and refresh > a stale claim or priority change shows the same banner, and Reload clears it
 Failed to claim ticket: ApiError: Version mismatch.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/TicketWorkflow.test.tsx:73:15
@@ -548,23 +553,32 @@ Failed to claim ticket: ApiError: Version mismatch.
   currentVersion: 2
 }
 
- ✓ tests/lab-03/AppShell.test.tsx (24 tests) 1096ms
 stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when the upload is rejected, leaving the existing attachment list unchanged
 Failed to upload attachment: ApiError: Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:296:7
     at runNextTicks (node:internal/process/task_queues:65:5)
-    at processTimers (node:internal/timers:568:9)
+    at listOnTimeout (node:internal/timers:597:9)
+    at processTimers (node:internal/timers:571:7)
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
     at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
   status: 415,
   fieldErrors: undefined,
   code: undefined,
   currentVersion: undefined
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > disables the upload control once the ticket has the maximum of 5 attachments
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
 }
 
 stderr | tests/lab-04/TicketWorkflow.test.tsx > TicketWorkflow: status buttons > UI-10: conflicts and refresh > a stale claim or priority change shows the same banner, and Reload clears it
@@ -585,7 +599,7 @@ Failed to update priority: ApiError: Version mismatch.
   currentVersion: 2
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > disables the upload control once the ticket has the maximum of 5 attachments
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > removes an attachment after confirming in the modal, and refreshes the list
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -619,7 +633,7 @@ act(() => {
 This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
     at StaffTicketDetail (/Users/aphisamai/Downloads/toktickit/client/src/StaffTicketDetail.tsx:24:30)
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > removes an attachment after confirming in the modal, and refreshes the list
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > sends the optional removal reason typed into the modal
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -629,8 +643,8 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
- ✓ tests/lab-04/TicketWorkflow.test.tsx (27 tests) 1322ms
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > sends the optional removal reason typed into the modal
+ ✓ tests/lab-04/TicketWorkflow.test.tsx (27 tests) 2642ms
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > does not remove the attachment when the modal is cancelled
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -638,6 +652,34 @@ Failed to load the dashboard: [TypeError: fetch failed] {
     code: 'ECONNREFUSED',
     [errors]: [ [Error], [Error] ]
   }
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when removal is rejected, leaving the attachment in place
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when removal is rejected, leaving the attachment in place
+Failed to remove attachment: ApiError: Ticket not found.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:495:7
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+    at withEnv (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:90:5)
+    at run (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:112:3) {
+  status: 404,
+  fieldErrors: undefined,
+  code: undefined,
+  currentVersion: undefined
 }
 
 stderr | tests/lab-03/UserManagement.test.tsx > UserManagement > shows a loading state, then the user list
@@ -670,7 +712,17 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > does not remove the attachment when the modal is cancelled
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > renders a removed attachment as a struck-through row with no download link or Remove button
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > lists the requester's tickets with a default sort of newest first
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -710,7 +762,17 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when removal is rejected, leaving the attachment in place
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > lists the requester's tickets with a default sort of newest first
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > does not count a removed attachment toward the 5-attachment limit
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -750,54 +812,6 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > shows an error message when removal is rejected, leaving the attachment in place
-Failed to remove attachment: ApiError: Ticket not found.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:495:7
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at processTimers (node:internal/timers:568:9)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
-  status: 404,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
-
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > lists the requester's tickets with a default sort of newest first
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > lists the requester's tickets with a default sort of newest first
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > renders a removed attachment as a struck-through row with no download link or Remove button
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
 stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > shows an empty state when nothing matches
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
@@ -808,7 +822,7 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > does not count a removed attachment toward the 5-attachment limit
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Comments > shows 'No comments yet.' for an empty thread
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -828,7 +842,7 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Comments > shows 'No comments yet.' for an empty thread
+stderr | tests/lab-03/StaffTicketQueue.test.tsx > StaffTicketQueue > shows 'No tickets yet.' when nothing exists and no filter is active
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -868,54 +882,6 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Comments > shows a post error above the textarea and preserves its content
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Comments > shows a post error above the textarea and preserves its content
-Failed to post comment: ApiError: Ticket not found.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:658:9
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at processTimers (node:internal/timers:568:9)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
-  status: 404,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows the button, then a confirm step, then the success note
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-03/StaffTicketQueue.test.tsx > StaffTicketQueue > shows 'No tickets yet.' when nothing exists and no filter is active
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
 stderr | tests/lab-03/UserManagement.test.tsx > UserManagement > Create user > shows field validation errors from the API
 Warning: An update to UserManagement inside a test was not wrapped in act(...).
 
@@ -946,7 +912,44 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
- ✓ tests/lab-03/ticketBadges.test.tsx (16 tests) 185ms
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Comments > shows a post error above the textarea and preserves its content
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > re-fetches with the chosen category filter
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Comments > shows a post error above the textarea and preserves its content
+Failed to post comment: ApiError: Ticket not found.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:658:9
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+    at withEnv (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:90:5) {
+  status: 404,
+  fieldErrors: undefined,
+  code: undefined,
+  currentVersion: undefined
+}
+
 stderr | tests/lab-03/UserManagement.test.tsx > UserManagement > Create user > surfaces a duplicate-email 409 as a field-level message under Email
 Warning: An update to UserManagement inside a test was not wrapped in act(...).
 
@@ -977,7 +980,7 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows the already-marked note directly when the ticket was marked earlier
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > re-fetches with the chosen status filter
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -987,27 +990,7 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows the already-marked note directly when the ticket was marked earlier
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > re-fetches with the chosen category filter
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > hides the button entirely once the ticket is in a terminal status
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows the button, then a confirm step, then the success note
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1047,6 +1030,16 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > re-fetches with the chosen sort option
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
 stderr | tests/lab-04/RequesterDashboard.test.tsx > RequesterDashboard states > shows 'Unable to load the dashboard.' with Retry
 Failed to load the dashboard: ApiError: Failed to load the dashboard
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/RequesterDashboard.test.tsx:144:30
@@ -1065,35 +1058,6 @@ Failed to load the dashboard: ApiError: Failed to load the dashboard
   currentVersion: undefined
 }
 
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > re-fetches with the chosen status filter
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-04/RequesterDashboard.test.tsx > RequesterDashboard states > shows the forbidden panel on a 403
-Failed to load the dashboard: ApiError: Forbidden
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/RequesterDashboard.test.tsx:155:64
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
-  status: 403,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
-
- ✓ tests/lab-04/RequesterDashboard.test.tsx (11 tests) 315ms
 stderr | tests/lab-03/UserManagement.test.tsx > UserManagement > Edit user > shows the self-suspend guard message at the Active control
 Warning: An update to UserManagement inside a test was not wrapped in act(...).
 
@@ -1124,7 +1088,7 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > loads categories/related systems once New Ticket is opened, with no Requester field in the form
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > pages forward and back, and disables Previous on page 1
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1134,35 +1098,27 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows an error and returns to Available when the request fails
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows an error and returns to Available when the request fails
-Failed to mark ticket resolved: ApiError: This ticket is already CLOSED and can't be marked resolved.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:746:9
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at listOnTimeout (node:internal/timers:597:9)
-    at processTimers (node:internal/timers:571:7)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
+ ✓ tests/lab-03/ticketBadges.test.tsx (16 tests) 421ms
+stderr | tests/lab-04/RequesterDashboard.test.tsx > RequesterDashboard states > shows the forbidden panel on a 403
+Failed to load the dashboard: ApiError: Forbidden
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-04/RequesterDashboard.test.tsx:155:64
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5) {
-  status: 409,
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
+  status: 403,
   fieldErrors: undefined,
   code: undefined,
   currentVersion: undefined
 }
 
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > re-fetches with the chosen sort option
+ ✓ tests/lab-04/RequesterDashboard.test.tsx (11 tests) 547ms
+stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > resets to page 1 when a filter changes
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1172,17 +1128,7 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > submits the form under the logged-in session's identity and shows the returned unique Ticket Number
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > pages forward and back, and disables Previous on page 1
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows the already-marked note directly when the ticket was marked earlier
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1222,36 +1168,6 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > submits the form under the logged-in session's identity and shows the returned unique Ticket Number
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > UI-11: marking resolved leaves the status badge as it was
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
-stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > resets to page 1 when a filter changes
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-
 stderr | tests/lab-02/my-tickets.test.tsx > MyTickets > switches to My Tickets from New Ticket without logging in again
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
@@ -1262,8 +1178,19 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
- ✓ tests/lab-02/my-tickets.test.tsx (10 tests) 866ms
-   ✓ MyTickets > debounces the search box before calling the API 376ms
+ ✓ tests/lab-02/my-tickets.test.tsx (10 tests) 1824ms
+   ✓ MyTickets > does not fetch tickets until My Tickets is opened 655ms
+   ✓ MyTickets > debounces the search box before calling the API 377ms
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows the already-marked note directly when the ticket was marked earlier
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
 stderr | tests/lab-03/UserManagement.test.tsx > UserManagement > Edit user > shows 'User updated.' and refreshes the list on success
 Warning: An update to UserManagement inside a test was not wrapped in act(...).
 
@@ -1294,7 +1221,7 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
-stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > a stale version shows the banner with Reload; Reload refetches the ticket and the next try sends the new version
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows an error and returns to Available when the request fails
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1303,33 +1230,68 @@ Failed to load the dashboard: [TypeError: fetch failed] {
     [errors]: [ [Error], [Error] ]
   }
 }
-Failed to mark ticket resolved: ApiError: Version mismatch.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:790:32
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at processTimers (node:internal/timers:568:9)
+
+stderr | tests/lab-03/StaffTicketQueue.test.tsx > StaffTicketQueue > shows the Forbidden panel on a 403, distinct from a generic error
+Failed to load the ticket queue: ApiError: You do not have permission to perform this action.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketQueue.test.tsx:311:7
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
+  status: 403,
+  fieldErrors: undefined,
+  code: undefined,
+  currentVersion: undefined
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > shows an error and returns to Available when the request fails
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+Failed to mark ticket resolved: ApiError: This ticket is already CLOSED and can't be marked resolved.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:746:9
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
     at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+    at withEnv (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:90:5) {
   status: 409,
   fieldErrors: undefined,
-  code: 'STALE_VERSION',
-  currentVersion: 2
+  code: undefined,
+  currentVersion: undefined
 }
 
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > lets the same session submit another ticket
-Failed to load the dashboard: [TypeError: fetch failed] {
-  [cause]: AggregateError: 
-      at internalConnectMultiple (node:net:1339:18)
-      at afterConnectMultiple (node:net:1942:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
+stderr | tests/lab-03/StaffTicketQueue.test.tsx > StaffTicketQueue > shows a generic error banner on a non-403 failure
+Failed to load the ticket queue: Error: network down
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketQueue.test.tsx:323:58
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
 
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (13 tests) 3031ms
+   ✓ StaffTicketQueue > opens from the Ticket Queue item of the IT Staff navigation 1045ms
+   ✓ StaffTicketQueue > keeps the search box visible on mobile while the other filters are collapsed 851ms
+   ✓ StaffTicketQueue > debounces the search box before calling the API 363ms
 stderr | tests/lab-03/UserManagement.test.tsx > UserManagement > Reset password > shows the reset-password success message
 Warning: An update to UserManagement inside a test was not wrapped in act(...).
 
@@ -1360,9 +1322,17 @@ This ensures that you're testing the behavior the user would see in the browser.
     at div
     at App (/Users/aphisamai/Downloads/toktickit/client/src/App.tsx:34:61)
 
- ✓ tests/lab-02/ticket-detail.test.tsx (29 tests) 2215ms
-   ✓ TicketDetail > keeps the previous search/filter/sort state after Back is clicked 502ms
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > disables the submit button while the request is in flight
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > loads categories/related systems once New Ticket is opened, with no Requester field in the form
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > submits the form under the logged-in session's identity and shows the returned unique Ticket Number
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1390,9 +1360,72 @@ Failed to load users: ApiError: Forbidden
   currentVersion: undefined
 }
 
- ✓ tests/lab-03/UserManagement.test.tsx (11 tests) 1055ms
-   ✓ UserManagement > re-queries with search and role filter values 350ms
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > shows field-level errors from a rejected submission without creating a ticket
+ ✓ tests/lab-03/UserManagement.test.tsx (11 tests) 2159ms
+   ✓ UserManagement > shows a loading state, then the user list 676ms
+   ✓ UserManagement > re-queries with search and role filter values 396ms
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > UI-11: marking resolved leaves the status badge as it was
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > a stale version shows the banner with Reload; Reload refetches the ticket and the next try sends the new version
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/ticket-detail.test.tsx > TicketDetail > Problem Appears Resolved > a stale version shows the banner with Reload; Reload refetches the ticket and the next try sends the new version
+Failed to mark ticket resolved: ApiError: Version mismatch.
+    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/ticket-detail.test.tsx:790:32
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at processTimers (node:internal/timers:568:9)
+    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:5
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:11)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3) {
+  status: 409,
+  fieldErrors: undefined,
+  code: 'STALE_VERSION',
+  currentVersion: 2
+}
+
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > submits the form under the logged-in session's identity and shows the returned unique Ticket Number
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+ ✓ tests/lab-02/ticket-detail.test.tsx (29 tests) 5765ms
+   ✓ TicketDetail > keeps the previous search/filter/sort state after Back is clicked 530ms
+   ✓ TicketDetail > does not remove the attachment when the modal is cancelled 927ms
+   ✓ TicketDetail > shows an error message when removal is rejected, leaving the attachment in place 575ms
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > lets the same session submit another ticket
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > disables the submit button while the request is in flight
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1412,41 +1445,7 @@ Failed to load the dashboard: [TypeError: fetch failed] {
   }
 }
 
-stderr | tests/lab-03/StaffTicketQueue.test.tsx > StaffTicketQueue > shows the Forbidden panel on a 403, distinct from a generic error
-Failed to load the ticket queue: ApiError: You do not have permission to perform this action.
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketQueue.test.tsx:311:7
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11 {
-  status: 403,
-  fieldErrors: undefined,
-  code: undefined,
-  currentVersion: undefined
-}
-
-stderr | tests/lab-03/StaffTicketQueue.test.tsx > StaffTicketQueue > shows a generic error banner on a non-403 failure
-Failed to load the ticket queue: Error: network down
-    at /Users/aphisamai/Downloads/toktickit/client/tests/lab-03/StaffTicketQueue.test.tsx:323:58
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
-    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
-    at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
-    at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
-
- ✓ tests/lab-03/StaffTicketQueue.test.tsx (13 tests) 1217ms
-   ✓ StaffTicketQueue > keeps the search box visible on mobile while the other filters are collapsed 390ms
-   ✓ StaffTicketQueue > debounces the search box before calling the API 329ms
-stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > still shows the Ticket Number if the attachment upload fails
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > uploads the selected attachment after the ticket is created
 Failed to load the dashboard: [TypeError: fetch failed] {
   [cause]: AggregateError: 
       at internalConnectMultiple (node:net:1339:18)
@@ -1455,6 +1454,8 @@ Failed to load the dashboard: [TypeError: fetch failed] {
     [errors]: [ [Error], [Error] ]
   }
 }
+
+stderr | tests/lab-02/create-ticket-form.test.tsx > CreateTicketForm > still shows the Ticket Number if the attachment upload fails
 Attachment upload failed: ApiError: Unsupported file type. Allowed: JPG, PNG, WEBP, PDF.
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-02/create-ticket-form.test.tsx:182:7
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:146:14
@@ -1471,11 +1472,19 @@ Attachment upload failed: ApiError: Unsupported file type. Allowed: JPG, PNG, WE
   code: undefined,
   currentVersion: undefined
 }
+Failed to load the dashboard: [TypeError: fetch failed] {
+  [cause]: AggregateError: 
+      at internalConnectMultiple (node:net:1339:18)
+      at afterConnectMultiple (node:net:1942:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
 
- ✓ tests/lab-02/create-ticket-form.test.tsx (8 tests) 651ms
- ✓ tests/lab-04/routes.test.ts (21 tests) 25ms
- ✓ tests/lab-03/styleConformance.test.tsx (5 tests) 147ms
- ✓ tests/lab-04/api-dashboard.test.ts (6 tests) 13ms
+ ✓ tests/lab-02/create-ticket-form.test.tsx (8 tests) 1234ms
+ ✓ tests/lab-04/routes.test.ts (21 tests) 19ms
+ ✓ tests/lab-04/api-dashboard.test.ts (6 tests) 49ms
+ ✓ tests/lab-03/styleConformance.test.tsx (5 tests) 254ms
 stderr | tests/lab-03/ChangePassword.test.tsx > ChangePassword > shows a loading state while saving
 Warning: An update to ChangePassword inside a test was not wrapped in act(...).
 
@@ -1489,8 +1498,7 @@ act(() => {
 This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
     at ChangePassword (/Users/aphisamai/Downloads/toktickit/client/src/ChangePassword.tsx:7:27)
 
- ✓ tests/lab-03/ChangePassword.test.tsx (7 tests) 148ms
- ✓ tests/lab-01/api.test.ts (2 tests) 7ms
+ ✓ tests/lab-03/ChangePassword.test.tsx (7 tests) 361ms
 stderr | tests/lab-03/Login.test.tsx > Login > shows a loading state while submitting
 Warning: An update to Login inside a test was not wrapped in act(...).
 
@@ -1511,13 +1519,13 @@ Login failed: Error: network down
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:533:11
     at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:39:7)
     at runTest (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at processTimers (node:internal/timers:568:9)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runFiles (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1262:5)
-    at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
-    at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
 
- ✓ tests/lab-03/Login.test.tsx (5 tests) 96ms
+ ✓ tests/lab-03/Login.test.tsx (5 tests) 258ms
 stderr | tests/lab-01/App.test.tsx > App > shows an Offline error message when the API is unavailable
 System check failed: Error: Backend unavailable
     at /Users/aphisamai/Downloads/toktickit/client/tests/lab-01/App.test.tsx:59:7
@@ -1531,10 +1539,11 @@ System check failed: Error: Backend unavailable
     at startTests (file:///Users/aphisamai/Downloads/toktickit/client/node_modules/@vitest/runner/dist/index.js:1271:3)
     at file:///Users/aphisamai/Downloads/toktickit/client/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
 
- ✓ tests/lab-01/App.test.tsx (3 tests) 86ms
+ ✓ tests/lab-01/App.test.tsx (3 tests) 242ms
+ ✓ tests/lab-01/api.test.ts (2 tests) 13ms
 
  Test Files  20 passed (20)
       Tests  291 passed (291)
-   Start at  10:19:04
-   Duration  4.07s (transform 728ms, setup 1.99s, collect 1.81s, tests 12.24s, environment 7.16s, prepare 895ms)
+   Start at  12:12:38
+   Duration  8.96s (transform 1.24s, setup 3.83s, collect 4.45s, tests 25.09s, environment 16.70s, prepare 2.10s)
 

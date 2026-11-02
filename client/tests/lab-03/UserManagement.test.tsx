@@ -4,6 +4,7 @@ import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+import { mockDashboards, openFromNavigation } from "../helpers/dashboards.js";
 
 function adminUser(overrides: Partial<api.AdminUser> = {}): api.AdminUser {
   return {
@@ -22,7 +23,10 @@ function adminUser(overrides: Partial<api.AdminUser> = {}): api.AdminUser {
 // nav destination — a Requester or IT Staff session never renders it.
 async function openUserManagement() {
   mockLoggedInUser({ id: 9, name: "Grace Thompson", role: "ADMINISTRATOR" });
+  mockDashboards();
   render(<App />);
+  // Lab 4 F8: the Administrator lands on the Dashboard and opens User Management from the navigation.
+  await openFromNavigation("User Management");
   await screen.findByRole("heading", { name: "User Management" });
 }
 
@@ -182,7 +186,9 @@ describe("UserManagement", () => {
   it("shows the forbidden panel on a 403 from the list endpoint", async () => {
     vi.spyOn(api, "fetchAdminUsers").mockRejectedValue(new ApiError("Forbidden", 403));
     mockLoggedInUser({ id: 9, role: "ADMINISTRATOR" });
+    mockDashboards();
     render(<App />);
+    await openFromNavigation("User Management");
 
     expect(await screen.findByText("You do not have permission to view this page.")).toBeInTheDocument();
   });

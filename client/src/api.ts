@@ -42,12 +42,18 @@ export interface AuthUser {
 export class ApiError extends Error {
   status: number;
   fieldErrors?: Record<string, string>;
+  // Lab 4: a 409 carries a machine code (STALE_VERSION, TICKET_RESOLVED, ...) and, for a stale
+  // write, the version the server now holds.
+  code?: string;
+  currentVersion?: number;
 
-  constructor(message: string, status: number, fieldErrors?: Record<string, string>) {
+  constructor(message: string, status: number, fieldErrors?: Record<string, string>, extra?: { code?: string; currentVersion?: number }) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.code = extra?.code;
+    this.currentVersion = extra?.currentVersion;
   }
 }
 
@@ -66,7 +72,10 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
 async function parseJsonOrThrow<T>(response: Response, fallbackMessage: string): Promise<T> {
   const body = await response.json();
   if (!response.ok) {
-    throw new ApiError(body.error ?? fallbackMessage, response.status, body.errors);
+    throw new ApiError(body.error ?? fallbackMessage, response.status, body.errors, {
+      code: body.code,
+      currentVersion: body.currentVersion,
+    });
   }
   return body;
 }
@@ -120,6 +129,8 @@ export interface Ticket {
   requesterMarkedResolvedById: number | null;
   createdAt: string;
   updatedAt: string;
+  // Lab 4 (BR-16, BR-17): optimistic-locking counter; ticket writes send back the one last loaded.
+  version: number;
 }
 
 export interface Attachment {
@@ -151,7 +162,7 @@ export interface Comment {
   createdAt: string;
 }
 
-export type TicketSortField = "createdAt" | "summary" | "requestedPriority";
+export type TicketSortField = "createdAt" | "updatedAt" | "summary" | "requestedPriority";
 export type SortDir = "asc" | "desc";
 
 export interface Pagination {
@@ -172,6 +183,9 @@ export interface FetchTicketsParams {
   relatedSystemId?: number;
   requestedPriority?: Priority;
   currentStatus?: TicketStatus;
+  // Lab 4 (api-spec.md "Dashboards"): the Requester dashboard's drill-downs.
+  open?: boolean;
+  recent?: boolean;
   sortBy?: TicketSortField;
   sortDir?: SortDir;
   page?: number;
@@ -242,6 +256,8 @@ export async function fetchTickets(params: FetchTicketsParams): Promise<TicketLi
   if (params.relatedSystemId) query.set("relatedSystemId", String(params.relatedSystemId));
   if (params.requestedPriority) query.set("requestedPriority", params.requestedPriority);
   if (params.currentStatus) query.set("currentStatus", params.currentStatus);
+  if (params.open) query.set("open", "1");
+  if (params.recent) query.set("recent", "1");
   if (params.sortBy) query.set("sortBy", params.sortBy);
   if (params.sortDir) query.set("sortDir", params.sortDir);
   if (params.page) query.set("page", String(params.page));
@@ -319,9 +335,10 @@ export async function postComment(ticketId: number, body: string): Promise<Comme
   return parseJsonOrThrow<Comment>(response, "Failed to post comment");
 }
 
-export async function markTicketResolved(ticketId: number): Promise<Ticket> {
+export async function markTicketResolved(ticketId: number, version: number): Promise<Ticket> {
   const response = await apiFetch(`/api/tickets/${ticketId}/mark-resolved`, {
     method: "POST",
+    body: JSON.stringify({ version }),
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to mark ticket resolved");
 }
@@ -353,8 +370,12 @@ export interface FetchStaffTicketsParams {
   currentStatus?: TicketStatus;
   // 0 means "unassigned only" — a meaningful, distinct value from "no
   // filter", so every call site here must check `!== undefined`, never
-  // truthiness (0 is falsy but not absent).
-  ownerId?: number;
+  // truthiness (0 is falsy but not absent). Lab 4: "me" and "unassigned" are the readable forms the dashboards use.
+  ownerId?: number | "me" | "unassigned";
+  // Lab 4 (api-spec.md "GET /api/staff/tickets (extended filter)"): the dashboard drill-downs.
+  open?: boolean;
+  recent?: boolean;
+  actionAssigneeId?: "me";
   sortBy?: StaffTicketSortField;
   sortDir?: SortDir;
   page?: number;
@@ -369,6 +390,9 @@ export async function fetchStaffTickets(params: FetchStaffTicketsParams): Promis
   if (params.itPriority) query.set("itPriority", params.itPriority);
   if (params.currentStatus) query.set("currentStatus", params.currentStatus);
   if (params.ownerId !== undefined) query.set("ownerId", String(params.ownerId));
+  if (params.open) query.set("open", "1");
+  if (params.recent) query.set("recent", "1");
+  if (params.actionAssigneeId) query.set("actionAssigneeId", params.actionAssigneeId);
   if (params.sortBy) query.set("sortBy", params.sortBy);
   if (params.sortDir) query.set("sortDir", params.sortDir);
   if (params.page) query.set("page", String(params.page));
@@ -389,6 +413,9 @@ export type StaffTicket = Ticket & {
   requesterEmail: string;
   ownerName: string | null;
   ownerEmail: string | null;
+  // Lab 4 FR-12, same for IT Staff and Administrator.
+  allowedTransitions: TicketStatus[];
+  resolutionGate: { ok: boolean; unmet: Array<"NO_OWNER" | "NO_COMPLETED_ACTION" | "OPEN_ACTIONS"> };
 };
 
 // Not a fetch — the URL IT Staff / Administrator open an attachment from (the
@@ -415,23 +442,26 @@ export async function fetchStaffTicketDetail(ticketId: number): Promise<StaffTic
   return parseJsonOrThrow<StaffTicketDetailResponse>(response, "Failed to load ticket");
 }
 
-export async function claimTicket(ticketId: number): Promise<Ticket> {
-  const response = await apiFetch(`/api/staff/tickets/${ticketId}/claim`, { method: "POST" });
+export async function claimTicket(ticketId: number, version: number): Promise<Ticket> {
+  const response = await apiFetch(`/api/staff/tickets/${ticketId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ version }),
+  });
   return parseJsonOrThrow<Ticket>(response, "Failed to claim ticket");
 }
 
-export async function assignTicket(ticketId: number, ownerId: number): Promise<Ticket> {
+export async function assignTicket(ticketId: number, ownerId: number, version: number): Promise<Ticket> {
   const response = await apiFetch(`/api/staff/tickets/${ticketId}/assign`, {
     method: "POST",
-    body: JSON.stringify({ ownerId }),
+    body: JSON.stringify({ ownerId, version }),
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to assign ticket");
 }
 
-export async function updateTicketItPriority(ticketId: number, itPriority: Priority): Promise<Ticket> {
+export async function updateTicketItPriority(ticketId: number, itPriority: Priority, version: number): Promise<Ticket> {
   const response = await apiFetch(`/api/staff/tickets/${ticketId}/priority`, {
     method: "PATCH",
-    body: JSON.stringify({ itPriority }),
+    body: JSON.stringify({ itPriority, version }),
   });
   return parseJsonOrThrow<Ticket>(response, "Failed to update priority");
 }
@@ -439,13 +469,16 @@ export async function updateTicketItPriority(ticketId: number, itPriority: Prior
 export async function updateTicketStatus(
   ticketId: number,
   currentStatus: TicketStatus,
+  version: number,
   confirm?: boolean
 ): Promise<Ticket> {
   const response = await apiFetch(`/api/staff/tickets/${ticketId}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ currentStatus, confirm }),
+    body: JSON.stringify({ currentStatus, confirm, version }),
   });
-  return parseJsonOrThrow<Ticket>(response, "Failed to update status");
+  // Lab 4: the route returns { ticket } (with allowedTransitions and resolutionGate).
+  const body = await parseJsonOrThrow<{ ticket: Ticket }>(response, "Failed to update status");
+  return body.ticket;
 }
 
 export async function fetchAssignableUsers(): Promise<AssignableUser[]> {
@@ -533,4 +566,131 @@ export async function resetUserPassword(userId: number, password: string): Promi
     body: JSON.stringify({ password }),
   });
   return parseJsonOrThrow<AdminUser>(response, "Failed to reset password");
+}
+
+// ---------------------------------------------------------------------------
+// Lab 4 F6 — Actions Taken (docs/lab-04/api-spec.md "Actions Taken")
+// ---------------------------------------------------------------------------
+export type ActionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+
+export interface ActionTakenItem {
+  id: number;
+  ticketId: number;
+  performedBy: { id: number; name: string };
+  assignee: { id: number; name: string } | null;
+  status: ActionStatus;
+  actionAt: string;
+  description: string;
+  result: string;
+  followUpRequired: boolean;
+  followUpNote: string;
+  attachmentNotes: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+}
+
+export interface ActionRevision {
+  revision: number;
+  editedBy: { id: number; name: string };
+  editedAt: string;
+  status: ActionStatus;
+  assigneeId: number | null;
+  actionAt: string;
+  description: string;
+  result: string;
+  followUpRequired: boolean;
+  followUpNote: string;
+  attachmentNotes: string;
+}
+
+export interface ActionInput {
+  description?: string;
+  actionAt?: string;
+  status?: ActionStatus;
+  result?: string;
+  assigneeId?: number | null;
+  followUpRequired?: boolean;
+  followUpNote?: string;
+  attachmentNotes?: string;
+}
+
+export async function fetchActions(ticketId: number): Promise<ActionTakenItem[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions`);
+  const body = await parseJsonOrThrow<{ actions: ActionTakenItem[] }>(response, "Unable to load actions.");
+  return body.actions;
+}
+
+export async function createAction(ticketId: number, input: ActionInput): Promise<ActionTakenItem> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions`, { method: "POST", body: JSON.stringify(input) });
+  return parseJsonOrThrow<ActionTakenItem>(response, "Failed to save the action");
+}
+
+export async function updateAction(ticketId: number, actionId: number, input: ActionInput, version: number): Promise<ActionTakenItem> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ ...input, version }),
+  });
+  return parseJsonOrThrow<ActionTakenItem>(response, "Failed to save the action");
+}
+
+export async function fetchActionRevisions(ticketId: number, actionId: number): Promise<ActionRevision[]> {
+  const response = await apiFetch(`/api/tickets/${ticketId}/actions/${actionId}/revisions`);
+  const body = await parseJsonOrThrow<{ revisions: ActionRevision[] }>(response, "Unable to load the history.");
+  return body.revisions;
+}
+
+// ---------------------------------------------------------------------------
+// Lab 4 F8 — role dashboards (docs/lab-04/api-spec.md "Dashboards")
+// ---------------------------------------------------------------------------
+export interface TicketBrief {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  currentStatus: TicketStatus;
+  itPriority: Priority;
+  updatedAt: string;
+}
+
+export interface ActionBrief {
+  id: number;
+  ticketId: number;
+  ticketNumber: string;
+  status: ActionStatus;
+  actionAt: string;
+  // Already cut to 120 characters by the server.
+  description: string;
+}
+
+export interface RequesterDashboardData {
+  generatedAt: string;
+  timezone: string;
+  openTickets: number;
+  waitingForRequester: number;
+  recentlyUpdated: TicketBrief[];
+  recentlyResolved: TicketBrief[];
+}
+
+export interface StaffDashboardData {
+  generatedAt: string;
+  timezone: string;
+  unassigned: number;
+  assignedToMe: number;
+  ticketsWithMyOpenActions: number;
+  myRecentActions: ActionBrief[];
+  byStatus: Record<TicketStatus, number>;
+  byItPriority: Record<Priority, number>;
+  recentlyUpdated: TicketBrief[];
+  // Present for the Administrator only.
+  userCounts?: { total: number; active: number; byRole: Record<"REQUESTER" | "IT_STAFF" | "ADMINISTRATOR", number> };
+}
+
+export async function fetchRequesterDashboard(): Promise<RequesterDashboardData> {
+  const response = await apiFetch("/api/dashboard/requester");
+  return parseJsonOrThrow<RequesterDashboardData>(response, "Failed to load the dashboard");
+}
+
+export async function fetchStaffDashboard(): Promise<StaffDashboardData> {
+  const response = await apiFetch("/api/dashboard/staff");
+  return parseJsonOrThrow<StaffDashboardData>(response, "Failed to load the dashboard");
 }

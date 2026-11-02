@@ -30,6 +30,7 @@ const ticket: api.Ticket = {
   requesterMarkedResolvedById: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  version: 1,
 };
 
 function mockLookups() {

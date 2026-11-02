@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import MyTickets from "../../src/MyTickets.js";
 import StaffTicketQueue from "../../src/StaffTicketQueue.js";
@@ -12,6 +12,13 @@ import {
 } from "../../src/ticketBadges.js";
 import * as api from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+
+// Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
+// about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
+beforeEach(() => {
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+});
+
 
 // docs/lab-03/tests.md STY-01 (badge half), UI-18. Sheet section 7: "use
 // consistent badges for Ticket status, Requested Priority, IT Priority, and
@@ -50,6 +57,7 @@ function ticket(overrides: Partial<api.Ticket> = {}): api.Ticket {
     requesterMarkedResolvedById: null,
     createdAt: "2026-09-01T10:00:00.000Z",
     updatedAt: "2026-09-01T10:00:00.000Z",
+    version: 1,
     ...overrides,
   };
 }

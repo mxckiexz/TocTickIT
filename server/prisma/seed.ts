@@ -156,7 +156,59 @@ async function main() {
     }
   }
 
-  console.log("Category, RelatedSystem, User, and demo Ticket/Comment/Note seed completed.");
+  // Lab 4 — docs/lab-04/specification.md §7.5: Actions Taken on the demo
+  // tickets. Mix: 0 actions (001, 009, 010, 012), 1 action (002, 004, 006, 008,
+  // 011), several (003, 005, 007); a PLANNED action that blocks the resolution
+  // gate (003, 004), tickets that pass it (002, 011, and the RESOLVED and CLOSED
+  // ones, which never hold an open action: BR-10); two actions with the same
+  // actionAt (003) to exercise the id tie-break (BR-09). Open actions assigned
+  // to Marcus and Olivia make their "open actions assigned to me" card non-zero;
+  // Priya and Grace have none, and Grace has performed none, so those are zero.
+  // Idempotent: an action is looked up by ticket and exact description, and
+  // revision 1 is written together with the action (BR-08).
+  type SeedAction = {
+    t: string; by: string; assignee?: string; status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+    at: string; description: string; result?: string; followUp?: string; attachmentNotes?: string;
+  };
+  const demoActions: SeedAction[] = [
+    { t: "002", by: "priya.nair", assignee: "priya.nair", status: "COMPLETED", at: "2026-09-21T09:30:00Z", description: "Raised the attachment size limit on the mail gateway", result: "Limit is now 25 MB; tested with a 12 MB file." },
+    { t: "003", by: "marcus.chen", assignee: "marcus.chen", status: "COMPLETED", at: "2026-09-22T10:00:00Z", description: "Reseated the tray 2 sensor", result: "Jam message still appears after reseating." },
+    { t: "003", by: "marcus.chen", assignee: "marcus.chen", status: "IN_PROGRESS", at: "2026-09-23T14:00:00Z", description: "Replace the paper-path sensor", attachmentNotes: "Photo of the sensor connector kept on the shared drive." },
+    { t: "003", by: "marcus.chen", assignee: "marcus.chen", status: "PLANNED", at: "2026-09-23T14:00:00Z", description: "Order a spare sensor kit", followUp: "Check stock for the other floor 3 printers." },
+    { t: "004", by: "olivia.martinez", assignee: "olivia.martinez", status: "PLANNED", at: "2026-09-24T08:15:00Z", description: "Check the VPN account lockout log" },
+    { t: "005", by: "priya.nair", assignee: "priya.nair", status: "COMPLETED", at: "2026-09-19T15:00:00Z", description: "Installed the font subset patch on the report server", result: "PDF export works; no data affected." },
+    { t: "005", by: "priya.nair", status: "CANCELLED", at: "2026-09-19T11:00:00Z", description: "Rebuild the report server image", result: "Not needed once the patch worked." },
+    { t: "006", by: "marcus.chen", assignee: "marcus.chen", status: "COMPLETED", at: "2026-09-15T13:20:00Z", description: "Replaced the battery under warranty", result: "Battery health back to 100%." },
+    { t: "007", by: "olivia.martinez", assignee: "olivia.martinez", status: "COMPLETED", at: "2026-09-26T09:00:00Z", description: "Re-synced the section list", result: "Section 2 is visible again." },
+    { t: "007", by: "olivia.martinez", status: "IN_PROGRESS", at: "2026-09-26T16:00:00Z", description: "Review the rollover job with the platform team", followUp: "Ask whether the job can skip enrolled sections." },
+    { t: "008", by: "priya.nair", status: "CANCELLED", at: "2026-09-18T10:00:00Z", description: "Test the captive portal from the guest VLAN", result: "Requester cancelled the ticket." },
+    { t: "011", by: "olivia.martinez", assignee: "olivia.martinez", status: "COMPLETED", at: "2026-09-27T11:00:00Z", description: "Created the shared mailbox and added five members", result: "Members confirmed they can send and read." },
+  ];
+
+  for (const a of demoActions) {
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { ticketNumber: `TKT-SEED-${a.t}` }, select: { id: true } });
+    const exists = await prisma.actionTaken.findFirst({ where: { ticketId: ticket.id, description: a.description }, select: { id: true } });
+    if (exists) continue;
+    const performedById = personId(`${a.by}${T}`);
+    const values = {
+      status: a.status,
+      assigneeId: a.assignee ? personId(`${a.assignee}${T}`) : null,
+      actionAt: new Date(a.at),
+      description: a.description,
+      result: a.result ?? "",
+      followUpRequired: a.followUp !== undefined,
+      followUpNote: a.followUp ?? "",
+      attachmentNotes: a.attachmentNotes ?? "",
+    };
+    await prisma.$transaction(async (tx) => {
+      const action = await tx.actionTaken.create({ data: { ticketId: ticket.id, performedById, ...values } });
+      await tx.actionTakenRevision.create({
+        data: { actionTakenId: action.id, revision: 1, editedById: performedById, editedAt: action.createdAt, ...values },
+      });
+    });
+  }
+
+  console.log("Category, RelatedSystem, User, and demo Ticket/Comment/Note/ActionTaken seed completed.");
 }
 
 main()

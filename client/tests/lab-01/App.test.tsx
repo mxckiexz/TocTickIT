@@ -1,10 +1,16 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+import { mockDashboards } from "../helpers/dashboards.js";
 
 describe("App", () => {
+  beforeEach(() => {
+    // Lab 4 F8: the signed-in Requester lands on a dashboard, which loads its own numbers.
+    mockDashboards();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

@@ -1,9 +1,16 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+
+// Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
+// about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
+beforeEach(() => {
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+});
+
 
 const categories = [
   { id: 1, name: "Hardware" },
@@ -30,6 +37,7 @@ const listedTicket: api.Ticket = {
   requesterMarkedResolvedById: null,
   createdAt: "2026-09-01T10:00:00.000Z",
   updatedAt: "2026-09-01T10:00:00.000Z",
+  version: 1,
 };
 
 function mockLookups() {
@@ -691,7 +699,7 @@ describe("TicketDetail", () => {
       fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
 
       expect(await screen.findByText(/You marked this as resolved on/i)).toBeInTheDocument();
-      expect(resolveSpy).toHaveBeenCalledWith(1);
+      expect(resolveSpy).toHaveBeenCalledWith(1, 1);
       expect(screen.queryByRole("button", { name: /Problem Appears Resolved/i })).not.toBeInTheDocument();
     });
 
@@ -748,6 +756,60 @@ describe("TicketDetail", () => {
         await screen.findByText("This ticket is already CLOSED and can't be marked resolved.")
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Problem Appears Resolved/i })).toBeInTheDocument();
+    });
+
+    // Lab 4 UI-11 (AC-19): the signal never moves the ticket's status.
+    it("UI-11: marking resolved leaves the status badge as it was", async () => {
+      await openDetail({ ...listedTicket, currentStatus: "IN_PROGRESS" });
+      vi.spyOn(api, "markTicketResolved").mockResolvedValue({
+        ...listedTicket,
+        currentStatus: "IN_PROGRESS",
+        requesterMarkedResolvedAt: "2026-09-02T08:00:00.000Z",
+        requesterMarkedResolvedById: 1,
+        version: 2,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+      await screen.findByRole("heading", { name: "TKT-2026-000001" });
+      expect(screen.getByText("In Progress", { selector: ".badge" })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Problem Appears Resolved/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
+
+      await screen.findByText(/You marked this as resolved on/i);
+      expect(screen.getByText("In Progress", { selector: ".badge" })).toBeInTheDocument();
+      expect(screen.queryByText("Resolved", { selector: ".badge" })).not.toBeInTheDocument();
+    });
+
+    // Lab 4 ui-spec.md §6 (AC-32): a stale version shows the shared banner, and Reload fetches the ticket again.
+    it("a stale version shows the banner with Reload; Reload refetches the ticket and the next try sends the new version", async () => {
+      await openDetail();
+      const detailSpy = vi.mocked(api.fetchTicketDetail);
+      const resolveSpy = vi
+        .spyOn(api, "markTicketResolved")
+        .mockRejectedValueOnce(new ApiError("Version mismatch.", 409, undefined, { code: "STALE_VERSION", currentVersion: 2 }))
+        .mockResolvedValue({ ...listedTicket, version: 3, requesterMarkedResolvedAt: "2026-09-02T08:00:00.000Z", requesterMarkedResolvedById: 1 });
+      detailSpy.mockResolvedValueOnce(listedTicket).mockResolvedValueOnce({ ...listedTicket, version: 2 });
+
+      fireEvent.click(screen.getByRole("button", { name: "TKT-2026-000001" }));
+      await screen.findByRole("heading", { name: "TKT-2026-000001" });
+      fireEvent.click(screen.getByRole("button", { name: /Problem Appears Resolved/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
+
+      const message = "Someone else changed this. Reload to see the latest, then try again.";
+      const banner = (await screen.findByText(message)).closest("[role='alert']") as HTMLElement;
+      expect(banner).not.toBeNull();
+      await waitFor(() => expect(banner).toHaveFocus());
+      expect(resolveSpy).toHaveBeenCalledWith(1, 1);
+
+      const callsBefore = detailSpy.mock.calls.length;
+      fireEvent.click(within(banner).getByRole("button", { name: "Reload" }));
+      await waitFor(() => expect(screen.queryByText(message)).not.toBeInTheDocument());
+      expect(detailSpy.mock.calls.length).toBe(callsBefore + 1);
+
+      fireEvent.click(await screen.findByRole("button", { name: /Problem Appears Resolved/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Yes, mark resolved/i }));
+      await waitFor(() => expect(resolveSpy).toHaveBeenLastCalledWith(1, 2));
     });
   });
 });

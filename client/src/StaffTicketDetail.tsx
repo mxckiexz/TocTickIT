@@ -1,4 +1,4 @@
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState, useEffect, useId, useRef } from "react";
 import {
   ApiError,
   AssignableUser,
@@ -16,23 +16,19 @@ import {
   updateTicketItPriority,
   updateTicketStatus,
 } from "./api.js";
-import { PriorityBadge, STATUS_LABELS } from "./ticketBadges.js";
+import ActionsTaken from "./ActionsTaken.js";
+import { PriorityBadge, STATUS_LABELS, StatusBadge } from "./ticketBadges.js";
 
 const COMMENT_MAX_LENGTH = 2000;
 
-// Mirrors server/src/ticketStatus.ts's STATUS_TRANSITIONS exactly
-// (docs/lab-03/specification.md §7.3) — duplicated client-side (as a plain
-// string-keyed map, no Prisma dependency) so the status <select> can offer
-// only legal next states without a round trip.
-const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  NEW: ["OPEN", "IN_PROGRESS", "CANCELLED"],
-  OPEN: ["IN_PROGRESS", "WAITING_FOR_REQUESTER", "CANCELLED"],
-  IN_PROGRESS: ["WAITING_FOR_REQUESTER", "RESOLVED", "CANCELLED"],
-  WAITING_FOR_REQUESTER: ["IN_PROGRESS", "RESOLVED", "CANCELLED"],
-  RESOLVED: ["CLOSED", "REOPENED"],
-  CLOSED: ["REOPENED"],
-  REOPENED: ["IN_PROGRESS", "WAITING_FOR_REQUESTER", "RESOLVED", "CANCELLED"],
-  CANCELLED: ["REOPENED"],
+// Lab 4 (ui-spec.md §5, §6): which statuses are offered comes from the server (`allowedTransitions`), so the
+// client no longer keeps its own copy of the status matrix.
+const STALE_MESSAGE = "Someone else changed this. Reload to see the latest, then try again.";
+
+const GATE_REASON_TEXT: Record<StaffTicket["resolutionGate"]["unmet"][number], string> = {
+  NO_OWNER: "Needs an owner",
+  NO_COMPLETED_ACTION: "Needs a completed action",
+  OPEN_ACTIONS: "Finish or cancel open actions",
 };
 
 const CONFIRMATION_REQUIRED_STATUSES = new Set<TicketStatus>([
@@ -46,6 +42,8 @@ const CONFIRMATION_REQUIRED_STATUSES = new Set<TicketStatus>([
 interface StaffTicketDetailProps {
   ticketId: number;
   onBack: () => void;
+  // Lab 4 F8: the dashboard's "My recent actions" rows open the ticket at its Actions Taken section.
+  scrollToActions?: boolean;
 }
 
 type LoadState = "loading" | "ready" | "error" | "forbidden";
@@ -55,7 +53,7 @@ type LoadState = "loading" | "ready" | "error" | "forbidden";
 // an Internal Notes panel alongside Public Comments. Attachments/comments/
 // notes all arrive bundled in one GET /api/staff/tickets/:id response — no
 // separate fetches the way the Requester screen needs.
-export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetailProps) {
+export default function StaffTicketDetail({ ticketId, onBack, scrollToActions }: StaffTicketDetailProps) {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [ticket, setTicket] = useState<StaffTicket | null>(null);
@@ -88,6 +86,31 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
   const [statusPendingTarget, setStatusPendingTarget] = useState<TicketStatus | null>(null);
   const [statusUiState, setStatusUiState] = useState<"idle" | "saving">("idle");
   const [statusError, setStatusError] = useState("");
+  // A 409 from any ticket write (ui-spec.md §6). Shown once, above the controls, with a Reload button.
+  const [conflict, setConflict] = useState("");
+  const gateReasonsId = useId();
+  const confirmRef = useRef<HTMLDivElement>(null);
+  const conflictRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (statusPendingTarget) confirmRef.current?.focus();
+  }, [statusPendingTarget]);
+
+  // Once, when the ticket first appears: a later refresh must not pull the page away from where the user is working.
+  const scrolledToActionsRef = useRef(false);
+  useEffect(() => {
+    if (!scrollToActions || loadState !== "ready" || scrolledToActionsRef.current) return;
+    scrolledToActionsRef.current = true;
+    document.getElementById("actions-taken")?.scrollIntoView?.({ block: "start", behavior: "instant" });
+  }, [scrollToActions, loadState]);
+
+  // The banner sits above the controls and the user may have scrolled past it: focusing it makes a screen reader
+  // read it, and scrolling brings it into view for everyone else (focus alone does not scroll in every browser).
+  useEffect(() => {
+    if (!conflict) return;
+    conflictRef.current?.focus();
+    conflictRef.current?.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+  }, [conflict]);
 
   // A fresh mount of this component happens every time a different ticket
   // is opened (StaffTicketQueue conditionally renders it, the same way
@@ -118,15 +141,28 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
+  // Returns true when the error was a conflict and the banner took it.
+  function showConflict(error: unknown): boolean {
+    if (!(error instanceof ApiError) || error.status !== 409) return false;
+    setConflict(error.code === "STALE_VERSION" ? STALE_MESSAGE : error.message);
+    return true;
+  }
+
+  async function handleReload() {
+    setConflict("");
+    await loadDetail();
+  }
+
   async function handleClaim() {
     setOwnershipUiState("saving");
     setOwnershipError("");
+    setConflict("");
     try {
-      await claimTicket(ticketId);
+      await claimTicket(ticketId, ticket!.version);
       await loadDetail();
     } catch (error) {
       console.error("Failed to claim ticket:", error);
-      setOwnershipError(error instanceof ApiError ? error.message : "Unable to claim this ticket.");
+      if (!showConflict(error)) setOwnershipError(error instanceof ApiError ? error.message : "Unable to claim this ticket.");
     } finally {
       setOwnershipUiState("idle");
     }
@@ -158,13 +194,15 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     if (!reassignSelection) return;
     setOwnershipUiState("saving");
     setOwnershipError("");
+    setConflict("");
     try {
-      await assignTicket(ticketId, Number(reassignSelection));
+      await assignTicket(ticketId, Number(reassignSelection), ticket!.version);
       setReassignOpen(false);
       await loadDetail();
     } catch (error) {
       console.error("Failed to reassign ticket:", error);
-      setOwnershipError(error instanceof ApiError ? error.message : "Unable to reassign this ticket.");
+      if (showConflict(error)) setReassignOpen(false);
+      else setOwnershipError(error instanceof ApiError ? error.message : "Unable to reassign this ticket.");
     } finally {
       setOwnershipUiState("idle");
     }
@@ -173,20 +211,22 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
   async function handlePriorityChange(nextPriority: Priority) {
     setPriorityUiState("saving");
     setPriorityError("");
+    setConflict("");
     try {
-      await updateTicketItPriority(ticketId, nextPriority);
+      await updateTicketItPriority(ticketId, nextPriority, ticket!.version);
       await loadDetail();
     } catch (error) {
       console.error("Failed to update priority:", error);
-      setPriorityError(error instanceof ApiError ? error.message : "Unable to update priority.");
+      if (!showConflict(error)) setPriorityError(error instanceof ApiError ? error.message : "Unable to update priority.");
     } finally {
       setPriorityUiState("idle");
     }
   }
 
-  function handleStatusSelectChange(nextStatus: TicketStatus) {
-    if (!ticket || nextStatus === ticket.currentStatus) return;
+  function handleStatusButton(nextStatus: TicketStatus) {
+    if (!ticket || statusUiState === "saving") return;
     setStatusError("");
+    setConflict("");
     if (CONFIRMATION_REQUIRED_STATUSES.has(nextStatus)) {
       setStatusPendingTarget(nextStatus);
     } else {
@@ -201,13 +241,19 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
   async function applyStatusChange(target: TicketStatus, confirm: boolean) {
     setStatusUiState("saving");
     setStatusError("");
+    setConflict("");
     try {
-      await updateTicketStatus(ticketId, target, confirm || undefined);
+      await updateTicketStatus(ticketId, target, ticket!.version, confirm || undefined);
       setStatusPendingTarget(null);
       await loadDetail();
     } catch (error) {
       console.error("Failed to update status:", error);
-      setStatusError(error instanceof ApiError ? error.message : "Unable to update status.");
+      if (showConflict(error)) {
+        // The state the user confirmed against is out of date: start again from the reloaded ticket.
+        setStatusPendingTarget(null);
+      } else {
+        setStatusError(error instanceof ApiError ? error.message : "Unable to update status.");
+      }
     } finally {
       setStatusUiState("idle");
     }
@@ -312,7 +358,7 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
     );
   }
 
-  const legalNextStatuses = STATUS_TRANSITIONS[ticket.currentStatus];
+  const gateBlocksResolved = !ticket.resolutionGate.ok && ticket.allowedTransitions.includes("RESOLVED");
 
   return (
     <div className="mt-4">
@@ -321,6 +367,15 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
       </button>
 
       <h2 className="h5">{ticket.ticketNumber}</h2>
+
+      {conflict && (
+        <div ref={conflictRef} tabIndex={-1} className="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2" role="alert">
+          <span>{conflict}</span>
+          <button type="button" className="btn btn-outline-success btn-sm" onClick={handleReload}>
+            Reload
+          </button>
+        </div>
+      )}
 
       <dl className="row">
         <dt className="col-sm-3">Requester</dt>
@@ -429,26 +484,41 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
 
         <dt className="col-sm-3">Status</dt>
         <dd className="col-sm-9">
-          <select
-            className="form-select form-select-sm d-inline-block"
-            style={{ width: "auto" }}
-            aria-label="Status"
-            value={statusPendingTarget ?? ticket.currentStatus}
-            disabled={statusUiState === "saving"}
-            onChange={(event) => handleStatusSelectChange(event.target.value as TicketStatus)}
-          >
-            <option value={ticket.currentStatus} disabled>
-              {STATUS_LABELS[ticket.currentStatus]} (current)
-            </option>
-            {legalNextStatuses.map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
+          <div className="mb-2">
+            <StatusBadge status={ticket.currentStatus} />
+          </div>
+
+          {ticket.allowedTransitions.length > 0 && (
+            <div role="group" aria-label="Change status" className="d-flex flex-wrap gap-2">
+              {ticket.allowedTransitions.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  className="btn btn-outline-success btn-sm"
+                  disabled={
+                    statusUiState === "saving" ||
+                    statusPendingTarget !== null ||
+                    (status === "RESOLVED" && !ticket.resolutionGate.ok)
+                  }
+                  aria-describedby={status === "RESOLVED" && gateBlocksResolved ? gateReasonsId : undefined}
+                  onClick={() => handleStatusButton(status)}
+                >
+                  {STATUS_LABELS[status]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {gateBlocksResolved && (
+            <ul id={gateReasonsId} className="small text-muted mt-2 mb-0 ps-3">
+              {ticket.resolutionGate.unmet.map((reason) => (
+                <li key={reason}>{GATE_REASON_TEXT[reason]}</li>
+              ))}
+            </ul>
+          )}
 
           {statusPendingTarget && (
-            <div className="mt-2">
+            <div className="mt-2" ref={confirmRef} tabIndex={-1}>
               <p className="mb-2 small">
                 Change status to <strong>{STATUS_LABELS[statusPendingTarget]}</strong>? This requires
                 confirmation.
@@ -515,6 +585,10 @@ export default function StaffTicketDetail({ ticketId, onBack }: StaffTicketDetai
           ))}
         </ul>
       )}
+
+      {/* Lab 4 F6: IT Staff and Administrator get the same Actions Taken controls. */}
+      {/* A completed, cancelled or reopened action changes the resolution gate, so ask for a fresh ticket. */}
+      <ActionsTaken ticketId={ticketId} ticketStatus={ticket.currentStatus} canWrite onChanged={() => void loadDetail()} />
 
       <h3 className="h6 mt-4">Comments</h3>
       {comments.length === 0 && <p className="text-muted">No comments yet.</p>}

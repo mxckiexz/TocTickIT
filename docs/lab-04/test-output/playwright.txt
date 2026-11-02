@@ -1,0 +1,210 @@
+# playwright: npx playwright test   (repository root)
+# commit under test: 82ec2002f4ae2d5922e8c5f105ec5aed7409ebdd (branch release/lab4)
+# run set started: 2026-11-02 05:10:32 UTC; suites run one after another on the author's local development database
+# this suite started: 2026-11-02 05:12:47 UTC
+[WebServer] (node:4364) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:4365) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:4384) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts restore
+
+
+> toktickit-server@1.0.0 e2e:fixture
+> tsx scripts/e2e-fixture.ts
+
+e2e fixtures ready (accounts: 8, tickets: 2, attachments: 1, comments: 2, notes: 1)
+
+Running 102 tests using 1 worker
+
+(node:4430) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓    1 [chromium] › e2e/lab-02/requester-ticket-flow.spec.ts:9:5 › a Requester creates a ticket and later finds it in My Tickets (1.8s)
+  ✓    2 [chromium] › e2e/lab-03/accessibility.spec.ts:5:5 › A11Y-01: Login is operable by keyboard alone, Enter submits (1.1s)
+  ✓    3 [chromium] › e2e/lab-03/accessibility.spec.ts:23:5 › A11Y-01: pressing Enter in the password field submits the form (1.1s)
+  ✓    4 [chromium] › e2e/lab-03/accessibility.spec.ts:31:5 › A11Y-02: keyboard focus is always visible on the new interactive controls (324ms)
+  ✓    5 [chromium] › e2e/lab-03/authentication.spec.ts:9:7 › Authentication › valid login opens the app shell with the user's name and role; invalid and inactive logins show the same safe message (3.1s)
+  ✓    6 [chromium] › e2e/lab-03/authentication.spec.ts:32:7 › Authentication › a default-password account is held on Change Password until a valid new password is saved (4.4s)
+  ✓    7 [chromium] › e2e/lab-03/authentication.spec.ts:67:7 › Authentication › logging out ends the session: reloading and calling the API directly both fail (1.3s)
+  ✓    8 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:78:9 › desktop (1280x900) › authentication screens: Login, validation, and forced Change Password (2.2s)
+  ✓    9 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:97:9 › desktop (1280x900) › voluntary Change Password, opened from the app shell header (FR-30) (1.2s)
+  ✓   10 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:111:9 › desktop (1280x900) › Requester Ticket Detail: Public Comments from both roles, no Internal Note, Problem Appears Resolved (1.9s)
+  ✓   11 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:164:9 › desktop (1280x900) › IT Staff Ticket Queue: table on desktop/tablet, stacked cards on mobile (RSP-01) (1.4s)
+  ✓   12 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:189:9 › desktop (1280x900) › IT Staff Ticket Detail: editable vs read-only fields, Internal Notes visually distinct (1.4s)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts restore
+
+(node:4481) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4482) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   13 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:207:9 › desktop (1280x900) › Administrator User Management: table on desktop/tablet, cards on mobile (RSP-02) (1.9s)
+  ✓   14 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:78:9 › tablet (800x1024) › authentication screens: Login, validation, and forced Change Password (2.1s)
+  ✓   15 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:97:9 › tablet (800x1024) › voluntary Change Password, opened from the app shell header (FR-30) (1.2s)
+  ✓   16 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:111:9 › tablet (800x1024) › Requester Ticket Detail: Public Comments from both roles, no Internal Note, Problem Appears Resolved (1.9s)
+  ✓   17 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:164:9 › tablet (800x1024) › IT Staff Ticket Queue: table on desktop/tablet, stacked cards on mobile (RSP-01) (1.3s)
+  ✓   18 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:189:9 › tablet (800x1024) › IT Staff Ticket Detail: editable vs read-only fields, Internal Notes visually distinct (1.4s)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts restore
+
+(node:4508) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4509) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   19 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:207:9 › tablet (800x1024) › Administrator User Management: table on desktop/tablet, cards on mobile (RSP-02) (1.9s)
+  ✓   20 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:78:9 › mobile (375x812) › authentication screens: Login, validation, and forced Change Password (2.1s)
+  ✓   21 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:97:9 › mobile (375x812) › voluntary Change Password, opened from the app shell header (FR-30) (1.1s)
+  ✓   22 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:111:9 › mobile (375x812) › Requester Ticket Detail: Public Comments from both roles, no Internal Note, Problem Appears Resolved (1.8s)
+  ✓   23 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:164:9 › mobile (375x812) › IT Staff Ticket Queue: table on desktop/tablet, stacked cards on mobile (RSP-01) (1.3s)
+  ✓   24 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:189:9 › mobile (375x812) › IT Staff Ticket Detail: editable vs read-only fields, Internal Notes visually distinct (1.3s)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts restore
+
+(node:4536) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4537) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   25 [chromium] › e2e/lab-03/responsive-screenshots.spec.ts:207:9 › mobile (375x812) › Administrator User Management: table on desktop/tablet, cards on mobile (RSP-02) (1.8s)
+  ✓   26 [chromium] › e2e/lab-03/staff-attachments-password.spec.ts:22:5 › E2E-07: IT Staff see the Category and Related System and open the ticket's attachment; a Requester cannot use the staff route (2.4s)
+  ✓   27 [chromium] › e2e/lab-03/staff-attachments-password.spec.ts:60:5 › E2E-08: a user changes their own password from the app shell, and only the new password works afterwards (5.3s)
+  ✓   28 [chromium] › e2e/lab-03/staff-ticket-flow.spec.ts:19:5 › E2E-04: IT Staff searches the queue, claims, prioritizes, transitions, comments, and adds an internal note the Requester never sees (3.2s)
+  ✓   29 [chromium] › e2e/lab-03/staff-ticket-flow.spec.ts:105:5 › E2E-05: a Requester posts a Public Comment and marks 'Problem Appears Resolved' without the ticket's status changing (2.0s)
+  ✓   30 [chromium] › e2e/lab-03/staff-ticket-flow.spec.ts:130:5 › E2E-05 (staff view): the Requester's resolved signal is shown to IT Staff, who still own the status (1.2s)
+  ✓   31 [chromium] › e2e/lab-03/style.spec.ts:8:5 › STY-02: the loaded theme styles disabled/read-only fields with the soft gray-green token (238ms)
+  ✓   32 [chromium] › e2e/lab-03/style.spec.ts:30:5 › STY-02: a real disabled field renders with that gray-green, an active one with the normal surface (221ms)
+  ✓   33 [chromium] › e2e/lab-03/style.spec.ts:70:7 › STY-03: every control in the Requester app header is readable against the header (contrast >= 4.5:1) (1.1s)
+  ✓   34 [chromium] › e2e/lab-03/style.spec.ts:70:7 › STY-03: every control in the IT Staff app header is readable against the header (contrast >= 4.5:1) (1.1s)
+  ✓   35 [chromium] › e2e/lab-03/style.spec.ts:70:7 › STY-03: every control in the Administrator app header is readable against the header (contrast >= 4.5:1) (1.1s)
+  ✓   36 [chromium] › e2e/lab-03/style.spec.ts:100:5 › STY-03: at phone width the header actions keep their labels on one line (1.1s)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts isolate
+
+(node:4571) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4572) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+e2e admin isolation: deactivated 1 other Administrator(s)
+  ✓   37 [chromium] › e2e/lab-03/user-administration.spec.ts:29:5 › E2E-06: Administrator creates, finds, edits, suspends, and resets a user — and the self-suspend and last-Administrator guards hold (6.8s)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts restore
+
+(node:4600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4601) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+e2e admin isolation: restored 1 Administrator(s)
+  ✓   38 [chromium] › e2e/lab-03/user-administration.spec.ts:114:5 › a non-Administrator never reaches User Management, in the UI or at the API (1.1s)
+  ✓   39 [chromium] › e2e/lab-04/accessibility.spec.ts:51:5 › A11Y-01: with the keyboard alone staff add a completed action and resolve the ticket (1.5s)
+  ✓   40 [chromium] › e2e/lab-04/accessibility.spec.ts:98:5 › setup: a ticket with open work again (998ms)
+  ✓   41 [chromium] › e2e/lab-04/accessibility.spec.ts:132:5 › A11Y-02: every control on the staff dashboard shows a focus ring when the keyboard reaches it (5.7s)
+  ✓   42 [chromium] › e2e/lab-04/accessibility.spec.ts:141:5 › A11Y-02: and on the Requester dashboard (3.4s)
+  ✓   43 [chromium] › e2e/lab-04/accessibility.spec.ts:150:5 › A11Y-02: and on the staff Ticket Detail with the Add action form open (5.3s)
+  ✓   44 [chromium] › e2e/lab-04/accessibility.spec.ts:161:5 › style: a ticked checkbox in the action form is Zen Green, not Bootstrap blue (174ms)
+  ✓   45 [chromium] › e2e/lab-04/accessibility.spec.ts:196:5 › style: Bootstrap's own blue is not drawn on the new screens (542ms)
+  ✓   46 [chromium] › e2e/lab-04/accessibility.spec.ts:215:5 › A11Y-03: text on the staff dashboard has the contrast WCAG asks for (4.5:1, 3:1 for large text) (179ms)
+  ✓   47 [chromium] › e2e/lab-04/accessibility.spec.ts:223:5 › A11Y-03: and on the Requester dashboard (190ms)
+  ✓   48 [chromium] › e2e/lab-04/accessibility.spec.ts:231:5 › A11Y-03: and on the staff Ticket Detail: Actions Taken, the form, the status buttons and the gate message (220ms)
+  ✓   49 [chromium] › e2e/lab-04/accessibility.spec.ts:247:5 › A11Y-03: and on the conflict banner (292ms)
+  ✓   50 [chromium] › e2e/lab-04/accessibility.spec.ts:265:5 › A11Y-03: and on the Requester's read-only Ticket Detail (191ms)
+  ✓   51 [chromium] › e2e/lab-04/accessibility.spec.ts:274:5 › A11Y-04: status, priority and follow-up are words in the page, never colour alone (145ms)
+  ✓   52 [chromium] › e2e/lab-04/accessibility.spec.ts:303:5 › no console error or uncaught exception on any of these screens (0ms)
+  ✓   53 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:44:5 › E2E-01: staff record a Planned action and one logged as Completed with a result (463ms)
+  ✓   54 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:79:5 › E2E-01: an empty Description is refused with the message under the field, and nothing is added (273ms)
+  ✓   55 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:90:5 › E2E-01: staff edit an action, and its History shows both revisions (189ms)
+  ✓   56 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:108:5 › E2E-01: an assignee who was deactivated after the form was opened is refused, with the typed text kept (1.3s)
+  ✓   57 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:141:5 › E2E-01: the Requester sees every field of every action, read only (1.3s)
+  ✓   58 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:164:5 › E2E-04: a double click on Save sends one request and adds one action (864ms)
+  ✓   59 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:185:5 › E2E-04: a failed submit keeps what was typed, and the retry works (357ms)
+  ✓   60 [chromium] › e2e/lab-04/actions-taken-flow.spec.ts:209:5 › E2E-04: no console error or uncaught exception during the whole flow (0ms)
+(node:4623) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4642) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4643) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   61 [chromium] › e2e/lab-04/dashboards.spec.ts:100:5 › E2E-03: the IT Staff dashboard says what the database holds (1.9s)
+(node:4646) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4665) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4666) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   62 [chromium] › e2e/lab-04/dashboards.spec.ts:138:5 › E2E-03: each drill-down link opens exactly the list its number counted (2.4s)
+(node:4669) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4688) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4689) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   63 [chromium] › e2e/lab-04/dashboards.spec.ts:173:5 › E2E-03: the Administrator dashboard adds the user counts, the IT Staff one does not (2.8s)
+  ✓   64 [chromium] › e2e/lab-04/dashboards.spec.ts:188:5 › E2E-03: navigation is per role, lands on the Dashboard, and a page the role cannot use does not open (3.6s)
+(node:4698) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4717) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4718) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   65 [chromium] › e2e/lab-04/dashboards.spec.ts:229:7 › E2E-03: the Requester dashboard › shows what the database holds for this Requester (548ms)
+(node:4720) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4739) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   66 [chromium] › e2e/lab-04/dashboards.spec.ts:239:7 › E2E-03: the Requester dashboard › its links open My Tickets with exactly the tickets they counted (655ms)
+  ✓   67 [chromium] › e2e/lab-04/dashboards.spec.ts:255:7 › E2E-03: the Requester dashboard › never shows another Requester's ticket: not on the dashboard, not in My Tickets (68ms)
+(node:4743) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4762) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4763) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   68 [chromium] › e2e/lab-04/dashboards.spec.ts:270:7 › E2E-03: the Requester dashboard › the other Requester sees their own ticket and none of this one's (1.6s)
+  ✓   69 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:59:9 › desktop (1280x900) › RSP-01: the IT Staff dashboard fits, its cards go 3, 2, 1 across, and nothing overlaps (956ms)
+  ✓   70 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:70:9 › desktop (1280x900) › RSP-01: the Requester dashboard fits and stacks its cards on a phone (1.3s)
+  ✓   71 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:82:9 › desktop (1280x900) › RSP-01: the Administrator dashboard, with its zeros and the user line, fits (1.3s)
+  ✓   72 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:95:9 › desktop (1280x900) › RSP-02: staff Ticket Detail with Actions Taken and the status buttons fits at this width (339ms)
+  ✓   73 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:115:9 › desktop (1280x900) › RSP-02: the Add action form stacks its fields on a phone and nothing is cut off (395ms)
+  ✓   74 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:135:9 › desktop (1280x900) › RSP-02: the Administrator's Ticket Detail has the same enabled controls as IT Staff (1.3s)
+  ✓   75 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:155:9 › desktop (1280x900) › RSP-02: the Requester's read-only view fits, with no way to add or edit (1.3s)
+  ✓   76 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:168:9 › desktop (1280x900) › RSP-02: the conflict banner is in view, on one screen with the controls it is about (346ms)
+  ✓   77 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:194:9 › desktop (1280x900) › no console error or uncaught exception on any of these screens (0ms)
+  ✓   78 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:59:9 › tablet (768x1024) › RSP-01: the IT Staff dashboard fits, its cards go 3, 2, 1 across, and nothing overlaps (948ms)
+  ✓   79 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:70:9 › tablet (768x1024) › RSP-01: the Requester dashboard fits and stacks its cards on a phone (1.3s)
+  ✓   80 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:82:9 › tablet (768x1024) › RSP-01: the Administrator dashboard, with its zeros and the user line, fits (1.3s)
+  ✓   81 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:95:9 › tablet (768x1024) › RSP-02: staff Ticket Detail with Actions Taken and the status buttons fits at this width (370ms)
+  ✓   82 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:115:9 › tablet (768x1024) › RSP-02: the Add action form stacks its fields on a phone and nothing is cut off (379ms)
+  ✓   83 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:135:9 › tablet (768x1024) › RSP-02: the Administrator's Ticket Detail has the same enabled controls as IT Staff (1.3s)
+  ✓   84 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:155:9 › tablet (768x1024) › RSP-02: the Requester's read-only view fits, with no way to add or edit (1.3s)
+  ✓   85 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:168:9 › tablet (768x1024) › RSP-02: the conflict banner is in view, on one screen with the controls it is about (345ms)
+  ✓   86 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:194:9 › tablet (768x1024) › no console error or uncaught exception on any of these screens (0ms)
+  ✓   87 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:59:9 › mobile (375x812) › RSP-01: the IT Staff dashboard fits, its cards go 3, 2, 1 across, and nothing overlaps (945ms)
+  ✓   88 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:70:9 › mobile (375x812) › RSP-01: the Requester dashboard fits and stacks its cards on a phone (1.2s)
+  ✓   89 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:82:9 › mobile (375x812) › RSP-01: the Administrator dashboard, with its zeros and the user line, fits (1.2s)
+  ✓   90 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:95:9 › mobile (375x812) › RSP-02: staff Ticket Detail with Actions Taken and the status buttons fits at this width (340ms)
+  ✓   91 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:115:9 › mobile (375x812) › RSP-02: the Add action form stacks its fields on a phone and nothing is cut off (381ms)
+  ✓   92 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:135:9 › mobile (375x812) › RSP-02: the Administrator's Ticket Detail has the same enabled controls as IT Staff (1.3s)
+  ✓   93 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:155:9 › mobile (375x812) › RSP-02: the Requester's read-only view fits, with no way to add or edit (1.3s)
+  ✓   94 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:168:9 › mobile (375x812) › RSP-02: the conflict banner is in view, on one screen with the controls it is about (327ms)
+  ✓   95 [chromium] › e2e/lab-04/responsive-screenshots.spec.ts:194:9 › mobile (375x812) › no console error or uncaught exception on any of these screens (0ms)
+  ✓   96 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:54:7 › E2E-02: the resolution gate, the Requester's advisory, and two sessions › E2E-02: Resolved stays disabled, with the reasons, until an owner and a completed action exist and none is open (1.5s)
+  ✓   97 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:98:7 › E2E-02: the resolution gate, the Requester's advisory, and two sessions › E2E-02: on a Resolved ticket a new action can only be Completed (79ms)
+  ✓   98 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:107:7 › E2E-02: the resolution gate, the Requester's advisory, and two sessions › E2E-02: the Requester's 'Problem Appears Resolved' never changes the status (1.4s)
+  ✓   99 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:130:7 › E2E-02: the resolution gate, the Requester's advisory, and two sessions › E2E-02: a second session that changes the ticket first gets the conflict banner, and Reload fixes it (1.6s)
+  ✓  100 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:162:7 › E2E-02: the resolution gate, the Requester's advisory, and two sessions › E2E-02: two sessions editing the same action: the second Save gets the conflict banner, keeps the typed text, and works after Reload (1.6s)
+  ✓  101 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:197:7 › E2E-02: the resolution gate, the Requester's advisory, and two sessions › E2E-04: no console error or uncaught exception in the first session during E2E-02 (1ms)
+  ✓  102 [chromium] › e2e/lab-04/ticket-resolution.spec.ts:220:7 › E2E-05: an Administrator takes a ticket from claim to Closed › E2E-05: claim, add and complete an action, comment, note, resolve and close, all through the screens (4.2s)
+
+> toktickit-server@1.0.0 e2e:admins
+> tsx scripts/e2e-admins.ts restore
+
+
+  102 passed (2.7m)

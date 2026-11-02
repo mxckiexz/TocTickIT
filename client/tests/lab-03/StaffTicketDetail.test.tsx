@@ -1,8 +1,15 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import StaffTicketDetail from "../../src/StaffTicketDetail.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
+
+// Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
+// about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
+beforeEach(() => {
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+});
+
 
 function staffTicket(overrides: Partial<api.StaffTicket> = {}): api.StaffTicket {
   return {
@@ -27,6 +34,9 @@ function staffTicket(overrides: Partial<api.StaffTicket> = {}): api.StaffTicket 
     requesterMarkedResolvedById: null,
     createdAt: "2026-09-01T10:00:00.000Z",
     updatedAt: "2026-09-01T10:00:00.000Z",
+    version: 1,
+    allowedTransitions: ["OPEN", "IN_PROGRESS", "CANCELLED"],
+    resolutionGate: { ok: false, unmet: ["NO_OWNER", "NO_COMPLETED_ACTION"] },
     ...overrides,
   };
 }
@@ -149,7 +159,7 @@ describe("StaffTicketDetail", () => {
       fireEvent.click(screen.getByRole("button", { name: /Claim this ticket/i }));
 
       expect(await screen.findByText("Priya Nair")).toBeInTheDocument();
-      expect(claimSpy).toHaveBeenCalledWith(1);
+      expect(claimSpy).toHaveBeenCalledWith(1, 1);
       expect(refetchSpy).toHaveBeenCalledTimes(2);
     });
 
@@ -191,7 +201,7 @@ describe("StaffTicketDetail", () => {
       fireEvent.change(select, { target: { value: "6" } });
       fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
 
-      await waitFor(() => expect(assignSpy).toHaveBeenCalledWith(1, 6));
+      await waitFor(() => expect(assignSpy).toHaveBeenCalledWith(1, 6, 1));
       expect(await screen.findByText("Marcus Chen")).toBeInTheDocument();
     });
   });
@@ -222,30 +232,27 @@ describe("StaffTicketDetail", () => {
 
       fireEvent.change(screen.getByLabelText("IT Priority"), { target: { value: "HIGH" } });
 
-      await waitFor(() => expect(prioritySpy).toHaveBeenCalledWith(1, "HIGH"));
+      await waitFor(() => expect(prioritySpy).toHaveBeenCalledWith(1, "HIGH", 1));
     });
   });
 
-  // UI-08/UI-14: status control limited to legal next states, confirm flow.
+  // UI-08/UI-14: status control limited to legal next states, confirm flow. Lab 4 F7 turned the <select> into
+  // one button per `allowedTransitions` entry (docs/lab-04/tests.md §9); the rules these tests state are unchanged.
   describe("Status control", () => {
-    it("offers only the current status's legal next states, plus the current value (disabled)", async () => {
+    const statusGroup = () => screen.getByRole("group", { name: "Change status" });
+
+    it("offers only the current status's legal next states as buttons, and shows the current one as text", async () => {
       mockDetail(staffTicket({ currentStatus: "NEW" }));
       render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
       await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
-      const select = screen.getByLabelText("Status") as HTMLSelectElement;
-      const options = within(select)
-        .getAllByRole("option")
-        .map((option) => (option as HTMLOptionElement).value);
-
-      // NEW's legal next states, per specification.md §7.3.
-      expect(options.sort()).toEqual(["CANCELLED", "IN_PROGRESS", "NEW", "OPEN"].sort());
-      const currentOption = within(select).getByRole("option", { name: /New \(current\)/i });
-      expect(currentOption).toBeDisabled();
+      // NEW's legal next states, per specification.md §7.3, as the server returns them.
+      const buttons = within(statusGroup()).getAllByRole("button").map((button) => button.textContent);
+      expect(buttons).toEqual(["Open", "In Progress", "Cancelled"]);
+      expect(screen.getByText("New", { selector: ".badge" })).toBeInTheDocument();
     });
 
     it("applies a non-confirm-required transition immediately, no confirm step", async () => {
-      mockDetail(staffTicket({ currentStatus: "NEW" }));
       const statusSpy = vi
         .spyOn(api, "updateTicketStatus")
         .mockResolvedValue(staffTicket({ currentStatus: "IN_PROGRESS" }));
@@ -266,26 +273,25 @@ describe("StaffTicketDetail", () => {
       render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
       await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
-      fireEvent.change(screen.getByLabelText("Status"), { target: { value: "IN_PROGRESS" } });
+      fireEvent.click(within(statusGroup()).getByRole("button", { name: "In Progress" }));
 
-      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "IN_PROGRESS", undefined));
+      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "IN_PROGRESS", 1, undefined));
       expect(screen.queryByText(/requires confirmation/i)).not.toBeInTheDocument();
     });
 
     it("opens a confirm step for a confirm-required target, and sends confirm:true only on confirm", async () => {
-      mockDetail(staffTicket({ currentStatus: "IN_PROGRESS" }));
+      const inProgress = staffTicket({
+        currentStatus: "IN_PROGRESS",
+        allowedTransitions: ["WAITING_FOR_REQUESTER", "RESOLVED", "CANCELLED"],
+        resolutionGate: { ok: true, unmet: [] },
+      });
       const statusSpy = vi
         .spyOn(api, "updateTicketStatus")
         .mockResolvedValue(staffTicket({ currentStatus: "RESOLVED" }));
       vi.spyOn(api, "fetchStaffTicketDetail")
+        .mockResolvedValueOnce({ ticket: inProgress, attachments: [], comments: [], notes: [] })
         .mockResolvedValueOnce({
-          ticket: staffTicket({ currentStatus: "IN_PROGRESS" }),
-          attachments: [],
-          comments: [],
-          notes: [],
-        })
-        .mockResolvedValueOnce({
-          ticket: staffTicket({ currentStatus: "RESOLVED" }),
+          ticket: staffTicket({ currentStatus: "RESOLVED", allowedTransitions: ["CLOSED", "REOPENED"] }),
           attachments: [],
           comments: [],
           notes: [],
@@ -294,31 +300,36 @@ describe("StaffTicketDetail", () => {
       render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
       await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
-      fireEvent.change(screen.getByLabelText("Status"), { target: { value: "RESOLVED" } });
+      fireEvent.click(within(statusGroup()).getByRole("button", { name: "Resolved" }));
 
       expect(await screen.findByText(/requires confirmation/i)).toBeInTheDocument();
       expect(statusSpy).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole("button", { name: /^Confirm$/i }));
 
-      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "RESOLVED", true));
+      await waitFor(() => expect(statusSpy).toHaveBeenCalledWith(1, "RESOLVED", 1, true));
     });
 
-    it("cancelling the confirm step sends nothing and reverts the select", async () => {
-      mockDetail(staffTicket({ currentStatus: "IN_PROGRESS" }));
+    it("cancelling the confirm step sends nothing and leaves the buttons as they were", async () => {
+      mockDetail(
+        staffTicket({
+          currentStatus: "IN_PROGRESS",
+          allowedTransitions: ["WAITING_FOR_REQUESTER", "RESOLVED", "CANCELLED"],
+          resolutionGate: { ok: true, unmet: [] },
+        })
+      );
       const statusSpy = vi.spyOn(api, "updateTicketStatus");
 
       render(<StaffTicketDetail ticketId={1} onBack={onBack} />);
       await screen.findByRole("heading", { name: "TKT-2026-000001" });
 
-      const select = screen.getByLabelText("Status") as HTMLSelectElement;
-      fireEvent.change(select, { target: { value: "RESOLVED" } });
+      fireEvent.click(within(statusGroup()).getByRole("button", { name: "Resolved" }));
       await screen.findByText(/requires confirmation/i);
 
       fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
 
       expect(screen.queryByText(/requires confirmation/i)).not.toBeInTheDocument();
-      expect(select.value).toBe("IN_PROGRESS");
+      expect(within(statusGroup()).getByRole("button", { name: "Resolved" })).toBeEnabled();
       expect(statusSpy).not.toHaveBeenCalled();
     });
 

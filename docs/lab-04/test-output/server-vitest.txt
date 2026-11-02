@@ -1,0 +1,127 @@
+# server: npx vitest run   (cd server)
+# commit under test: 82ec2002f4ae2d5922e8c5f105ec5aed7409ebdd (branch release/lab4)
+# run set started: 2026-11-02 05:10:32 UTC; suites run one after another on the author's local development database
+# this suite started: 2026-11-02 05:10:32 UTC
+
+ RUN  v2.1.9 /Users/aphisamai/Downloads/toktickit/server
+
+stderr | tests/lab-04/actions-taken.api.test.ts > Actions Taken API > revisions (API-60..63, AC-48, AC-49, BR-08) > API-63: a failure after the update inside the edit transaction leaves the action and its revisions untouched
+Failed to edit action: Error: forced failure after the update
+    at Object.__vite_ssr_import_5__.actionsTakenHooks.afterUpdate (/Users/aphisamai/Downloads/toktickit/server/tests/lab-04/actions-taken.api.test.ts:674:15)
+    at /Users/aphisamai/Downloads/toktickit/server/src/actionsTaken.ts:378:27
+    at Proxy._transactionWithCallback (/Users/aphisamai/Downloads/toktickit/server/node_modules/@prisma/client/runtime/library.js:130:8000)
+    at /Users/aphisamai/Downloads/toktickit/server/src/actionsTaken.ts:340:23
+
+stderr | tests/lab-04/actions-taken.api.test.ts > Actions Taken API > assignee eligibility is re-checked inside the transaction (BR-07) > a database error during the eligibility check is a 500 with a safe body, never a misleading write failure
+Failed to create action: Error: connection lost to db host
+    at /Users/aphisamai/Downloads/toktickit/server/tests/lab-04/actions-taken.api.test.ts:775:82
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:533:5
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1056:11)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+    at withEnv (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:90:5)
+
+ ✓ tests/lab-04/actions-taken.api.test.ts (58 tests) 7631ms
+   ✓ Actions Taken API > authentication, order of checks, origin (API-18, 19, SEC-02) > a Requester whose password change is still required is rejected on every action route 904ms
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (40 tests) 7641ms
+   ✓ Ticket workflow API > concurrency with the ticket lock (API-26, API-64 status half, BR-13) > API-26: with the ticket lock held elsewhere, an action create, an action edit and a status change all wait until it is released 623ms
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (101 tests) 4679ms
+ ✓ tests/lab-03/users-admin.api.test.ts (49 tests) 15524ms
+   ✓ Administrator User Management > GET /api/admin/users (API-39) > filters by search (name or email, case-insensitive contains) 465ms
+   ✓ Administrator User Management > POST /api/admin/users (API-40, API-41) > creates a user with mustChangePassword: true regardless of isActive given 903ms
+   ✓ Administrator User Management > Duplicate email on create and edit (API-42) > rejects creating a user with an email already in use, differing only by case 455ms
+   ✓ Administrator User Management > Duplicate email on create and edit (API-42) > rejects editing a user's email to one already in use, differing only by case 905ms
+   ✓ Administrator User Management > Self-suspend and last-admin guards (API-43, API-44, API-45) > rejects a role change away from ADMINISTRATOR on the sole active Administrator 908ms
+   ✓ Administrator User Management > Self-suspend and last-admin guards (API-43, API-44, API-45) > allows deactivating/role-changing an Administrator when another active Administrator remains 455ms
+   ✓ Administrator User Management > POST /api/admin/users/:id/reset-password (API-46) > sets mustChangePassword: true, and the user is forced to change it at next login 1353ms
+   ✓ Administrator User Management > POST /api/admin/users/:id/reset-password (API-46) > rejects a password under 8 characters 456ms
+   ✓ Administrator User Management > POST /api/admin/users/:id/reset-password (API-46) > carries no self/last-admin restriction (an Administrator may reset their own password) 903ms
+   ✓ Administrator User Management > PATCH never changes the password (API-47) > ignores a password field included in the edit body 458ms
+   ✓ Administrator User Management > Case-insensitive email uniqueness under concurrency (review fix) > exactly one of two concurrent creates with differently-cased forms of the same email succeeds 915ms
+   ✓ Administrator User Management > Case-insensitive email uniqueness under concurrency (review fix) > exactly one of two concurrent edits moving different users to the same differently-cased email succeeds 917ms
+   ✓ Administrator User Management > BR-37 under concurrency (review fix) > two simultaneous self-demotions: exactly one succeeds, one gets 409, one active Administrator remains 1808ms
+   ✓ Administrator User Management > BR-37 under concurrency (review fix) > two Administrators concurrently deactivating each other: exactly one succeeds, one gets 409, one active Administrator remains 1803ms
+ ✓ tests/lab-03/migration.api.test.ts (11 tests) 659ms
+   ✓ Lab 2 -> Lab 3 migration (real migration SQL, exact before/after, rolled back) > MIG-02: every Requester became exactly one User with the same id/name/email/isActive/createdAt, role REQUESTER, mustChangePassword true 454ms
+ ✓ tests/lab-03/authorization.api.test.ts (19 tests) 4935ms
+   ✓ Authorization sweeps (SEC-01..SEC-08) > a session whose user is deactivated mid-session is rejected 401 on the very next request (SEC-06) 913ms
+ ✓ tests/lab-03/comments-notes.api.test.ts (41 tests) 3818ms
+ ✓ tests/lab-03/auth.api.test.ts (31 tests) 13599ms
+   ✓ password helpers (UNIT-01, UNIT-02) > hashes a password so it verifies against the original but never stores it in the clear 1346ms
+   ✓ POST /api/auth/login > logs in with valid credentials, sets the session cookie, and returns the user's identity 474ms
+   ✓ POST /api/auth/login > rejects an unknown email, a wrong password, and an inactive account with the identical response 1346ms
+   ✓ POST /api/auth/login > runs the same bcrypt comparison for an unknown email as for a known one (no early return before it) 903ms
+   ✓ GET /api/auth/me > returns 200 with the current identity for a valid session 455ms
+   ✓ POST /api/auth/logout > invalidates the session so a replayed cookie is rejected afterward 904ms
+   ✓ POST /api/auth/logout > treats an expired session as unauthenticated 907ms
+   ✓ POST /api/auth/change-password > rejects a wrong current password and leaves mustChangePassword untouched 1346ms
+   ✓ POST /api/auth/change-password > changes the password, clears mustChangePassword, and the new password logs in next time 2245ms
+   ✓ POST /api/auth/change-password > rejects a new password equal to the current one, and one under 8 characters 902ms
+   ✓ POST /api/auth/change-password > rejects a mismatched confirmation 907ms
+   ✓ Origin gate on state-changing /api/auth routes (SEC-07) > a forged logout leaves the victim's session intact 454ms
+stderr | tests/lab-04/staff-dashboard.api.test.ts > Staff and Administrator dashboard API > returns a safe 500 with no detail when the database fails
+Failed to load the staff dashboard: Error: db host 10.0.0.5 refused the connection
+    at /Users/aphisamai/Downloads/toktickit/server/tests/lab-04/staff-dashboard.api.test.ts:266:73
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+
+ ✓ tests/lab-04/staff-dashboard.api.test.ts (16 tests) 4788ms
+ ✓ tests/lab-04/dashboard-drilldown.api.test.ts (12 tests) 4902ms
+ ✓ tests/lab-02/my-tickets.api.test.ts (31 tests) 4723ms
+   ✓ GET /api/tickets > rejects a session whose role is not REQUESTER 914ms
+ ✓ tests/lab-03/staff-queue.api.test.ts (27 tests) 3337ms
+ ✓ tests/lab-02/inspect-attachments.api.test.ts (16 tests) 3752ms
+ ✓ tests/lab-04/migration.api.test.ts (8 tests) 162ms
+ ✓ tests/lab-02/remove-attachment.api.test.ts (16 tests) 2900ms
+   ✓ DELETE /api/tickets/:id/attachments/:attachmentId (soft removal) > rejects a session whose role is not REQUESTER 906ms
+stderr | tests/lab-04/requester-dashboard.api.test.ts > Requester dashboard API > returns a safe 500 with no detail when the database fails
+Failed to load the Requester dashboard: Error: db host 10.0.0.5 refused the connection
+    at /Users/aphisamai/Downloads/toktickit/server/tests/lab-04/requester-dashboard.api.test.ts:193:73
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/aphisamai/Downloads/toktickit/server/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/aphisamai/Downloads/toktickit/server/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+
+ ✓ tests/lab-04/requester-dashboard.api.test.ts (12 tests) 5601ms
+   ✓ Requester dashboard API > a user whose password change is still required is rejected 907ms
+ ✓ tests/lab-04/authorization-sweep.api.test.ts (13 tests) 3825ms
+ ✓ tests/lab-02/create-ticket.api.test.ts (14 tests) 1963ms
+   ✓ POST /api/tickets > rejects a session whose role is not REQUESTER 912ms
+ ✓ tests/lab-02/attachments.api.test.ts (9 tests) 2840ms
+   ✓ POST /api/tickets/:id/attachments > rejects a session whose role is not REQUESTER 908ms
+ ✓ tests/lab-04/seed.api.test.ts (8 tests) 2338ms
+   ✓ Lab 4 seed (Actions Taken) > running the seed twice in a row changes nothing and doesn't error (idempotent) 2311ms
+ ✓ tests/lab-04/performance-smoke.api.test.ts (4 tests) 2068ms
+ ✓ tests/lab-02/ticket-detail.api.test.ts (6 tests) 2777ms
+   ✓ GET /api/tickets/:id > rejects a session whose role is not REQUESTER 906ms
+ ✓ tests/lab-03/seed.api.test.ts (3 tests) 2075ms
+   ✓ seed idempotency (SEED-01) > running the seed twice in a row changes nothing and doesn't error 2070ms
+ ✓ tests/lab-02/lookup-lists.api.test.ts (4 tests) 1880ms
+   ✓ GET /api/related-systems > rejects a session that still has the default password (requirePasswordUpToDate) 952ms
+   ✓ GET /api/related-systems > returns only active related systems in id order, for an authenticated session 905ms
+ ✓ tests/lab-01/categories.test.ts (3 tests) 1868ms
+   ✓ GET /api/categories > rejects a session that still has the default password (requirePasswordUpToDate) 944ms
+   ✓ GET /api/categories > returns the four seeded categories in id order, for an authenticated session 905ms
+ ✓ tests/lab-01/health.test.ts (1 test) 15ms
+
+ Test Files  26 passed (26)
+      Tests  553 passed (553)
+   Start at  12:10:33
+   Duration  117.50s (transform 372ms, setup 0ms, collect 2.88s, tests 110.30s, environment 3ms, prepare 1.00s)
+

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { REQUESTER, REQUESTER_RESOLVE_TICKET, STAFF, STAFF_FLOW_TICKET, login } from "../helpers/accounts";
+import { openPage } from "../helpers/accounts";
 
 const API = "http://localhost:3000";
 const STAFF_TICKET_NUMBER = "TKT-E2E-000001";
@@ -23,6 +24,7 @@ test("E2E-04: IT Staff searches the queue, claims, prioritizes, transitions, com
   const internalNote = `Staff internal note ${Date.now()}`;
 
   await login(page, STAFF);
+  await openPage(page, "Ticket Queue");
   await expect(page.getByRole("heading", { name: "Ticket Queue" })).toBeVisible();
 
   // Search finds exactly the fixture ticket, unassigned and New.
@@ -43,18 +45,31 @@ test("E2E-04: IT Staff searches the queue, claims, prioritizes, transitions, com
   await expect(page.getByLabel("IT Priority")).toHaveValue("HIGH");
   await expect(page.locator("dd", { hasText: /^MEDIUM$/ })).toBeVisible(); // Requested Priority unchanged
 
-  // Status: a routine transition applies immediately...
-  await page.getByLabel("Status").selectOption("IN_PROGRESS");
-  await expect(page.getByLabel("Status")).toHaveValue("IN_PROGRESS");
+  // Status: a routine transition applies immediately (Lab 4: one button per allowed status)...
+  const statusGroup = page.getByRole("group", { name: "Change status" });
+  const currentStatus = (label: string) => page.locator(".badge", { hasText: new RegExp(`^${label}$`) });
+  await statusGroup.getByRole("button", { name: "In Progress" }).click();
+  await expect(currentStatus("In Progress")).toBeVisible();
+  // Lab 4 (docs/lab-04/tests.md §9): Resolved also needs the resolution gate, an owner
+  // (claimed above) and a COMPLETED Action Taken. Until then the button is there but disabled.
+  await expect(statusGroup.getByRole("button", { name: "Resolved" })).toBeDisabled();
+  await expect(page.getByText("Needs a completed action")).toBeVisible();
+  await page.getByRole("button", { name: "Add action" }).click();
+  const actionForm = page.getByRole("form", { name: "Add action" });
+  await actionForm.getByLabel(/Description/).fill("Replaced the faulty battery");
+  await actionForm.getByLabel(/^Status/).selectOption("COMPLETED");
+  await actionForm.getByLabel(/^Result/).fill("Battery replaced and tested");
+  await actionForm.getByRole("button", { name: /^Save/ }).click();
+  await expect(statusGroup.getByRole("button", { name: "Resolved" })).toBeEnabled();
   // ...while Resolved needs confirmation (BR-42): cancelling changes nothing,
-  await page.getByLabel("Status").selectOption("RESOLVED");
+  await statusGroup.getByRole("button", { name: "Resolved" }).click();
   await expect(page.getByText(/requires confirmation/i)).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByLabel("Status")).toHaveValue("IN_PROGRESS");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(currentStatus("In Progress")).toBeVisible();
   // confirming applies it.
-  await page.getByLabel("Status").selectOption("RESOLVED");
-  await page.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByLabel("Status")).toHaveValue("RESOLVED");
+  await statusGroup.getByRole("button", { name: "Resolved" }).click();
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(currentStatus("Resolved")).toBeVisible();
 
   // Public Comment and Internal Note — visually distinct panels.
   await page.getByLabel("Add a comment").fill(publicComment);
@@ -116,8 +131,11 @@ test("E2E-05 (staff view): the Requester's resolved signal is shown to IT Staff,
   page,
 }) => {
   await login(page, STAFF);
+  await openPage(page, "Ticket Queue");
   await searchFor(page, REQUESTER_RESOLVE_TICKET);
   await page.getByRole("row", { name: new RegExp(RESOLVE_TICKET_NUMBER) }).getByRole("button", { name: RESOLVE_TICKET_NUMBER }).click();
   await expect(page.getByText(/Requester marked this resolved on/)).toBeVisible();
-  await expect(page.getByLabel("Status")).toHaveValue("IN_PROGRESS");
+  // The signal is advisory: the status is still In Progress (shown as text), and staff keep the buttons.
+  await expect(page.locator(".badge", { hasText: /^In Progress$/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Change status" })).toBeVisible();
 });

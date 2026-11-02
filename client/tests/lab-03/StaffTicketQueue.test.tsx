@@ -1,9 +1,17 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 import { ApiError } from "../../src/api.js";
 import { mockLoggedInUser } from "../helpers/auth.js";
+import { mockDashboards, openFromNavigation } from "../helpers/dashboards.js";
+
+// Lab 4 F6: both ticket detail screens now embed Actions Taken, which loads its own list. These tests are
+// about other things, so it loads an empty list (the section itself is tested in tests/lab-04).
+beforeEach(() => {
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+});
+
 
 const categories = [
   { id: 1, name: "Hardware" },
@@ -33,6 +41,7 @@ function staffTicket(overrides: Partial<api.StaffTicketSummary> = {}): api.Staff
     requesterMarkedResolvedById: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    version: 1,
     ...overrides,
   };
 }
@@ -46,7 +55,10 @@ function mockLookups() {
 // destination — a Requester or Administrator session never renders it.
 async function openQueue() {
   mockLoggedInUser({ id: 5, name: "Priya Nair", role: "IT_STAFF" });
+  mockDashboards();
   render(<App />);
+  // Lab 4 F8: IT Staff land on the Dashboard and open the Ticket Queue from the navigation.
+  await openFromNavigation("Ticket Queue");
   await screen.findByRole("heading", { name: "Ticket Queue" });
 }
 
@@ -55,7 +67,7 @@ describe("StaffTicketQueue", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders for an IT Staff session without any nav click needed", async () => {
+  it("opens from the Ticket Queue item of the IT Staff navigation", async () => {
     mockLookups();
     vi.spyOn(api, "fetchStaffTickets").mockResolvedValue({
       tickets: [],
@@ -274,8 +286,11 @@ describe("StaffTicketQueue", () => {
         ...staffTicket(),
         categoryName: "Hardware",
         relatedSystemName: "Corporate Laptop",
+        requesterName: "Jennifer Anderson",
         requesterEmail: "jennifer.anderson@toktickit.test",
         ownerEmail: null,
+        allowedTransitions: ["OPEN", "IN_PROGRESS", "CANCELLED"],
+        resolutionGate: { ok: false, unmet: ["NO_OWNER", "NO_COMPLETED_ACTION"] },
       },
       attachments: [],
       comments: [],

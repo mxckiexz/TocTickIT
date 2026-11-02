@@ -32,6 +32,13 @@ describe("comment/note body validator (UNIT-05)", () => {
 });
 
 describe("Comments, Notes, and mark-resolved", () => {
+  // Lab 4 (BR-17, D-4): mark-resolved is a ticket write and needs the version.
+  async function sv(id: number) {
+    const row = await getPrisma().ticket.findUnique({ where: { id }, select: { version: true } });
+    return { version: row?.version ?? 1 };
+  }
+
+
   const requesterEmail = "comments-requester-fixture@toktickit.test";
   const otherRequesterEmail = "comments-other-requester-fixture@toktickit.test";
   const staffEmail = "comments-staff-fixture@toktickit.test";
@@ -126,15 +133,14 @@ describe("Comments, Notes, and mark-resolved", () => {
       expect(response.body.error).toBeDefined();
     });
 
-    it("rejects a caller with role ADMINISTRATOR (BR-39: read-only)", async () => {
+    // Lab 4 BR-26 (was API-56 / BR-39: Administrator 403): the Administrator may post a comment.
+    it("lets an Administrator post a comment (BR-26)", async () => {
       const response = await adminAgent
         .post(`/api/tickets/${ticketId}/comments`)
         .set("Origin", CLIENT_ORIGIN)
-        // API-56 (BR-39) — an Administrator posting a comment is 403; see the notes route for the same on notes
-    //
-        .send({ body: "Administrators can't post comments." })
-        .expect(403);
-      expect(response.body.error).toBeDefined();
+        .send({ body: "Administrators can post comments now." })
+        .expect(201);
+      expect(response.body.body).toBe("Administrators can post comments now.");
     });
 
     // API-16 (BR-25) — comments; the notes route repeats it below
@@ -298,13 +304,14 @@ describe("Comments, Notes, and mark-resolved", () => {
       expect(response.body.error).toBeDefined();
     });
 
-    it("rejects an Administrator (read-only, BR-39)", async () => {
+    // Lab 4 BR-26 (was BR-39: Administrator 403): the Administrator may write an Internal Note.
+    it("lets an Administrator write an Internal Note (BR-26)", async () => {
       const response = await adminAgent
         .post(`/api/tickets/${ticketId}/notes`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ body: "Administrators can't write notes either." })
-        .expect(403);
-      expect(response.body.error).toBeDefined();
+        .send({ body: "Administrators can write notes now." })
+        .expect(201);
+      expect(response.body.body).toBe("Administrators can write notes now.");
     });
 
     it("rejects an empty/whitespace-only body (BR-25)", async () => {
@@ -378,6 +385,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await request(app)
         .post(`/api/tickets/${ticketId}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticketId))
         .expect(401);
       expect(response.body.error).toBeDefined();
     });
@@ -386,6 +394,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await staffAgent
         .post(`/api/tickets/${ticketId}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticketId))
         .expect(403);
       expect(response.body.error).toBeDefined();
     });
@@ -394,6 +403,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await otherRequesterAgent
         .post(`/api/tickets/${ticketId}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticketId))
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
@@ -402,6 +412,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await requesterAgent
         .post("/api/tickets/999999/mark-resolved")
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(999999))
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
@@ -411,6 +422,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await requesterAgent
         .post(`/api/tickets/${ticketId}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticketId))
         .expect(200);
 
       expect(response.body.currentStatus).toBe("NEW");
@@ -424,6 +436,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const first = await requesterAgent
         .post(`/api/tickets/${ticketId}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticketId))
         .expect(200);
 
       await new Promise((r) => setTimeout(r, 5));
@@ -431,6 +444,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const second = await requesterAgent
         .post(`/api/tickets/${ticketId}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticketId))
         .expect(200);
 
       expect(new Date(second.body.requesterMarkedResolvedAt).getTime()).toBeGreaterThan(
@@ -462,6 +476,7 @@ describe("Comments, Notes, and mark-resolved", () => {
       const response = await requesterAgent
         .post(`/api/tickets/${terminalTicket.id}/mark-resolved`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(terminalTicket.id))
         .expect(409);
 
       expect(response.body.error).toBeDefined();

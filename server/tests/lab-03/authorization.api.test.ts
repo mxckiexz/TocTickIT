@@ -124,17 +124,17 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
       { label: "DELETE /api/tickets/:id/attachments/:aid", method: "delete", url: `/api/tickets/${t}/attachments/999999`, allowed: ["REQUESTER"] },
       { label: "POST /api/tickets/:id/mark-resolved", method: "post", url: `/api/tickets/${t}/mark-resolved`, allowed: ["REQUESTER"] },
       { label: "GET /api/tickets/:id/comments", method: "get", url: `/api/tickets/${t}/comments`, allowed: ["REQUESTER", "IT_STAFF", "ADMINISTRATOR"] },
-      { label: "POST /api/tickets/:id/comments", method: "post", url: `/api/tickets/${t}/comments`, body: {}, allowed: ["REQUESTER", "IT_STAFF"] },
+      { label: "POST /api/tickets/:id/comments", method: "post", url: `/api/tickets/${t}/comments`, body: {}, allowed: ["REQUESTER", "IT_STAFF", "ADMINISTRATOR"] },
       { label: "GET /api/tickets/:id/notes", method: "get", url: `/api/tickets/${t}/notes`, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
-      { label: "POST /api/tickets/:id/notes", method: "post", url: `/api/tickets/${t}/notes`, body: {}, allowed: ["IT_STAFF"] },
+      { label: "POST /api/tickets/:id/notes", method: "post", url: `/api/tickets/${t}/notes`, body: {}, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
       { label: "GET /api/staff/tickets", method: "get", url: "/api/staff/tickets", allowed: ["IT_STAFF", "ADMINISTRATOR"] },
       { label: "GET /api/staff/tickets/:id", method: "get", url: `/api/staff/tickets/${t}`, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
       { label: "GET /api/staff/tickets/:id/attachments/:aid", method: "get", url: `/api/staff/tickets/${t}/attachments/${attachmentAId}`, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
-      { label: "POST /api/staff/tickets/:id/claim", method: "post", url: `/api/staff/tickets/${t}/claim`, allowed: ["IT_STAFF"] },
-      { label: "POST /api/staff/tickets/:id/assign", method: "post", url: `/api/staff/tickets/${t}/assign`, body: {}, allowed: ["IT_STAFF"] },
-      { label: "PATCH /api/staff/tickets/:id/priority", method: "patch", url: `/api/staff/tickets/${t}/priority`, body: {}, allowed: ["IT_STAFF"] },
-      { label: "PATCH /api/staff/tickets/:id/status", method: "patch", url: `/api/staff/tickets/${t}/status`, body: {}, allowed: ["IT_STAFF"] },
-      { label: "GET /api/staff/assignable-users", method: "get", url: "/api/staff/assignable-users", allowed: ["IT_STAFF"] },
+      { label: "POST /api/staff/tickets/:id/claim", method: "post", url: `/api/staff/tickets/${t}/claim`, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
+      { label: "POST /api/staff/tickets/:id/assign", method: "post", url: `/api/staff/tickets/${t}/assign`, body: {}, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
+      { label: "PATCH /api/staff/tickets/:id/priority", method: "patch", url: `/api/staff/tickets/${t}/priority`, body: {}, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
+      { label: "PATCH /api/staff/tickets/:id/status", method: "patch", url: `/api/staff/tickets/${t}/status`, body: {}, allowed: ["IT_STAFF", "ADMINISTRATOR"] },
+      { label: "GET /api/staff/assignable-users", method: "get", url: "/api/staff/assignable-users", allowed: ["IT_STAFF", "ADMINISTRATOR"] },
       { label: "GET /api/admin/users", method: "get", url: "/api/admin/users", allowed: ["ADMINISTRATOR"] },
       { label: "POST /api/admin/users", method: "post", url: "/api/admin/users", body: {}, allowed: ["ADMINISTRATOR"] },
       { label: "PATCH /api/admin/users/:id", method: "patch", url: "/api/admin/users/999999", body: {}, allowed: ["ADMINISTRATOR"] },
@@ -216,7 +216,7 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
       { label: "attachment removal", method: "delete", url: `/api/tickets/${theirs}/attachments/1`, body: {} },
       { label: "comments list", method: "get", url: `/api/tickets/${theirs}/comments` },
       { label: "comment post", method: "post", url: `/api/tickets/${theirs}/comments`, body: { body: "hello" } },
-      { label: "mark resolved", method: "post", url: `/api/tickets/${theirs}/mark-resolved` },
+      { label: "mark resolved", method: "post", url: `/api/tickets/${theirs}/mark-resolved`, body: { version: 1 } },
     ];
     for (const attempt of attempts) {
       const response = await call(agents.REQUESTER, attempt);
@@ -358,7 +358,7 @@ describe("Authorization sweeps (SEC-01..SEC-08)", () => {
     });
 
     it("404 beats 409: right role, valid body, ticket doesn't exist", async () => {
-      await call(agents.IT_STAFF, { method: "patch", url: "/api/staff/tickets/999999/status", body: { currentStatus: "OPEN" } }).expect(404);
+      await call(agents.IT_STAFF, { method: "patch", url: "/api/staff/tickets/999999/status", body: { currentStatus: "OPEN", version: 1 } }).expect(404);
     });
   });
 });

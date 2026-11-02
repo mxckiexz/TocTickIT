@@ -114,6 +114,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
 
   afterAll(async () => {
     const prisma = getPrisma();
+    await prisma.actionTaken.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.internalNote.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
@@ -126,7 +127,17 @@ describe("IT Staff Ticket Detail & Workflow", () => {
     await deleteFixtureUser(adminEmail);
   });
 
-  async function createTicket(overrides: Record<string, unknown> = {}) {
+  // Lab 4 (BR-17, D-4): every state-changing ticket route now needs the ticket's
+  // current `version`; `sv` adds it to a request body (1 for a ticket that does
+  // not exist, so those requests still reach their 404).
+  async function sv(ticketId: number, body: Record<string, unknown> = {}) {
+    const row = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { version: true } });
+    return { ...body, version: row?.version ?? 1 };
+  }
+
+  // `completedAction` makes the ticket pass the Lab 4 resolution gate (an owner
+  // and a COMPLETED Action Taken), for tests that move a ticket to RESOLVED.
+  async function createTicket(overrides: Record<string, unknown> = {}, opts: { completedAction?: boolean } = {}) {
     const prisma = getPrisma();
     const ticket = await prisma.ticket.create({
       data: {
@@ -138,10 +149,16 @@ describe("IT Staff Ticket Detail & Workflow", () => {
         description: "Fixture ticket.",
         requestedPriority: "LOW",
         itPriority: "LOW",
+        ...(opts.completedAction ? { ownerId: staffAId } : {}),
         ...overrides,
       },
     });
     createdTicketIds.push(ticket.id);
+    if (opts.completedAction) {
+      await prisma.actionTaken.create({
+        data: { ticketId: ticket.id, performedById: staffAId, description: "Fixture completed action", status: "COMPLETED", result: "Done" },
+      });
+    }
     return ticket;
   }
 
@@ -336,18 +353,22 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await request(app)
         .post(`/api/staff/tickets/${ticket.id}/claim`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticket.id))
         .expect(401);
       expect(response.body.error).toBeDefined();
     });
 
-    // API-55 / AC-20b
-    it("rejects an Administrator session (403, same as Requester)", async () => {
+    // Lab 4 BR-26 (was Lab 3 API-55 / AC-20b: Administrator 403): the Administrator
+    // performs IT Staff behavior, so a claim succeeds with the IT Staff response.
+    it("lets an Administrator claim an unassigned ticket (BR-26)", async () => {
       const ticket = await createTicket();
+      const admin = await getPrisma().user.findFirstOrThrow({ where: { email: adminEmail } });
       const response = await adminAgent
         .post(`/api/staff/tickets/${ticket.id}/claim`)
         .set("Origin", CLIENT_ORIGIN)
-        .expect(403);
-      expect(response.body.error).toBeDefined();
+        .send(await sv(ticket.id))
+        .expect(200);
+      expect(response.body.ownerId).toBe(admin.id);
     });
 
     it("rejects a Requester session", async () => {
@@ -355,6 +376,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await requesterAgent
         .post(`/api/staff/tickets/${ticket.id}/claim`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticket.id))
         .expect(403);
       expect(response.body.error).toBeDefined();
     });
@@ -365,6 +387,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/claim`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticket.id))
         .expect(200);
       expect(response.body.ownerId).toBe(staffAId);
     });
@@ -375,6 +398,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffBAgent
         .post(`/api/staff/tickets/${ticket.id}/claim`)
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticket.id))
         .expect(409);
       expect(response.body.error).toBeDefined();
 
@@ -386,6 +410,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post("/api/staff/tickets/999999/claim")
         .set("Origin", CLIENT_ORIGIN)
+        .send(await sv(999999))
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
@@ -398,8 +423,10 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const ticket = await createTicket();
 
       const [resultA, resultB] = await Promise.all([
-        staffAAgent.post(`/api/staff/tickets/${ticket.id}/claim`).set("Origin", CLIENT_ORIGIN),
-        staffBAgent.post(`/api/staff/tickets/${ticket.id}/claim`).set("Origin", CLIENT_ORIGIN),
+        staffAAgent.post(`/api/staff/tickets/${ticket.id}/claim`).set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticket.id)),
+        staffBAgent.post(`/api/staff/tickets/${ticket.id}/claim`).set("Origin", CLIENT_ORIGIN)
+        .send(await sv(ticket.id)),
       ]);
 
       // Exactly one 200 and one 409 — never both 200 (the race the fix
@@ -424,20 +451,20 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await request(app)
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: staffAId })
+        .send(await sv(ticket.id, { ownerId: staffAId }))
         .expect(401);
       expect(response.body.error).toBeDefined();
     });
 
-    // API-55 / AC-20b
-    it("rejects an Administrator session", async () => {
+    // Lab 4 BR-26 (was API-55 / AC-20b: 403).
+    it("lets an Administrator assign a ticket (BR-26)", async () => {
       const ticket = await createTicket();
       const response = await adminAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: staffAId })
-        .expect(403);
-      expect(response.body.error).toBeDefined();
+        .send(await sv(ticket.id, { ownerId: staffAId }))
+        .expect(200);
+      expect(response.body.ownerId).toBe(staffAId);
     });
 
     // API-30
@@ -446,7 +473,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffBAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: staffBId })
+        .send(await sv(ticket.id, { ownerId: staffBId }))
         .expect(200);
       expect(response.body.ownerId).toBe(staffBId);
     });
@@ -456,7 +483,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: staffAId })
+        .send(await sv(ticket.id, { ownerId: staffAId }))
         .expect(200);
       expect(response.body.ownerId).toBe(staffAId);
     });
@@ -467,21 +494,21 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: requesterId })
+        .send(await sv(ticket.id, { ownerId: requesterId }))
         .expect(400);
       expect(response.body.errors.ownerId).toBeDefined();
     });
 
-    it("rejects an ownerId that references an Administrator", async () => {
+    // Lab 4 BR-26 (was: 400): an active Administrator is a valid owner.
+    it("accepts an ownerId that references an active Administrator (BR-26)", async () => {
       const ticket = await createTicket();
-      const prisma = getPrisma();
-      const admin = await prisma.user.findFirstOrThrow({ where: { email: adminEmail } });
+      const admin = await getPrisma().user.findFirstOrThrow({ where: { email: adminEmail } });
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: admin.id })
-        .expect(400);
-      expect(response.body.errors.ownerId).toBeDefined();
+        .send(await sv(ticket.id, { ownerId: admin.id }))
+        .expect(200);
+      expect(response.body.ownerId).toBe(admin.id);
     });
 
     it("rejects an ownerId that references an inactive IT Staff user", async () => {
@@ -489,7 +516,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: inactiveStaffId })
+        .send(await sv(ticket.id, { ownerId: inactiveStaffId }))
         .expect(400);
       expect(response.body.errors.ownerId).toBeDefined();
     });
@@ -499,7 +526,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: 999999 })
+        .send(await sv(ticket.id, { ownerId: 999999 }))
         .expect(400);
       expect(response.body.errors.ownerId).toBeDefined();
     });
@@ -509,7 +536,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post(`/api/staff/tickets/${ticket.id}/assign`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({})
+        .send(await sv(ticket.id, {}))
         .expect(400);
       expect(response.body.errors.ownerId).toBeDefined();
     });
@@ -518,7 +545,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .post("/api/staff/tickets/999999/assign")
         .set("Origin", CLIENT_ORIGIN)
-        .send({ ownerId: staffAId })
+        .send(await sv(999999, { ownerId: staffAId }))
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
@@ -530,20 +557,20 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await request(app)
         .patch(`/api/staff/tickets/${ticket.id}/priority`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ itPriority: "HIGH" })
+        .send(await sv(ticket.id, { itPriority: "HIGH" }))
         .expect(401);
       expect(response.body.error).toBeDefined();
     });
 
-    // API-55 / AC-20b
-    it("rejects an Administrator session", async () => {
+    // Lab 4 BR-26 (was API-55 / AC-20b: 403).
+    it("lets an Administrator change the IT priority (BR-26)", async () => {
       const ticket = await createTicket();
       const response = await adminAgent
         .patch(`/api/staff/tickets/${ticket.id}/priority`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ itPriority: "HIGH" })
-        .expect(403);
-      expect(response.body.error).toBeDefined();
+        .send(await sv(ticket.id, { itPriority: "HIGH" }))
+        .expect(200);
+      expect(response.body.itPriority).toBe("HIGH");
     });
 
     // API-32 / API-49
@@ -552,7 +579,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .patch(`/api/staff/tickets/${ticket.id}/priority`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ itPriority: "HIGH", requestedPriority: "MEDIUM" })
+        .send(await sv(ticket.id, { itPriority: "HIGH", requestedPriority: "MEDIUM" }))
         .expect(200);
 
       expect(response.body.itPriority).toBe("HIGH");
@@ -567,7 +594,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .patch(`/api/staff/tickets/${ticket.id}/priority`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ itPriority: "URGENT" })
+        .send(await sv(ticket.id, { itPriority: "URGENT" }))
         .expect(400);
       expect(response.body.errors.itPriority).toBeDefined();
     });
@@ -576,7 +603,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .patch("/api/staff/tickets/999999/priority")
         .set("Origin", CLIENT_ORIGIN)
-        .send({ itPriority: "HIGH" })
+        .send(await sv(999999, { itPriority: "HIGH" }))
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
@@ -588,20 +615,20 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await request(app)
         .patch(`/api/staff/tickets/${ticket.id}/status`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ currentStatus: "OPEN" })
+        .send(await sv(ticket.id, { currentStatus: "OPEN" }))
         .expect(401);
       expect(response.body.error).toBeDefined();
     });
 
-    // API-55 / AC-20b
-    it("rejects an Administrator session", async () => {
-      const ticket = await createTicket();
+    // Lab 4 BR-26 (was API-55 / AC-20b: 403).
+    it("lets an Administrator change the status (BR-26)", async () => {
+      const ticket = await createTicket({ currentStatus: "NEW" });
       const response = await adminAgent
         .patch(`/api/staff/tickets/${ticket.id}/status`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ currentStatus: "OPEN" })
-        .expect(403);
-      expect(response.body.error).toBeDefined();
+        .send(await sv(ticket.id, { currentStatus: "OPEN" }))
+        .expect(200);
+      expect(response.body.ticket.currentStatus).toBe("OPEN");
     });
 
     // API-36
@@ -610,7 +637,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await requesterAgent
         .patch(`/api/staff/tickets/${ticket.id}/status`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ currentStatus: "OPEN" })
+        .send(await sv(ticket.id, { currentStatus: "OPEN" }))
         .expect(403);
       expect(response.body.error).toBeDefined();
     });
@@ -622,9 +649,9 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffBAgent
         .patch(`/api/staff/tickets/${ticket.id}/status`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ currentStatus: "OPEN" })
+        .send(await sv(ticket.id, { currentStatus: "OPEN" }))
         .expect(200);
-      expect(response.body.currentStatus).toBe("OPEN");
+      expect(response.body.ticket.currentStatus).toBe("OPEN");
     });
 
     it("rejects an unrecognized currentStatus value", async () => {
@@ -632,7 +659,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .patch(`/api/staff/tickets/${ticket.id}/status`)
         .set("Origin", CLIENT_ORIGIN)
-        .send({ currentStatus: "Open" })
+        .send(await sv(ticket.id, { currentStatus: "Open" }))
         .expect(400);
       expect(response.body.errors.currentStatus).toBeDefined();
     });
@@ -641,7 +668,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       const response = await staffAAgent
         .patch("/api/staff/tickets/999999/status")
         .set("Origin", CLIENT_ORIGIN)
-        .send({ currentStatus: "OPEN" })
+        .send(await sv(999999, { currentStatus: "OPEN" }))
         .expect(404);
       expect(response.body.error).toBeDefined();
     });
@@ -652,13 +679,14 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       for (const from of ALL_STATUSES) {
         for (const to of STATUS_TRANSITIONS[from]) {
           it(`${from} -> ${to} succeeds`, async () => {
-            const ticket = await createTicket({ currentStatus: from });
+            // Lab 4: RESOLVED needs the gate (an owner and a COMPLETED action).
+            const ticket = await createTicket({ currentStatus: from }, { completedAction: true });
             const response = await staffAAgent
               .patch(`/api/staff/tickets/${ticket.id}/status`)
               .set("Origin", CLIENT_ORIGIN)
-              .send({ currentStatus: to, confirm: true })
+        .send(await sv(ticket.id, { currentStatus: to, confirm: true }))
               .expect(200);
-            expect(response.body.currentStatus).toBe(to);
+            expect(response.body.ticket.currentStatus).toBe(to);
           });
         }
       }
@@ -674,7 +702,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
           const response = await staffAAgent
             .patch(`/api/staff/tickets/${ticket.id}/status`)
             .set("Origin", CLIENT_ORIGIN)
-            .send({ currentStatus: status, confirm: true })
+        .send(await sv(ticket.id, { currentStatus: status, confirm: true }))
             .expect(409);
           expect(response.body.error).toBeDefined();
 
@@ -699,7 +727,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
           const response = await staffAAgent
             .patch(`/api/staff/tickets/${ticket.id}/status`)
             .set("Origin", CLIENT_ORIGIN)
-            .send({ currentStatus: to, confirm: true })
+        .send(await sv(ticket.id, { currentStatus: to, confirm: true }))
             .expect(409);
           expect(response.body.error).toBeDefined();
 
@@ -723,7 +751,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
           const omitted = await staffAAgent
             .patch(`/api/staff/tickets/${omittedTicket.id}/status`)
             .set("Origin", CLIENT_ORIGIN)
-            .send({ currentStatus: to })
+        .send(await sv(omittedTicket.id, { currentStatus: to }))
             .expect(400);
           expect(omitted.body.errors.confirm).toBeDefined();
 
@@ -731,7 +759,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
           const falseResponse = await staffAAgent
             .patch(`/api/staff/tickets/${falseTicket.id}/status`)
             .set("Origin", CLIENT_ORIGIN)
-            .send({ currentStatus: to, confirm: false })
+        .send(await sv(falseTicket.id, { currentStatus: to, confirm: false }))
             .expect(400);
           expect(falseResponse.body.errors.confirm).toBeDefined();
 
@@ -748,13 +776,13 @@ describe("IT Staff Ticket Detail & Workflow", () => {
         ["RESOLVED", "REOPENED"],
         ["IN_PROGRESS", "CANCELLED"],
       ] as [TicketStatus, TicketStatus][])("API-58: %s -> %s with confirm:true is 200", async (from, to) => {
-        const ticket = await createTicket({ currentStatus: from });
+        const ticket = await createTicket({ currentStatus: from }, { completedAction: true });
         const response = await staffAAgent
           .patch(`/api/staff/tickets/${ticket.id}/status`)
           .set("Origin", CLIENT_ORIGIN)
-          .send({ currentStatus: to, confirm: true })
+        .send(await sv(ticket.id, { currentStatus: to, confirm: true }))
           .expect(200);
-        expect(response.body.currentStatus).toBe(to);
+        expect(response.body.ticket.currentStatus).toBe(to);
       });
 
       // API-59
@@ -763,9 +791,9 @@ describe("IT Staff Ticket Detail & Workflow", () => {
         const response = await staffAAgent
           .patch(`/api/staff/tickets/${ticket.id}/status`)
           .set("Origin", CLIENT_ORIGIN)
-          .send({ currentStatus: "IN_PROGRESS" })
+        .send(await sv(ticket.id, { currentStatus: "IN_PROGRESS" }))
           .expect(200);
-        expect(response.body.currentStatus).toBe("IN_PROGRESS");
+        expect(response.body.ticket.currentStatus).toBe("IN_PROGRESS");
       });
 
       // API-60 — confirmation check runs before the legality check: an
@@ -775,7 +803,7 @@ describe("IT Staff Ticket Detail & Workflow", () => {
         const response = await staffAAgent
           .patch(`/api/staff/tickets/${ticket.id}/status`)
           .set("Origin", CLIENT_ORIGIN)
-          .send({ currentStatus: "CLOSED" })
+        .send(await sv(ticket.id, { currentStatus: "CLOSED" }))
           .expect(400);
         expect(response.body.errors.confirm).toBeDefined();
       });
@@ -808,12 +836,13 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
 
-    it("excludes Administrator accounts", async () => {
+    // Lab 4 BR-26 (was: excludes Administrator accounts).
+    it("includes active Administrator accounts (BR-26)", async () => {
       const prisma = getPrisma();
       const admin = await prisma.user.findFirstOrThrow({ where: { email: adminEmail } });
       const response = await staffAAgent.get("/api/staff/assignable-users").expect(200);
       const ids = response.body.map((u: { id: number }) => u.id);
-      expect(ids).not.toContain(admin.id);
+      expect(ids).toContain(admin.id);
     });
 
     it("rejects a Requester session", async () => {
@@ -821,9 +850,10 @@ describe("IT Staff Ticket Detail & Workflow", () => {
       expect(response.body.error).toBeDefined();
     });
 
-    it("rejects an Administrator session", async () => {
-      const response = await adminAgent.get("/api/staff/assignable-users").expect(403);
-      expect(response.body.error).toBeDefined();
+    // Lab 4 BR-26 (was: 403): the Administrator may read the same list.
+    it("lets an Administrator read the list (BR-26)", async () => {
+      const response = await adminAgent.get("/api/staff/assignable-users").expect(200);
+      expect(Array.isArray(response.body)).toBe(true);
     });
   });
 });

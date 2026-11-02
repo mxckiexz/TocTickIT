@@ -1,4 +1,4 @@
-import type { Priority, TicketStatus } from "./api.js";
+import type { ActionStatus, Priority, TicketStatus } from "./api.js";
 
 // One place that decides how a ticket's status and priority look, used by every
 // screen that shows them (Requester My Tickets and Ticket Detail, Staff Queue
@@ -70,4 +70,29 @@ export function PriorityBadge({ priority, prefix }: { priority: Priority; prefix
 
 export function StatusBadge({ status }: { status: TicketStatus }) {
   return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
+}
+
+// Lab 4: Action Taken statuses use the same badge idea (text always present, colour only supports it).
+export const ACTION_STATUS_LABELS: Record<ActionStatus, string> = {
+  PLANNED: "Planned",
+  IN_PROGRESS: "In progress",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+export function actionStatusBadgeClass(status: ActionStatus): string {
+  switch (status) {
+    case "COMPLETED":
+      return "badge text-bg-success";
+    case "IN_PROGRESS":
+      return "badge text-bg-info";
+    case "CANCELLED":
+    case "PLANNED":
+    default:
+      return "badge text-bg-secondary";
+  }
+}
+
+export function ActionStatusBadge({ status }: { status: ActionStatus }) {
+  return <span className={actionStatusBadgeClass(status)}>{ACTION_STATUS_LABELS[status] ?? status}</span>;
 }

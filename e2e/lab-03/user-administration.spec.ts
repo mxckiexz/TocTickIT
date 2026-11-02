@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN, REQUESTER, login, runAdminIsolation } from "../helpers/accounts";
+import { openPage } from "../helpers/accounts";
 
 const API = "http://localhost:3000";
 
@@ -32,6 +33,7 @@ test("E2E-06: Administrator creates, finds, edits, suspends, and resets a user â
   const email = `e2e-created-${Date.now()}@toktickit.test`;
 
   await login(page, ADMIN);
+  await openPage(page, "User Management");
   await expect(page.getByRole("heading", { name: "User Management" })).toBeVisible();
 
   // --- Create: validation first, then success.

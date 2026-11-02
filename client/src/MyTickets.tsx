@@ -10,6 +10,7 @@ import {
   fetchRelatedSystems,
   fetchTickets,
 } from "./api.js";
+import { MyTicketFilters, routeHref } from "./routes.js";
 import TicketDetail from "./TicketDetail.js";
 import { PriorityBadge, STATUS_OPTIONS, StatusBadge } from "./ticketBadges.js";
 
@@ -22,6 +23,8 @@ type ListState = "loading" | "ready" | "error";
 const SORT_OPTIONS = [
   { value: "createdAt-desc", label: "Newest first", sortBy: "createdAt", sortDir: "desc" },
   { value: "createdAt-asc", label: "Oldest first", sortBy: "createdAt", sortDir: "asc" },
+  // Lab 4 F8: what the Requester dashboard's "recently updated" links ask for.
+  { value: "updatedAt-desc", label: "Recently updated", sortBy: "updatedAt", sortDir: "desc" },
   { value: "summary-asc", label: "Summary (A–Z)", sortBy: "summary", sortDir: "asc" },
   { value: "summary-desc", label: "Summary (Z–A)", sortBy: "summary", sortDir: "desc" },
 ] as const;
@@ -32,7 +35,13 @@ const SORT_OPTIONS = [
 
 // Lab 3: identity comes from the logged-in session (FR-08/BR-03) — always
 // scoped to the caller's own tickets, no Requester prop needed anymore.
-export default function MyTickets() {
+interface MyTicketsProps {
+  // Lab 4 F8: what a dashboard link asked for (routes.ts). Absent for the plain My Tickets.
+  initialFilters?: MyTicketFilters;
+  initialTicketId?: number;
+}
+
+export default function MyTickets({ initialFilters = {}, initialTicketId }: MyTicketsProps = {}) {
   const [lookupState, setLookupState] = useState<LookupState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
   const [relatedSystems, setRelatedSystems] = useState<RelatedSystem[]>([]);
@@ -42,16 +51,19 @@ export default function MyTickets() {
   const [categoryId, setCategoryId] = useState("");
   const [relatedSystemId, setRelatedSystemId] = useState("");
   const [requestedPriority, setRequestedPriority] = useState("");
-  const [currentStatus, setCurrentStatus] = useState("");
+  const [currentStatus, setCurrentStatus] = useState<string>(initialFilters.currentStatus ?? "");
   const [sortValue, setSortValue] = useState<(typeof SORT_OPTIONS)[number]["value"]>(
-    "createdAt-desc"
+    initialFilters.sortBy === "updatedAt" ? "updatedAt-desc" : "createdAt-desc"
   );
+  // `open` and `recent` have no control of their own (api-spec.md "Dashboards"): the screen says when they are on and
+  // offers Clear.
+  const [drill, setDrill] = useState({ open: Boolean(initialFilters.open), recent: Boolean(initialFilters.recent) });
   const [page, setPage] = useState(1);
 
   const [listState, setListState] = useState<ListState>("loading");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(initialTicketId ?? null);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +96,7 @@ export default function MyTickets() {
   // always land back on page 1 rather than showing a now-out-of-range page.
   useEffect(() => {
     setPage(1);
-  }, [search, categoryId, relatedSystemId, requestedPriority, currentStatus, sortValue]);
+  }, [search, categoryId, relatedSystemId, requestedPriority, currentStatus, drill, sortValue]);
 
   useEffect(() => {
     if (lookupState !== "ready") return;
@@ -100,6 +112,8 @@ export default function MyTickets() {
       relatedSystemId: relatedSystemId ? Number(relatedSystemId) : undefined,
       requestedPriority: (requestedPriority as Priority) || undefined,
       currentStatus: (currentStatus as TicketStatus) || undefined,
+      open: drill.open || undefined,
+      recent: drill.recent || undefined,
       sortBy: sortOption.sortBy,
       sortDir: sortOption.sortDir,
       page,
@@ -125,6 +139,7 @@ export default function MyTickets() {
     relatedSystemId,
     requestedPriority,
     currentStatus,
+    drill,
     sortValue,
     page,
     lookupState,
@@ -156,7 +171,13 @@ export default function MyTickets() {
         ticketId={selectedTicketId}
         categories={categories}
         relatedSystems={relatedSystems}
-        onBack={() => setSelectedTicketId(null)}
+        onBack={() => {
+          setSelectedTicketId(null);
+          // A ticket opened from a link has its own address; do not leave it behind (see StaffTicketQueue).
+          if (initialTicketId !== undefined) {
+            window.history.replaceState(null, "", routeHref({ view: "myTickets", filters: initialFilters }));
+          }
+        }}
       />
     );
   }
@@ -164,6 +185,22 @@ export default function MyTickets() {
   return (
     <div className="mt-4">
       <h2 className="h5">My Tickets</h2>
+
+      {(drill.open || drill.recent) && (
+        <div className="alert alert-info d-flex flex-wrap align-items-center gap-2 py-2" role="status">
+          <span>
+            Showing:{" "}
+            {[drill.open && "Open tickets only", drill.recent && "Updated in the last 7 days"].filter(Boolean).join(" · ")}
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline-success btn-sm"
+            onClick={() => setDrill({ open: false, recent: false })}
+          >
+            Clear dashboard filter
+          </button>
+        </div>
+      )}
 
       <div className="row g-2 mb-3">
         <div className="col-12 col-md-4">
